@@ -34,13 +34,6 @@ export interface BodyConfig {
   firstLineIndent: number // 字符数
 }
 
-/** 表格格式 (预留) */
-export interface TableConfig {
-  fontFamily: string
-  fontSize: number      // pt
-  lineSpacing: number   // 磅
-  boldHeader: boolean
-}
 
 /** 特殊选项 */
 export interface SpecialOptionsConfig {
@@ -98,7 +91,6 @@ export interface DocumentConfig {
   title: TitleConfig
   headings: HeadingsConfig
   body: BodyConfig
-  table: TableConfig
   specialOptions: SpecialOptionsConfig
   advanced: AdvancedConfig
   header: HeaderConfig
@@ -133,12 +125,6 @@ export const DEFAULT_CONFIG: DocumentConfig = {
     fontSize: 16,
     lineSpacing: 29.6,
     firstLineIndent: 2,
-  },
-  table: {
-    fontFamily: '仿宋_GB2312',
-    fontSize: 12,
-    lineSpacing: 22,
-    boldHeader: true,
   },
   specialOptions: {
     boldFirstSentence: false,

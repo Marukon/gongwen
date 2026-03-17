@@ -358,39 +358,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
             <p className="settings-hint">正文格式同时应用于三级标题、四级标题、附件说明和成文日期</p>
           </section>
 
-          {/* 区块 5: 表格格式（预留） */}
-          <section className="settings-section">
-            <h3 className="settings-section-title">
-              表格格式 <span className="settings-tag">预留</span>
-            </h3>
-            <div className="settings-grid settings-grid--2">
-              <FontSelectField
-                label="字体"
-                value={config.table.fontFamily}
-                {...fontFieldProps}
-                onChange={(v) => patch({ table: { fontFamily: v } })}
-              />
-              <SelectField
-                label="字号"
-                value={config.table.fontSize}
-                options={FONT_SIZE_OPTIONS}
-                onChange={(v) => patch({ table: { fontSize: Number(v) } })}
-              />
-              <SelectField
-                label="行距"
-                value={config.table.lineSpacing}
-                options={LINE_SPACING_OPTIONS}
-                onChange={(v) => patch({ table: { lineSpacing: Number(v) } })}
-              />
-              <CheckboxField
-                label="表头加粗"
-                checked={config.table.boldHeader}
-                onChange={(v) => patch({ table: { boldHeader: v } })}
-              />
-            </div>
-          </section>
-
-          {/* 区块 6: 特殊选项 */}
+          {/* 区块 5: 特殊选项 */}
           <section className="settings-section">
             <h3 className="settings-section-title">特殊选项</h3>
             <div className="settings-options">
