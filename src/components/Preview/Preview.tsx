@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useRef, useState, useCallback, type CSSProperties, type KeyboardEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, useCallback, type CSSProperties, type KeyboardEvent, type MouseEvent } from 'react'
 import { useDocumentConfig } from '../../contexts/DocumentConfigContext'
-import { CHARS_PER_LINE, FONT_OPTIONS, FONT_SIZE_OPTIONS, cmToPagePercent } from '../../types/documentConfig'
+import { CHARS_PER_LINE, FONT_OPTIONS, FONT_SIZE_OPTIONS, cmToPagePercent, type DocumentConfig } from '../../types/documentConfig'
 import { normalizeEditorHtml } from '../../utils/richText'
 import './A4Page.css'
 import './Preview.css'
@@ -18,6 +18,45 @@ const FONT_SIZE_OPTIONS_CN = FONT_SIZE_OPTIONS.map((option) => ({
 const BLOCK_SELECTOR = 'p,div,h1,h2,h3,h4,h5,h6'
 type InlineStyleMap = Partial<Record<'fontFamily' | 'fontSize' | 'fontWeight' | 'fontStyle' | 'textDecoration', string>>
 
+interface SelectionFormatState {
+  fontFamily: string
+  fontSize: number
+  bold: boolean
+  italic: boolean
+  underline: boolean
+}
+
+const DEFAULT_FONT_SIZE = FONT_SIZE_OPTIONS_CN[3]?.value ?? 16
+
+function normalizeFontName(fontFamily: string) {
+  return fontFamily
+    .split(',')[0]
+    .trim()
+    .replace(/^['"]|['"]$/g, '')
+}
+
+function pxToPt(size: string) {
+  const matched = size.match(/(\d+(?:\.\d+)?)px/)
+  if (!matched) return DEFAULT_FONT_SIZE
+  return Math.round(Number(matched[1]) * 72 / 96)
+}
+
+function closestFontSize(size: number) {
+  return FONT_SIZE_OPTIONS_CN.reduce((closest, option) => {
+    return Math.abs(option.value - size) < Math.abs(closest - size) ? option.value : closest
+  }, DEFAULT_FONT_SIZE)
+}
+
+function createDefaultFormatState(config: DocumentConfig): SelectionFormatState {
+  return {
+    fontFamily: config.body.fontFamily,
+    fontSize: config.body.fontSize,
+    bold: false,
+    italic: false,
+    underline: false,
+  }
+}
+
 function applyStyles(element: HTMLElement, styles: InlineStyleMap) {
   for (const [key, value] of Object.entries(styles)) {
     if (!value) continue
@@ -25,14 +64,17 @@ function applyStyles(element: HTMLElement, styles: InlineStyleMap) {
     element.style.setProperty(cssName, value)
   }
 
-  if (styles.fontWeight === 'bold') {
-    element.dataset.previewBold = 'true'
+  if (styles.fontWeight) {
+    if (styles.fontWeight === 'bold') element.dataset.previewBold = 'true'
+    else delete element.dataset.previewBold
   }
-  if (styles.fontStyle === 'italic') {
-    element.dataset.previewItalic = 'true'
+  if (styles.fontStyle) {
+    if (styles.fontStyle === 'italic') element.dataset.previewItalic = 'true'
+    else delete element.dataset.previewItalic
   }
-  if (styles.textDecoration?.includes('underline')) {
-    element.dataset.previewUnderline = 'true'
+  if (styles.textDecoration) {
+    if (styles.textDecoration.includes('underline')) element.dataset.previewUnderline = 'true'
+    else delete element.dataset.previewUnderline
   }
 }
 
@@ -87,6 +129,43 @@ function applyInlineStyles(styles: InlineStyleMap) {
   selection.addRange(nextRange)
 }
 
+function getStyleTarget(node: Node | null, editor: HTMLElement | null): HTMLElement | null {
+  if (!node || !editor) return null
+  let current: Node | null = node.nodeType === Node.ELEMENT_NODE ? node : node.parentNode
+
+  while (current && current !== editor) {
+    if (current instanceof HTMLElement && editor.contains(current)) return current
+    current = current.parentNode
+  }
+
+  return editor
+}
+
+function getSelectionFormatState(editor: HTMLElement | null, fallback: SelectionFormatState): SelectionFormatState {
+  const selection = window.getSelection()
+  if (!editor || !selection || selection.rangeCount === 0) return fallback
+
+  const range = selection.getRangeAt(0)
+  if (!isRangeInsideEditor(range, editor)) return fallback
+
+  const target = getStyleTarget(selection.anchorNode ?? range.startContainer, editor)
+  if (!target) return fallback
+
+  const computed = window.getComputedStyle(target)
+  const fontFamily = normalizeFontName(target.style.fontFamily || computed.fontFamily || fallback.fontFamily)
+  const fontSize = closestFontSize(pxToPt(target.style.fontSize || computed.fontSize))
+  const numericWeight = Number(computed.fontWeight)
+  const underlineLine = target.style.textDecorationLine || computed.textDecorationLine
+
+  return {
+    fontFamily,
+    fontSize,
+    bold: target.dataset.previewBold === 'true' || target.style.fontWeight === 'bold' || computed.fontWeight === 'bold' || (!Number.isNaN(numericWeight) && numericWeight >= 600),
+    italic: target.dataset.previewItalic === 'true' || target.style.fontStyle === 'italic' || computed.fontStyle === 'italic',
+    underline: target.dataset.previewUnderline === 'true' || target.style.textDecoration.includes('underline') || underlineLine.includes('underline'),
+  }
+}
+
 function isRangeInsideEditor(range: Range, editor: HTMLElement) {
   const startNode = range.startContainer
   const endNode = range.endContainer
@@ -127,8 +206,10 @@ export function Preview({ value, onChange }: PreviewProps) {
   const editorRef = useRef<HTMLDivElement>(null)
   const syncingRef = useRef(false)
   const savedRangeRef = useRef<Range | null>(null)
-  const [currentFont, setCurrentFont] = useState(FONT_FAMILY_OPTIONS[0])
-  const [currentFontSize, setCurrentFontSize] = useState(FONT_SIZE_OPTIONS_CN[3]?.value ?? 16)
+  const historyRef = useRef<string[]>([])
+  const historyIndexRef = useRef(-1)
+  const lastEmittedValueRef = useRef('')
+  const [formatState, setFormatState] = useState<SelectionFormatState>(() => createDefaultFormatState(config))
   const headerOrgFontSize = useMemo(
     () => getHeaderOrgFontSize(config.header.orgName, config.margins.left, config.margins.right),
     [config.header.orgName, config.margins.left, config.margins.right],
@@ -176,7 +257,25 @@ export function Preview({ value, onChange }: PreviewProps) {
     syncingRef.current = true
     editor.innerHTML = normalized
     syncingRef.current = false
+
+    if (normalized !== lastEmittedValueRef.current) {
+      historyRef.current = [normalized]
+      historyIndexRef.current = 0
+      setFormatState(createDefaultFormatState(config))
+    }
   }, [value])
+
+  useEffect(() => {
+    setFormatState((prev) => ({
+      ...prev,
+      fontFamily: prev.fontFamily || config.body.fontFamily,
+      fontSize: prev.fontSize || config.body.fontSize,
+    }))
+  }, [config.body.fontFamily, config.body.fontSize])
+
+  const syncFormatState = useCallback(() => {
+    setFormatState(getSelectionFormatState(editorRef.current, createDefaultFormatState(config)))
+  }, [config])
 
   const saveSelection = useCallback(() => {
     const editor = editorRef.current
@@ -201,23 +300,52 @@ export function Preview({ value, onChange }: PreviewProps) {
     return true
   }, [])
 
+  const commitHistory = useCallback((html: string) => {
+    const normalized = normalizeEditorHtml(html)
+    const current = historyRef.current[historyIndexRef.current]
+    if (current === normalized) return normalized
+
+    historyRef.current = historyRef.current.slice(0, historyIndexRef.current + 1)
+    historyRef.current.push(normalized)
+    historyIndexRef.current = historyRef.current.length - 1
+    return normalized
+  }, [])
+
+  const emitChange = useCallback((recordHistory = true) => {
+    const editor = editorRef.current
+    if (!editor || syncingRef.current) return
+    const normalized = normalizeEditorHtml(editor.innerHTML)
+    if (recordHistory) commitHistory(normalized)
+    lastEmittedValueRef.current = normalized
+    onChange(normalized)
+    syncFormatState()
+  }, [commitHistory, onChange, syncFormatState])
+
+  const handleUndo = useCallback(() => {
+    const editor = editorRef.current
+    if (!editor || historyIndexRef.current <= 0) return
+
+    historyIndexRef.current -= 1
+    const previousHtml = historyRef.current[historyIndexRef.current]
+    syncingRef.current = true
+    editor.innerHTML = previousHtml
+    syncingRef.current = false
+    lastEmittedValueRef.current = previousHtml
+    onChange(previousHtml)
+    syncFormatState()
+  }, [onChange, syncFormatState])
+
   useEffect(() => {
     const handleSelectionChange = () => {
       saveSelection()
+      syncFormatState()
     }
 
     document.addEventListener('selectionchange', handleSelectionChange)
     return () => document.removeEventListener('selectionchange', handleSelectionChange)
-  }, [saveSelection])
-
-  const emitChange = useCallback(() => {
-    const editor = editorRef.current
-    if (!editor || syncingRef.current) return
-    onChange(normalizeEditorHtml(editor.innerHTML))
-  }, [onChange])
+  }, [saveSelection, syncFormatState])
 
   const handleFontChange = useCallback((fontFamily: string) => {
-    setCurrentFont(fontFamily)
     restoreSelection()
     applyInlineStyles({ fontFamily })
     saveSelection()
@@ -225,7 +353,6 @@ export function Preview({ value, onChange }: PreviewProps) {
   }, [emitChange, restoreSelection, saveSelection])
 
   const handleFontSizeChange = useCallback((fontSize: number) => {
-    setCurrentFontSize(fontSize)
     restoreSelection()
     applyInlineStyles({ fontSize: `${fontSize}pt` })
     saveSelection()
@@ -234,12 +361,12 @@ export function Preview({ value, onChange }: PreviewProps) {
 
   const handleInlineStyle = useCallback((command: 'bold' | 'italic' | 'underline') => {
     restoreSelection()
-    if (command === 'bold') applyInlineStyles({ fontWeight: 'bold' })
-    if (command === 'italic') applyInlineStyles({ fontStyle: 'italic' })
-    if (command === 'underline') applyInlineStyles({ textDecoration: 'underline' })
+    if (command === 'bold') applyInlineStyles({ fontWeight: formatState.bold ? 'normal' : 'bold' })
+    if (command === 'italic') applyInlineStyles({ fontStyle: formatState.italic ? 'normal' : 'italic' })
+    if (command === 'underline') applyInlineStyles({ textDecoration: formatState.underline ? 'none' : 'underline' })
     saveSelection()
     emitChange()
-  }, [emitChange, restoreSelection, saveSelection])
+  }, [emitChange, formatState.bold, formatState.italic, formatState.underline, restoreSelection, saveSelection])
 
   const handleAlignmentChange = useCallback((alignment: 'left' | 'center' | 'right' | 'justify') => {
     const editor = editorRef.current
@@ -266,6 +393,12 @@ export function Preview({ value, onChange }: PreviewProps) {
   }, [emitChange, restoreSelection])
 
   const handleKeyDown = useCallback((e: KeyboardEvent<HTMLDivElement>) => {
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
+      e.preventDefault()
+      handleUndo()
+      return
+    }
+
     if (e.key !== 'Backspace') return
 
     const selection = window.getSelection()
@@ -289,7 +422,12 @@ export function Preview({ value, onChange }: PreviewProps) {
       emitChange()
       e.preventDefault()
     }
-  }, [emitChange])
+  }, [emitChange, handleUndo])
+
+  const handleToolbarMouseDown = useCallback((e: MouseEvent<HTMLButtonElement>) => {
+    e.preventDefault()
+    saveSelection()
+  }, [saveSelection])
 
   return (
     <div className="preview-container">
@@ -298,23 +436,24 @@ export function Preview({ value, onChange }: PreviewProps) {
           <span className="preview-label">排版</span>
         </div>
         <div className="preview-toolbar">
-          <select className="preview-select" value={currentFont} onMouseDown={saveSelection} onChange={(e) => handleFontChange(e.target.value)}>
+          <select className="preview-select" value={formatState.fontFamily} onMouseDown={saveSelection} onChange={(e) => handleFontChange(e.target.value)}>
             {FONT_FAMILY_OPTIONS.map((font) => (
               <option key={font} value={font}>{font}</option>
             ))}
           </select>
-          <select className="preview-select preview-select--size" value={currentFontSize} onMouseDown={saveSelection} onChange={(e) => handleFontSizeChange(Number(e.target.value))}>
+          <select className="preview-select preview-select--size" value={formatState.fontSize} onMouseDown={saveSelection} onChange={(e) => handleFontSizeChange(Number(e.target.value))}>
             {FONT_SIZE_OPTIONS_CN.map((option) => (
               <option key={option.label} value={option.value}>{option.label}</option>
             ))}
           </select>
-          <button type="button" className="preview-tool-btn" onMouseDown={saveSelection} onClick={() => handleInlineStyle('bold')}><strong>B</strong></button>
-          <button type="button" className="preview-tool-btn" onMouseDown={saveSelection} onClick={() => handleInlineStyle('italic')}><em>I</em></button>
-          <button type="button" className="preview-tool-btn" onMouseDown={saveSelection} onClick={() => handleInlineStyle('underline')}><u>U</u></button>
-          <button type="button" className="preview-tool-btn" onClick={() => handleAlignmentChange('left')}>左</button>
-          <button type="button" className="preview-tool-btn" onClick={() => handleAlignmentChange('center')}>中</button>
-          <button type="button" className="preview-tool-btn" onClick={() => handleAlignmentChange('right')}>右</button>
-          <button type="button" className="preview-tool-btn" onClick={() => handleAlignmentChange('justify')}>两端</button>
+          <button type="button" className={`preview-tool-btn ${formatState.bold ? 'preview-tool-btn--active' : ''}`} onMouseDown={handleToolbarMouseDown} onClick={() => handleInlineStyle('bold')}><strong>B</strong></button>
+          <button type="button" className={`preview-tool-btn ${formatState.italic ? 'preview-tool-btn--active' : ''}`} onMouseDown={handleToolbarMouseDown} onClick={() => handleInlineStyle('italic')}><em>I</em></button>
+          <button type="button" className={`preview-tool-btn ${formatState.underline ? 'preview-tool-btn--active' : ''}`} onMouseDown={handleToolbarMouseDown} onClick={() => handleInlineStyle('underline')}><u>U</u></button>
+          <button type="button" className="preview-tool-btn" onMouseDown={handleToolbarMouseDown} onClick={handleUndo}>撤</button>
+          <button type="button" className="preview-tool-btn" onMouseDown={handleToolbarMouseDown} onClick={() => handleAlignmentChange('left')}>左</button>
+          <button type="button" className="preview-tool-btn" onMouseDown={handleToolbarMouseDown} onClick={() => handleAlignmentChange('center')}>中</button>
+          <button type="button" className="preview-tool-btn" onMouseDown={handleToolbarMouseDown} onClick={() => handleAlignmentChange('right')}>右</button>
+          <button type="button" className="preview-tool-btn" onMouseDown={handleToolbarMouseDown} onClick={() => handleAlignmentChange('justify')}>两端</button>
         </div>
       </div>
       <div className="preview-scroll" style={cssVars}>
@@ -348,8 +487,8 @@ export function Preview({ value, onChange }: PreviewProps) {
               className="preview-editor"
               contentEditable
               suppressContentEditableWarning
-              onInput={emitChange}
-              onBlur={emitChange}
+              onInput={() => emitChange()}
+              onBlur={() => emitChange(false)}
               onKeyDown={handleKeyDown}
             />
           </div>

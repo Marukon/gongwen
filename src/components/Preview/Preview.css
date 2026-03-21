@@ -83,6 +83,13 @@
   border-color: #9ca3af;
 }
 
+.preview-tool-btn--active {
+  background: #e5eefc;
+  border-color: #3b82f6;
+  color: #1d4ed8;
+  font-weight: 700;
+}
+
 .preview-page-shell {
   width: 100%;
   max-width: 595px;
