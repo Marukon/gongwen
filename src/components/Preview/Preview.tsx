@@ -16,8 +16,9 @@ const FONT_SIZE_OPTIONS_CN = FONT_SIZE_OPTIONS.map((option) => ({
   value: option.value,
 }))
 const BLOCK_SELECTOR = 'p,div,h1,h2,h3,h4,h5,h6'
+type InlineStyleMap = Partial<Record<'fontFamily' | 'fontSize' | 'fontWeight' | 'fontStyle' | 'textDecoration', string>>
 
-function applyStyles(element: HTMLElement, styles: Partial<CSSStyleDeclaration>) {
+function applyStyles(element: HTMLElement, styles: InlineStyleMap) {
   for (const [key, value] of Object.entries(styles)) {
     if (!value) continue
     const cssName = key.replace(/[A-Z]/g, (match) => `-${match.toLowerCase()}`)
@@ -25,7 +26,7 @@ function applyStyles(element: HTMLElement, styles: Partial<CSSStyleDeclaration>)
   }
 }
 
-function styleNode(node: Node, styles: Partial<CSSStyleDeclaration>): Node {
+function styleNode(node: Node, styles: InlineStyleMap): Node {
   if (node.nodeType === Node.TEXT_NODE) {
     const text = node.textContent ?? ''
     if (!text) return node.cloneNode(true)
@@ -53,7 +54,7 @@ function styleNode(node: Node, styles: Partial<CSSStyleDeclaration>): Node {
   return clone
 }
 
-function applyInlineStyles(styles: Partial<CSSStyleDeclaration>) {
+function applyInlineStyles(styles: InlineStyleMap) {
   const selection = window.getSelection()
   if (!selection || selection.rangeCount === 0 || selection.isCollapsed) return
 
