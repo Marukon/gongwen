@@ -108,6 +108,22 @@
   margin-top: 0;
 }
 
+.preview-editor [data-preview-bold='true'] {
+  text-shadow:
+    0.02em 0 0 currentColor,
+    -0.02em 0 0 currentColor;
+}
+
+.preview-editor [data-preview-italic='true'] {
+  display: inline-block;
+  transform: skewX(-12deg);
+  transform-origin: center;
+}
+
+.preview-editor [data-preview-underline='true'] {
+  text-decoration-thickness: from-font;
+}
+
 .preview-header-section {
   margin-bottom: calc(var(--body-line-height, 29pt) * 2);
 }

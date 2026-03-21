@@ -24,6 +24,16 @@ function applyStyles(element: HTMLElement, styles: InlineStyleMap) {
     const cssName = key.replace(/[A-Z]/g, (match) => `-${match.toLowerCase()}`)
     element.style.setProperty(cssName, value)
   }
+
+  if (styles.fontWeight === 'bold') {
+    element.dataset.previewBold = 'true'
+  }
+  if (styles.fontStyle === 'italic') {
+    element.dataset.previewItalic = 'true'
+  }
+  if (styles.textDecoration?.includes('underline')) {
+    element.dataset.previewUnderline = 'true'
+  }
 }
 
 function styleNode(node: Node, styles: InlineStyleMap): Node {
