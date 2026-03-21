@@ -1,0 +1,55 @@
+{
+  "headers": [
+    {
+      "source": "/*",
+      "headers": [
+        {
+          "key": "X-Robots-Tag",
+          "value": "noindex, nofollow, noarchive, nosnippet"
+        }
+      ]
+    }
+  ],
+  "caches": [
+    {
+      "source": "/sitemap.xml",
+      "cacheTtl": 0
+    },
+    {
+      "source": "/*.js",
+      "cacheTtl": 864000
+    },
+    {
+      "source": "/*.css",
+      "cacheTtl": 864000
+    },
+    {
+      "source": "/*.woff2",
+      "cacheTtl": 864000
+    },
+    {
+      "source": "/*.woff",
+      "cacheTtl": 864000
+    },
+    {
+      "source": "/*.ttf",
+      "cacheTtl": 864000
+    },
+    {
+      "source": "/*.otf",
+      "cacheTtl": 864000
+    },
+    {
+      "source": "/*.png",
+      "cacheTtl": 864000
+    },
+    {
+      "source": "/*.webp",
+      "cacheTtl": 864000
+    },
+    {
+      "source": "/*.svg",
+      "cacheTtl": 864000
+    }
+  ]
+}
