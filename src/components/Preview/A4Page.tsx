@@ -1,8 +1,10 @@
 import React, { type CSSProperties } from 'react'
 import { NodeType } from '../../types/ast'
-import type { DocumentNode, AttachmentNode } from '../../types/ast'
-import type { HeaderConfig, FooterNoteConfig } from '../../types/documentConfig'
+import type { DocumentNode, AttachmentNode, RichTextRun } from '../../types/ast'
+import type { HeaderConfig, FooterNoteConfig, SpecialOptionsConfig } from '../../types/documentConfig'
 import './A4Page.css'
+
+const TITLE_DATE_RE = /^[（(]?\d{4}年\d{1,2}月\d{1,2}日[）)]?$/
 
 /** 节点类型 → CSS 类名映射 */
 export const NODE_CLASS_MAP: Record<NodeType, string> = {
@@ -53,6 +55,31 @@ export function calculateSignatureIndentEm(
   const dateWidth = calculateTextWidthEm(dateContent)
   const centerOffset = (dateWidth - signatureWidth) / 2
   return Math.max(0, baseIndent + centerOffset)
+}
+
+function isTitleDateNode(node: DocumentNode, index: number, title: DocumentNode | null): boolean {
+  return title !== null && index === 0 && TITLE_DATE_RE.test(node.content.trim())
+}
+
+function hasRichStyleOverrides(runs?: RichTextRun[]): boolean {
+  return !!runs?.some((run) => run.bold || run.italic || run.underline || run.fontFamily || run.fontSize)
+}
+
+function renderRichRuns(runs: RichTextRun[]) {
+  return runs.map((run, index) => (
+    <span
+      key={`${index}-${run.text}`}
+      style={{
+        fontFamily: run.fontFamily,
+        fontSize: run.fontSize ? `${run.fontSize}px` : undefined,
+        fontWeight: run.bold ? 'bold' : undefined,
+        fontStyle: run.italic ? 'italic' : undefined,
+        textDecoration: run.underline ? 'underline' : undefined,
+      }}
+    >
+      {run.text}
+    </span>
+  ))
 }
 
 /**
@@ -199,6 +226,8 @@ interface A4PageProps {
   isFirstPage: boolean
   /** 是否为最后一页 */
   isLastPage: boolean
+  /** 页码布局 */
+  pageNumberLayout: SpecialOptionsConfig['pageNumberLayout']
   /**
    * 是否加盖印章
    * - true: 成文日期右空四字 (GB/T 9704 7.3.5.1)
@@ -220,6 +249,7 @@ export function A4Page({
   footerNoteConfig,
   isFirstPage,
   isLastPage,
+  pageNumberLayout,
   hasStamp,
 }: A4PageProps) {
   /**
@@ -228,6 +258,7 @@ export function A4Page({
    * - DATE: 根据 hasStamp 右空四字或二字
    */
   function getNodeStyle(node: DocumentNode, index: number): CSSProperties | undefined {
+    if (isTitleDateNode(node, index, title)) return undefined
     if (node.type === NodeType.SIGNATURE) {
       // 查找下一个节点是否为 DATE
       const nextNode = body[index + 1]
@@ -266,7 +297,9 @@ export function A4Page({
         <div className="a4-content-viewport" style={{ height: `${clipHeight}px` }}>
           <div style={{ transform: `translateY(-${offsetY}px)` }}>
             {title && (
-              <p className={NODE_CLASS_MAP[title.type]}>{title.content}</p>
+              <p className={NODE_CLASS_MAP[title.type]}>
+                {hasRichStyleOverrides(title.runs) ? renderRichRuns(title.runs ?? []) : title.content}
+              </p>
             )}
             {body.flatMap((node, index) => {
               const elements: React.ReactNode[] = []
@@ -292,9 +325,11 @@ export function A4Page({
                   <p
                     key={node.lineNumber}
                     className={
-                      node.type === NodeType.HEADING_1 ? 'a4-h1'
-                      : node.type === NodeType.HEADING_2 ? 'a4-h2'
-                      : NODE_CLASS_MAP[node.type]
+                      isTitleDateNode(node, index, title)
+                        ? 'a4-title-date'
+                        : node.type === NodeType.HEADING_1 ? 'a4-h1'
+                        : node.type === NodeType.HEADING_2 ? 'a4-h2'
+                        : NODE_CLASS_MAP[node.type]
                     }
                     style={getNodeStyle(node, index)}
                   >
@@ -308,7 +343,9 @@ export function A4Page({
                             ? renderHeading4(node.content)
                             : (boldFirstSentence && node.type === NodeType.PARAGRAPH)
                               ? renderBoldFirstSentence(node.content)
-                              : node.content}
+                              : hasRichStyleOverrides(node.runs)
+                                ? renderRichRuns(node.runs ?? [])
+                                : node.content}
                   </p>
                 )
               }
@@ -338,7 +375,17 @@ export function A4Page({
         </div>
       )}
       {showPageNumber && (
-        <div className={`a4-footer ${pageNumber % 2 === 0 ? 'a4-footer-even' : 'a4-footer-odd'}`}>
+        <div
+          className={
+            `a4-footer ${
+              pageNumberLayout === 'center'
+                ? 'a4-footer-center'
+                : pageNumber % 2 === 0
+                  ? 'a4-footer-even'
+                  : 'a4-footer-odd'
+            }`
+          }
+        >
           — {pageNumber} —
         </div>
       )}

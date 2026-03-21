@@ -38,14 +38,22 @@ export interface BodyConfig {
 /** 特殊选项 */
 export interface SpecialOptionsConfig {
   boldFirstSentence: boolean
+  firstParagraphNoIndent: boolean
   showPageNumber: boolean
   pageNumberFont: string
+  pageNumberLayout: 'center' | 'mirrored'
   /**
    * 是否加盖印章
    * - true: 成文日期右空四字 (GB/T 9704 7.3.5.1 加盖印章的公文)
    * - false: 成文日期右空二字 (GB/T 9704 7.3.5.2 不加盖印章的公文)
    */
   hasStamp: boolean
+}
+
+/** 文本修复选项 */
+export interface TextFixOptionsConfig {
+  convertEnglishPunctuation: boolean
+  removeRedundantSpaces: boolean
 }
 
 /** 高级设置 — 单个元素配置 */
@@ -66,6 +74,7 @@ export interface AdvancedConfig {
 /** 版头配置 */
 export interface HeaderConfig {
   enabled: boolean
+  mode: 'formal' | 'note'
   /** 发文机关标志（红色大字居中） */
   orgName: string
   /** 发文字号，如"国办发〔2024〕1号" */
@@ -92,6 +101,7 @@ export interface DocumentConfig {
   headings: HeadingsConfig
   body: BodyConfig
   specialOptions: SpecialOptionsConfig
+  textFixOptions: TextFixOptionsConfig
   advanced: AdvancedConfig
   header: HeaderConfig
   footerNote: FooterNoteConfig
@@ -128,9 +138,15 @@ export const DEFAULT_CONFIG: DocumentConfig = {
   },
   specialOptions: {
     boldFirstSentence: false,
+    firstParagraphNoIndent: false,
     showPageNumber: true,
     pageNumberFont: '宋体',
+    pageNumberLayout: 'mirrored',
     hasStamp: false,
+  },
+  textFixOptions: {
+    convertEnglishPunctuation: true,
+    removeRedundantSpaces: true,
   },
   advanced: {
     addressee: { fontFamily: '仿宋_GB2312', asciiFontFamily: 'Times New Roman', fontSize: 16 },
@@ -140,6 +156,7 @@ export const DEFAULT_CONFIG: DocumentConfig = {
   },
   header: {
     enabled: false,
+    mode: 'formal',
     orgName: '',
     docNumber: '',
     signer: '',
@@ -202,6 +219,16 @@ export const INDENT_OPTIONS: { label: string; value: number }[] = [
   { label: '1字符', value: 1 },
   { label: '2字符', value: 2 },
   { label: '3字符', value: 3 },
+]
+
+export const PAGE_NUMBER_LAYOUT_OPTIONS: { label: string; value: 'center' | 'mirrored' }[] = [
+  { label: '居中', value: 'center' },
+  { label: '双面打印两侧', value: 'mirrored' },
+]
+
+export const HEADER_MODE_OPTIONS: { label: string; value: 'formal' | 'note' }[] = [
+  { label: '正式文', value: 'formal' },
+  { label: '便签', value: 'note' },
 ]
 
 // ---- 版式常量 (GB/T 9704) ----

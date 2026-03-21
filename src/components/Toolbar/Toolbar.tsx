@@ -13,7 +13,13 @@ interface ToolbarProps {
   importing?: boolean
 }
 
-export function Toolbar({ ast, onExport, onClear, onImport, importing }: ToolbarProps) {
+export function Toolbar({
+  ast,
+  onExport,
+  onClear,
+  onImport,
+  importing,
+}: ToolbarProps) {
   const hasContent = ast.title !== null || ast.body.length > 0
   const nodeCount = (ast.title ? 1 : 0) + ast.body.length
   const [showSettings, setShowSettings] = useState(false)

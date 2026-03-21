@@ -1,51 +1,89 @@
-import React, { useRef, useMemo, type CSSProperties } from 'react'
-import { NodeType } from '../../types/ast'
-import type { GongwenAST, DocumentNode, AttachmentNode } from '../../types/ast'
+import { useEffect, useMemo, useRef, useState, useCallback, type CSSProperties, type KeyboardEvent } from 'react'
 import { useDocumentConfig } from '../../contexts/DocumentConfigContext'
-import { cmToPagePercent, CHARS_PER_LINE } from '../../types/documentConfig'
-import { usePagination } from '../../hooks/usePagination'
-import { A4Page, NODE_CLASS_MAP, renderHeading1, renderHeading2, renderHeading3, renderHeading4, renderBoldFirstSentence, renderAttachment, calculateSignatureIndentEm } from './A4Page'
+import { CHARS_PER_LINE, FONT_OPTIONS, FONT_SIZE_OPTIONS, cmToPagePercent } from '../../types/documentConfig'
+import { normalizeEditorHtml } from '../../utils/richText'
 import './A4Page.css'
 import './Preview.css'
 
 interface PreviewProps {
-  ast: GongwenAST
+  value: string
+  onChange: (value: string) => void
 }
 
-/**
- * 计算节点的动态样式（用于 measurer）
- * - SIGNATURE: 以成文日期为基准居中
- * - DATE: 根据 hasStamp 右空四字或二字
- */
-function getNodeStyle(
-  node: DocumentNode,
-  index: number,
-  body: DocumentNode[],
-  hasStamp: boolean
-): CSSProperties | undefined {
-  if (node.type === NodeType.SIGNATURE) {
-    const nextNode = body[index + 1]
-    if (nextNode && nextNode.type === NodeType.DATE) {
-      const indent = calculateSignatureIndentEm(node.content, nextNode.content, hasStamp)
-      return { paddingRight: `${indent}em` }
+const FONT_FAMILY_OPTIONS = FONT_OPTIONS.map((option) => option.value)
+const FONT_SIZE_OPTIONS_CN = FONT_SIZE_OPTIONS.map((option) => ({
+  label: option.label,
+  value: option.value,
+}))
+const BLOCK_SELECTOR = 'p,div,h1,h2,h3,h4,h5,h6'
+
+function exec(command: string, value?: string) {
+  document.execCommand('styleWithCSS', false, 'true')
+  document.execCommand(command, false, value)
+}
+
+function applyFontSize(size: number) {
+  const selection = window.getSelection()
+  if (!selection || selection.rangeCount === 0 || selection.isCollapsed) return
+
+  const range = selection.getRangeAt(0)
+  const span = document.createElement('span')
+  span.style.fontSize = `${size}pt`
+  try {
+    range.surroundContents(span)
+  } catch {
+    const fragment = range.extractContents()
+    span.appendChild(fragment)
+    range.insertNode(span)
+  }
+  selection.removeAllRanges()
+}
+
+function getHeaderOrgFontSize(orgName: string, leftMargin: number, rightMargin: number): number {
+  const length = Math.max(1, Array.from(orgName.trim()).length)
+  const availablePx = 595 * (1 - (leftMargin * 10 / 210) - (rightMargin * 10 / 210))
+  return Math.max(18, Math.min(30, Math.floor(availablePx / length)))
+}
+
+function getSelectedBlocks(root: HTMLElement): HTMLElement[] {
+  const selection = window.getSelection()
+  if (!selection || selection.rangeCount === 0) return []
+
+  const range = selection.getRangeAt(0)
+  const blocks = Array.from(root.querySelectorAll<HTMLElement>(BLOCK_SELECTOR))
+  const selected = blocks.filter((block) => {
+    try {
+      return range.intersectsNode(block)
+    } catch {
+      return false
     }
-    return { paddingRight: `${hasStamp ? 4 : 2}em` }
-  }
-  if (node.type === NodeType.DATE) {
-    return { paddingRight: `${hasStamp ? 4 : 2}em` }
-  }
-  return undefined
+  })
+
+  if (selected.length > 0) return selected
+
+  const startNode = range.startContainer.nodeType === Node.ELEMENT_NODE
+    ? range.startContainer as HTMLElement
+    : range.startContainer.parentElement
+  const fallback = startNode?.closest<HTMLElement>(BLOCK_SELECTOR)
+  return fallback && root.contains(fallback) ? [fallback] : []
 }
 
-export function Preview({ ast }: PreviewProps) {
-  const measurerRef = useRef<HTMLDivElement>(null)
+export function Preview({ value, onChange }: PreviewProps) {
   const { config } = useDocumentConfig()
-  const pages = usePagination(ast.title, ast.body, measurerRef)
+  const editorRef = useRef<HTMLDivElement>(null)
+  const syncingRef = useRef(false)
+  const [currentFont, setCurrentFont] = useState(FONT_FAMILY_OPTIONS[0])
+  const [currentFontSize, setCurrentFontSize] = useState(FONT_SIZE_OPTIONS_CN[3]?.value ?? 16)
+  const headerOrgFontSize = useMemo(
+    () => getHeaderOrgFontSize(config.header.orgName, config.margins.left, config.margins.right),
+    [config.header.orgName, config.margins.left, config.margins.right],
+  )
+  const headerOrgChars = useMemo(
+    () => Array.from(config.header.orgName.trim()),
+    [config.header.orgName],
+  )
 
-  /** 将 config 转换为 CSS 自定义属性 */
   const cssVars = useMemo((): CSSProperties => {
-    // 计算字符间距，使每行恰好容纳 28 字 (GB/T 9704)
-    // 预览以 72dpi 渲染，1pt = 1px，页面宽度 595px
     const pageWidthPx = 595
     const marginLeftPct = config.margins.left * 10 / 210
     const marginRightPct = config.margins.right * 10 / 210
@@ -57,108 +95,164 @@ export function Preview({ ast }: PreviewProps) {
       '--margin-bottom': `${cmToPagePercent(config.margins.bottom, 'x')}%`,
       '--margin-left': `${cmToPagePercent(config.margins.left, 'x')}%`,
       '--margin-right': `${cmToPagePercent(config.margins.right, 'x')}%`,
-      // 版记绝对定位使用 y 轴百分比（相对页面高度 297mm，而非宽度 210mm）
       '--margin-bottom-y': `${cmToPagePercent(config.margins.bottom, 'y')}%`,
       '--title-font': config.title.fontFamily,
-      '--title-size': `${config.title.fontSize}px`,
-      '--title-line-height': `${config.title.lineSpacing}px`,
+      '--title-size': `${config.title.fontSize}pt`,
+      '--title-line-height': `${config.title.lineSpacing}pt`,
       '--body-font': config.body.fontFamily,
-      '--body-size': `${config.body.fontSize}px`,
-      '--body-line-height': `${config.body.lineSpacing}px`,
+      '--body-size': `${config.body.fontSize}pt`,
+      '--body-line-height': `${config.body.lineSpacing}pt`,
       '--body-indent': `${config.body.firstLineIndent}em`,
       '--char-spacing': `${charSpacingPx.toFixed(4)}px`,
       '--h1-font': config.headings.h1.fontFamily,
-      '--h1-size': `${config.headings.h1.fontSize}px`,
+      '--h1-size': `${config.headings.h1.fontSize}pt`,
       '--h2-font': config.headings.h2.fontFamily,
-      '--h2-size': `${config.headings.h2.fontSize}px`,
+      '--h2-size': `${config.headings.h2.fontSize}pt`,
       '--h3-font': config.advanced.h3.fontFamily,
       '--page-number-font': config.specialOptions.pageNumberFont,
     } as CSSProperties
   }, [config])
 
-  const boldFirst = config.specialOptions.boldFirstSentence
+  useEffect(() => {
+    const editor = editorRef.current
+    if (!editor) return
+    const normalized = normalizeEditorHtml(value)
+    if (editor.innerHTML === normalized) return
+    syncingRef.current = true
+    editor.innerHTML = normalized
+    syncingRef.current = false
+  }, [value])
+
+  const emitChange = useCallback(() => {
+    const editor = editorRef.current
+    if (!editor || syncingRef.current) return
+    onChange(normalizeEditorHtml(editor.innerHTML))
+  }, [onChange])
+
+  const handleFontChange = useCallback((fontFamily: string) => {
+    setCurrentFont(fontFamily)
+    exec('fontName', fontFamily)
+    emitChange()
+  }, [emitChange])
+
+  const handleFontSizeChange = useCallback((fontSize: number) => {
+    setCurrentFontSize(fontSize)
+    applyFontSize(fontSize)
+    emitChange()
+  }, [emitChange])
+
+  const handleAlignmentChange = useCallback((alignment: 'left' | 'center' | 'right' | 'justify') => {
+    const editor = editorRef.current
+    if (!editor) return
+
+    const blocks = getSelectedBlocks(editor)
+    if (blocks.length === 0) return
+
+    for (const block of blocks) {
+      block.style.textAlign = alignment
+      if (alignment === 'justify') {
+        if (block.dataset.alignNoIndent === 'true') {
+          delete block.dataset.alignNoIndent
+          delete block.dataset.noIndent
+        }
+      } else {
+        block.dataset.noIndent = 'true'
+        block.dataset.alignNoIndent = 'true'
+      }
+    }
+
+    emitChange()
+  }, [emitChange])
+
+  const handleKeyDown = useCallback((e: KeyboardEvent<HTMLDivElement>) => {
+    if (e.key !== 'Backspace') return
+
+    const selection = window.getSelection()
+    if (!selection || !selection.isCollapsed || selection.rangeCount === 0) return
+
+    const range = selection.getRangeAt(0)
+    const block = (range.startContainer.nodeType === Node.ELEMENT_NODE
+      ? range.startContainer as HTMLElement
+      : range.startContainer.parentElement
+    )?.closest('p')
+
+    if (!block || block.dataset.noIndent === 'true') return
+
+    const blockRange = document.createRange()
+    blockRange.selectNodeContents(block)
+    blockRange.setEnd(range.startContainer, range.startOffset)
+    const textBeforeCaret = blockRange.toString()
+
+    if (textBeforeCaret.length === 0) {
+      block.dataset.noIndent = 'true'
+      emitChange()
+      e.preventDefault()
+    }
+  }, [emitChange])
 
   return (
     <div className="preview-container">
       <div className="preview-header">
-        <span className="preview-label">预览</span>
-        <span className="preview-hint">共 {pages.length} 页</span>
+        <div className="preview-header-main">
+          <span className="preview-label">排版</span>
+        </div>
+        <div className="preview-toolbar">
+          <select className="preview-select" value={currentFont} onChange={(e) => handleFontChange(e.target.value)}>
+            {FONT_FAMILY_OPTIONS.map((font) => (
+              <option key={font} value={font}>{font}</option>
+            ))}
+          </select>
+          <select className="preview-select preview-select--size" value={currentFontSize} onChange={(e) => handleFontSizeChange(Number(e.target.value))}>
+            {FONT_SIZE_OPTIONS_CN.map((option) => (
+              <option key={option.label} value={option.value}>{option.label}</option>
+            ))}
+          </select>
+          <button type="button" className="preview-tool-btn" onClick={() => { exec('bold'); emitChange() }}><strong>B</strong></button>
+          <button type="button" className="preview-tool-btn" onClick={() => { exec('italic'); emitChange() }}><em>I</em></button>
+          <button type="button" className="preview-tool-btn" onClick={() => { exec('underline'); emitChange() }}><u>U</u></button>
+          <button type="button" className="preview-tool-btn" onClick={() => handleAlignmentChange('left')}>左</button>
+          <button type="button" className="preview-tool-btn" onClick={() => handleAlignmentChange('center')}>中</button>
+          <button type="button" className="preview-tool-btn" onClick={() => handleAlignmentChange('right')}>右</button>
+          <button type="button" className="preview-tool-btn" onClick={() => handleAlignmentChange('justify')}>两端</button>
+        </div>
       </div>
       <div className="preview-scroll" style={cssVars}>
-        {/* 隐藏度量容器：渲染全部节点用于高度测量（与 A4Page 使用相同的 CSS 类和渲染逻辑） */}
-        <div ref={measurerRef} className="a4-measurer" aria-hidden="true">
-          <div className="a4-measurer-content">
-            {ast.title && (
-              <p className={NODE_CLASS_MAP[ast.title.type]}>{ast.title.content}</p>
+        <div className="preview-page-shell">
+          <div className="preview-page-content a4-content">
+            {config.header.enabled && config.header.orgName && (
+              <div className={`preview-header-section ${config.header.mode === 'note' ? 'preview-header-section--note' : ''}`}>
+                <div className="a4-header-org" style={{ fontSize: `${headerOrgFontSize}pt` }}>
+                  {headerOrgChars.map((char, index) => (
+                    <span key={`${char}-${index}`} className="a4-header-org-char">
+                      {char === ' ' ? '\u00a0' : char}
+                    </span>
+                  ))}
+                </div>
+                {config.header.mode === 'formal' && (config.header.docNumber || config.header.signer) && (
+                  <div className={`a4-header-meta${config.header.signer ? ' a4-header-meta--with-signer' : ''}`}>
+                    <span>{config.header.docNumber}</span>
+                    {config.header.signer && (
+                      <span>
+                        <span className="a4-header-signer-label">签发人：</span>
+                        <span className="a4-header-signer-name">{config.header.signer}</span>
+                      </span>
+                    )}
+                  </div>
+                )}
+                <div className="a4-header-separator"></div>
+              </div>
             )}
-            {ast.body.flatMap((node, index) => {
-              const elements: React.ReactNode[] = []
-              
-              // 发文机关署名前插入 2 个空行
-              if (node.type === NodeType.SIGNATURE) {
-                for (let j = 0; j < 2; j++) {
-                  elements.push(
-                    <p key={`empty-${node.lineNumber}-${j}`} className="a4-empty-line">{'\u200B'}</p>
-                  )
-                }
-              }
-              
-              if (node.type === NodeType.ATTACHMENT) {
-                elements.push(
-                  <React.Fragment key={node.lineNumber}>
-                    {renderAttachment(node as AttachmentNode)}
-                  </React.Fragment>
-                )
-              } else {
-                elements.push(
-                  <p
-                    key={node.lineNumber}
-                    className={
-                      node.type === NodeType.HEADING_1 ? 'a4-h1'
-                      : node.type === NodeType.HEADING_2 ? 'a4-h2'
-                      : NODE_CLASS_MAP[node.type]
-                    }
-                    style={getNodeStyle(node, index, ast.body, config.specialOptions.hasStamp)}
-                  >
-                    {node.type === NodeType.HEADING_1
-                      ? renderHeading1(node.content)
-                      : node.type === NodeType.HEADING_2
-                        ? renderHeading2(node.content)
-                        : node.type === NodeType.HEADING_3
-                          ? renderHeading3(node.content)
-                          : node.type === NodeType.HEADING_4
-                            ? renderHeading4(node.content)
-                            : (boldFirst && node.type === NodeType.PARAGRAPH)
-                              ? renderBoldFirstSentence(node.content)
-                              : node.content}
-                  </p>
-                )
-              }
-              
-              return elements
-            })}
+            <div
+              ref={editorRef}
+              className="preview-editor"
+              contentEditable
+              suppressContentEditableWarning
+              onInput={emitChange}
+              onBlur={emitChange}
+              onKeyDown={handleKeyDown}
+            />
           </div>
         </div>
-
-        {/* 渲染分页后的多个 A4 页面（每页渲染完整内容流，通过 offsetY 裁剪） */}
-        {pages.map((slice, index) => (
-          <A4Page
-            key={index}
-            title={ast.title}
-            body={ast.body}
-            pageNumber={index + 1}
-            totalPages={pages.length}
-            offsetY={slice.offsetY}
-            clipHeight={slice.clipHeight}
-            showPageNumber={config.specialOptions.showPageNumber}
-            boldFirstSentence={boldFirst}
-            headerConfig={config.header}
-            footerNoteConfig={config.footerNote}
-            isFirstPage={index === 0}
-            isLastPage={index === pages.length - 1}
-            hasStamp={config.specialOptions.hasStamp}
-          />
-        ))}
       </div>
     </div>
   )

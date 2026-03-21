@@ -7,6 +7,8 @@ import {
   FONT_SIZE_OPTIONS,
   LINE_SPACING_OPTIONS,
   INDENT_OPTIONS,
+  PAGE_NUMBER_LAYOUT_OPTIONS,
+  HEADER_MODE_OPTIONS,
   type DeepPartial,
   type DocumentConfig,
 } from '../../types/documentConfig'
@@ -333,6 +335,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
   const { config, updateConfig, resetConfig } = useDocumentConfig()
   const { customFonts, addFont, removeFont } = useCustomFonts()
   const [showAdvanced, setShowAdvanced] = useState(false)
+  const importInputRef = useRef<HTMLInputElement>(null)
 
   const patch = (p: DeepPartial<DocumentConfig>) => updateConfig(p)
   const FONT_SIZE_MIN = 8
@@ -354,6 +357,39 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
     customFonts,
     onAddCustomFont: addFont,
     onRemoveCustomFont: removeFont,
+  }
+
+  function handleExportSettings() {
+    const payload = {
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      config,
+    }
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = 'gongwen-settings.json'
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(url)
+  }
+
+  async function handleImportSettings(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+
+    try {
+      const raw = await file.text()
+      const parsed = JSON.parse(raw) as { config?: DeepPartial<DocumentConfig> }
+      if (!parsed.config) throw new Error('设置文件格式无效')
+      updateConfig(parsed.config)
+      alert('设置已导入并实时应用')
+    } catch (error) {
+      alert(error instanceof Error ? error.message : '导入设置失败')
+    }
   }
 
   return (
@@ -380,24 +416,34 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
               />
               {config.header.enabled && (
                 <div className="settings-grid settings-grid--3">
+                  <SelectField
+                    label="版头样式"
+                    value={config.header.mode}
+                    options={HEADER_MODE_OPTIONS}
+                    onChange={(v) => patch({ header: { mode: v as 'formal' | 'note' } })}
+                  />
                   <TextField
                     label="发文机关标志"
                     value={config.header.orgName}
                     placeholder="如：国务院办公厅"
                     onChange={(v) => patch({ header: { orgName: v } })}
                   />
-                  <TextField
-                    label="发文字号"
-                    value={config.header.docNumber}
-                    placeholder="如：国办发〔2024〕1号"
-                    onChange={(v) => patch({ header: { docNumber: v } })}
-                  />
-                  <TextField
-                    label="签发人"
-                    value={config.header.signer}
-                    placeholder="选填，上行文使用"
-                    onChange={(v) => patch({ header: { signer: v } })}
-                  />
+                  {config.header.mode === 'formal' && (
+                    <>
+                      <TextField
+                        label="发文字号"
+                        value={config.header.docNumber}
+                        placeholder="如：国办发〔2024〕1号"
+                        onChange={(v) => patch({ header: { docNumber: v } })}
+                      />
+                      <TextField
+                        label="签发人"
+                        value={config.header.signer}
+                        placeholder="选填，上行文使用"
+                        onChange={(v) => patch({ header: { signer: v } })}
+                      />
+                    </>
+                  )}
                 </div>
               )}
             </div>
@@ -587,6 +633,11 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                 onChange={(v) => patch({ specialOptions: { boldFirstSentence: v } })}
               />
               <CheckboxField
+                label="正文首段顶格"
+                checked={config.specialOptions.firstParagraphNoIndent}
+                onChange={(v) => patch({ specialOptions: { firstParagraphNoIndent: v } })}
+              />
+              <CheckboxField
                 label="添加页码"
                 checked={config.specialOptions.showPageNumber}
                 onChange={(v) => patch({ specialOptions: { showPageNumber: v } })}
@@ -598,6 +649,14 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                     value={config.specialOptions.pageNumberFont}
                     {...fontFieldProps}
                     onChange={(v) => patch({ specialOptions: { pageNumberFont: v } })}
+                  />
+                  <SelectField
+                    label="页码位置"
+                    value={config.specialOptions.pageNumberLayout}
+                    options={PAGE_NUMBER_LAYOUT_OPTIONS}
+                    onChange={(v) =>
+                      patch({ specialOptions: { pageNumberLayout: v as 'center' | 'mirrored' } })
+                    }
                   />
                 </div>
               )}
@@ -672,6 +731,24 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                     </div>
                   </div>
                 ))}
+                <div className="settings-advanced-row settings-advanced-row--text-fix">
+                  <span className="settings-advanced-label">文本修复</span>
+                  <div className="settings-options">
+                    <CheckboxField
+                      label="一键修复和实时解析时，将英文标点替换为中文标点"
+                      checked={config.textFixOptions.convertEnglishPunctuation}
+                      onChange={(v) => patch({ textFixOptions: { convertEnglishPunctuation: v } })}
+                    />
+                    <CheckboxField
+                      label="一键修复和实时解析时，去除多余空格"
+                      checked={config.textFixOptions.removeRedundantSpaces}
+                      onChange={(v) => patch({ textFixOptions: { removeRedundantSpaces: v } })}
+                    />
+                    <p className="settings-hint">
+                      关闭某项后，预览解析与“一键修复”都会跳过对应处理，仅保留你启用的文本修复规则。
+                    </p>
+                  </div>
+                </div>
               </div>
             )}
           </section>
@@ -679,21 +756,38 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
 
         {/* 底部操作栏 */}
         <div className="settings-footer">
-          <a
-            className="settings-btn settings-btn--download"
-            href="https://github.com/hehecat/gongwen/releases/latest/download/gongwen.html"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            下载离线版
-          </a>
+          <input
+            ref={importInputRef}
+            type="file"
+            accept=".json"
+            onChange={handleImportSettings}
+            style={{ display: 'none' }}
+          />
+          <div className="settings-footer-actions settings-footer-actions--left">
+            <a
+              className="settings-btn settings-btn--download"
+              href="https://github.com/hehecat/gongwen/releases/latest/download/gongwen.html"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              下载离线版
+            </a>
+          </div>
           <div className="settings-footer-spacer" />
-          <button className="settings-btn settings-btn--reset" onClick={resetConfig}>
-            恢复默认
-          </button>
-          <button className="settings-btn settings-btn--close" onClick={onClose}>
-            关闭
-          </button>
+          <div className="settings-footer-actions settings-footer-actions--right">
+            <button className="settings-btn settings-btn--close" onClick={handleExportSettings}>
+              导出设置
+            </button>
+            <button className="settings-btn settings-btn--close" onClick={() => importInputRef.current?.click()}>
+              导入设置
+            </button>
+            <button className="settings-btn settings-btn--reset" onClick={resetConfig}>
+              恢复默认
+            </button>
+            <button className="settings-btn settings-btn--save" onClick={onClose}>
+              保存
+            </button>
+          </div>
         </div>
       </div>
     </div>
