@@ -17,28 +17,61 @@ const FONT_SIZE_OPTIONS_CN = FONT_SIZE_OPTIONS.map((option) => ({
 }))
 const BLOCK_SELECTOR = 'p,div,h1,h2,h3,h4,h5,h6'
 
-function exec(command: string, value?: string) {
-  document.execCommand('styleWithCSS', false, 'true')
-  document.execCommand(command, false, value)
+function applyStyles(element: HTMLElement, styles: Partial<CSSStyleDeclaration>) {
+  for (const [key, value] of Object.entries(styles)) {
+    if (!value) continue
+    const cssName = key.replace(/[A-Z]/g, (match) => `-${match.toLowerCase()}`)
+    element.style.setProperty(cssName, value)
+  }
 }
 
-function applyFontSize(size: number) {
+function styleNode(node: Node, styles: Partial<CSSStyleDeclaration>): Node {
+  if (node.nodeType === Node.TEXT_NODE) {
+    const text = node.textContent ?? ''
+    if (!text) return node.cloneNode(true)
+
+    const span = document.createElement('span')
+    applyStyles(span, styles)
+    span.textContent = text
+    return span
+  }
+
+  if (node.nodeType !== Node.ELEMENT_NODE) {
+    return node.cloneNode(true)
+  }
+
+  const element = node as HTMLElement
+  const clone = element.cloneNode(false) as HTMLElement
+  if (clone.tagName !== 'BR') {
+    applyStyles(clone, styles)
+  }
+
+  for (const child of Array.from(element.childNodes)) {
+    clone.appendChild(styleNode(child, styles))
+  }
+
+  return clone
+}
+
+function applyInlineStyles(styles: Partial<CSSStyleDeclaration>) {
   const selection = window.getSelection()
   if (!selection || selection.rangeCount === 0 || selection.isCollapsed) return
 
   const range = selection.getRangeAt(0)
-  const span = document.createElement('span')
-  span.style.fontSize = `${size}pt`
-  try {
-    range.surroundContents(span)
-  } catch {
-    const fragment = range.extractContents()
-    span.appendChild(fragment)
-    range.insertNode(span)
+  const fragment = range.extractContents()
+  const styledFragment = document.createDocumentFragment()
+
+  for (const child of Array.from(fragment.childNodes)) {
+    styledFragment.appendChild(styleNode(child, styles))
   }
 
+  const insertedNodes = Array.from(styledFragment.childNodes)
+  range.insertNode(styledFragment)
+  if (insertedNodes.length === 0) return
+
   const nextRange = document.createRange()
-  nextRange.selectNodeContents(span)
+  nextRange.setStartBefore(insertedNodes[0])
+  nextRange.setEndAfter(insertedNodes[insertedNodes.length - 1])
   selection.removeAllRanges()
   selection.addRange(nextRange)
 }
@@ -175,7 +208,7 @@ export function Preview({ value, onChange }: PreviewProps) {
   const handleFontChange = useCallback((fontFamily: string) => {
     setCurrentFont(fontFamily)
     restoreSelection()
-    exec('fontName', fontFamily)
+    applyInlineStyles({ fontFamily })
     saveSelection()
     emitChange()
   }, [emitChange, restoreSelection, saveSelection])
@@ -183,14 +216,16 @@ export function Preview({ value, onChange }: PreviewProps) {
   const handleFontSizeChange = useCallback((fontSize: number) => {
     setCurrentFontSize(fontSize)
     restoreSelection()
-    applyFontSize(fontSize)
+    applyInlineStyles({ fontSize: `${fontSize}pt` })
     saveSelection()
     emitChange()
   }, [emitChange, restoreSelection, saveSelection])
 
   const handleInlineStyle = useCallback((command: 'bold' | 'italic' | 'underline') => {
     restoreSelection()
-    exec(command)
+    if (command === 'bold') applyInlineStyles({ fontWeight: 'bold' })
+    if (command === 'italic') applyInlineStyles({ fontStyle: 'italic' })
+    if (command === 'underline') applyInlineStyles({ textDecoration: 'underline' })
     saveSelection()
     emitChange()
   }, [emitChange, restoreSelection, saveSelection])
@@ -252,12 +287,12 @@ export function Preview({ value, onChange }: PreviewProps) {
           <span className="preview-label">排版</span>
         </div>
         <div className="preview-toolbar">
-          <select className="preview-select" value={currentFont} onChange={(e) => handleFontChange(e.target.value)}>
+          <select className="preview-select" value={currentFont} onMouseDown={saveSelection} onChange={(e) => handleFontChange(e.target.value)}>
             {FONT_FAMILY_OPTIONS.map((font) => (
               <option key={font} value={font}>{font}</option>
             ))}
           </select>
-          <select className="preview-select preview-select--size" value={currentFontSize} onChange={(e) => handleFontSizeChange(Number(e.target.value))}>
+          <select className="preview-select preview-select--size" value={currentFontSize} onMouseDown={saveSelection} onChange={(e) => handleFontSizeChange(Number(e.target.value))}>
             {FONT_SIZE_OPTIONS_CN.map((option) => (
               <option key={option.label} value={option.value}>{option.label}</option>
             ))}
