@@ -36,7 +36,17 @@ function applyFontSize(size: number) {
     span.appendChild(fragment)
     range.insertNode(span)
   }
+
+  const nextRange = document.createRange()
+  nextRange.selectNodeContents(span)
   selection.removeAllRanges()
+  selection.addRange(nextRange)
+}
+
+function isRangeInsideEditor(range: Range, editor: HTMLElement) {
+  const startNode = range.startContainer
+  const endNode = range.endContainer
+  return editor.contains(startNode) && editor.contains(endNode)
 }
 
 function getHeaderOrgFontSize(orgName: string, leftMargin: number, rightMargin: number): number {
@@ -72,6 +82,7 @@ export function Preview({ value, onChange }: PreviewProps) {
   const { config } = useDocumentConfig()
   const editorRef = useRef<HTMLDivElement>(null)
   const syncingRef = useRef(false)
+  const savedRangeRef = useRef<Range | null>(null)
   const [currentFont, setCurrentFont] = useState(FONT_FAMILY_OPTIONS[0])
   const [currentFontSize, setCurrentFontSize] = useState(FONT_SIZE_OPTIONS_CN[3]?.value ?? 16)
   const headerOrgFontSize = useMemo(
@@ -123,6 +134,38 @@ export function Preview({ value, onChange }: PreviewProps) {
     syncingRef.current = false
   }, [value])
 
+  const saveSelection = useCallback(() => {
+    const editor = editorRef.current
+    const selection = window.getSelection()
+    if (!editor || !selection || selection.rangeCount === 0) return
+
+    const range = selection.getRangeAt(0)
+    if (!isRangeInsideEditor(range, editor)) return
+    savedRangeRef.current = range.cloneRange()
+  }, [])
+
+  const restoreSelection = useCallback(() => {
+    const editor = editorRef.current
+    const selection = window.getSelection()
+    const savedRange = savedRangeRef.current
+    if (!editor || !selection || !savedRange) return false
+    if (!isRangeInsideEditor(savedRange, editor)) return false
+
+    editor.focus()
+    selection.removeAllRanges()
+    selection.addRange(savedRange.cloneRange())
+    return true
+  }, [])
+
+  useEffect(() => {
+    const handleSelectionChange = () => {
+      saveSelection()
+    }
+
+    document.addEventListener('selectionchange', handleSelectionChange)
+    return () => document.removeEventListener('selectionchange', handleSelectionChange)
+  }, [saveSelection])
+
   const emitChange = useCallback(() => {
     const editor = editorRef.current
     if (!editor || syncingRef.current) return
@@ -131,20 +174,32 @@ export function Preview({ value, onChange }: PreviewProps) {
 
   const handleFontChange = useCallback((fontFamily: string) => {
     setCurrentFont(fontFamily)
+    restoreSelection()
     exec('fontName', fontFamily)
+    saveSelection()
     emitChange()
-  }, [emitChange])
+  }, [emitChange, restoreSelection, saveSelection])
 
   const handleFontSizeChange = useCallback((fontSize: number) => {
     setCurrentFontSize(fontSize)
+    restoreSelection()
     applyFontSize(fontSize)
+    saveSelection()
     emitChange()
-  }, [emitChange])
+  }, [emitChange, restoreSelection, saveSelection])
+
+  const handleInlineStyle = useCallback((command: 'bold' | 'italic' | 'underline') => {
+    restoreSelection()
+    exec(command)
+    saveSelection()
+    emitChange()
+  }, [emitChange, restoreSelection, saveSelection])
 
   const handleAlignmentChange = useCallback((alignment: 'left' | 'center' | 'right' | 'justify') => {
     const editor = editorRef.current
     if (!editor) return
 
+    restoreSelection()
     const blocks = getSelectedBlocks(editor)
     if (blocks.length === 0) return
 
@@ -162,7 +217,7 @@ export function Preview({ value, onChange }: PreviewProps) {
     }
 
     emitChange()
-  }, [emitChange])
+  }, [emitChange, restoreSelection])
 
   const handleKeyDown = useCallback((e: KeyboardEvent<HTMLDivElement>) => {
     if (e.key !== 'Backspace') return
@@ -207,9 +262,9 @@ export function Preview({ value, onChange }: PreviewProps) {
               <option key={option.label} value={option.value}>{option.label}</option>
             ))}
           </select>
-          <button type="button" className="preview-tool-btn" onClick={() => { exec('bold'); emitChange() }}><strong>B</strong></button>
-          <button type="button" className="preview-tool-btn" onClick={() => { exec('italic'); emitChange() }}><em>I</em></button>
-          <button type="button" className="preview-tool-btn" onClick={() => { exec('underline'); emitChange() }}><u>U</u></button>
+          <button type="button" className="preview-tool-btn" onMouseDown={saveSelection} onClick={() => handleInlineStyle('bold')}><strong>B</strong></button>
+          <button type="button" className="preview-tool-btn" onMouseDown={saveSelection} onClick={() => handleInlineStyle('italic')}><em>I</em></button>
+          <button type="button" className="preview-tool-btn" onMouseDown={saveSelection} onClick={() => handleInlineStyle('underline')}><u>U</u></button>
           <button type="button" className="preview-tool-btn" onClick={() => handleAlignmentChange('left')}>左</button>
           <button type="button" className="preview-tool-btn" onClick={() => handleAlignmentChange('center')}>中</button>
           <button type="button" className="preview-tool-btn" onClick={() => handleAlignmentChange('right')}>右</button>
