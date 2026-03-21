@@ -78,6 +78,12 @@
   transition: background 0.15s, border-color 0.15s;
 }
 
+.preview-tool-icon {
+  width: 16px;
+  height: 16px;
+  display: block;
+}
+
 .preview-tool-btn:hover {
   background: #f3f4f6;
   border-color: #9ca3af;

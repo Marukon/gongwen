@@ -71,7 +71,7 @@ function renderRichRuns(runs: RichTextRun[]) {
       key={`${index}-${run.text}`}
       style={{
         fontFamily: run.fontFamily,
-        fontSize: run.fontSize ? `${run.fontSize}px` : undefined,
+        fontSize: run.fontSize ? `${run.fontSize}pt` : undefined,
         fontWeight: run.bold ? 'bold' : undefined,
         fontStyle: run.italic ? 'italic' : undefined,
         textDecoration: run.underline ? 'underline' : undefined,

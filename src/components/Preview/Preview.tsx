@@ -166,6 +166,20 @@ function getSelectionFormatState(editor: HTMLElement | null, fallback: Selection
   }
 }
 
+function cloneFormatState(format: SelectionFormatState): SelectionFormatState {
+  return { ...format }
+}
+
+function isSameRange(a: Range | null, b: Range | null) {
+  if (!a || !b) return false
+  return (
+    a.startContainer === b.startContainer &&
+    a.startOffset === b.startOffset &&
+    a.endContainer === b.endContainer &&
+    a.endOffset === b.endOffset
+  )
+}
+
 function isRangeInsideEditor(range: Range, editor: HTMLElement) {
   const startNode = range.startContainer
   const endNode = range.endContainer
@@ -209,7 +223,10 @@ export function Preview({ value, onChange }: PreviewProps) {
   const historyRef = useRef<string[]>([])
   const historyIndexRef = useRef(-1)
   const lastEmittedValueRef = useRef('')
+  const formatPainterSourceRangeRef = useRef<Range | null>(null)
   const [formatState, setFormatState] = useState<SelectionFormatState>(() => createDefaultFormatState(config))
+  const [formatPainterActive, setFormatPainterActive] = useState(false)
+  const [copiedFormat, setCopiedFormat] = useState<SelectionFormatState | null>(null)
   const headerOrgFontSize = useMemo(
     () => getHeaderOrgFontSize(config.header.orgName, config.margins.left, config.margins.right),
     [config.header.orgName, config.margins.left, config.margins.right],
@@ -368,6 +385,34 @@ export function Preview({ value, onChange }: PreviewProps) {
     emitChange()
   }, [emitChange, formatState.bold, formatState.italic, formatState.underline, restoreSelection, saveSelection])
 
+  const applyFormatPreset = useCallback((preset: SelectionFormatState) => {
+    restoreSelection()
+    applyInlineStyles({
+      fontFamily: preset.fontFamily,
+      fontSize: `${preset.fontSize}pt`,
+      fontWeight: preset.bold ? 'bold' : 'normal',
+      fontStyle: preset.italic ? 'italic' : 'normal',
+      textDecoration: preset.underline ? 'underline' : 'none',
+    })
+    saveSelection()
+    emitChange()
+  }, [emitChange, restoreSelection, saveSelection])
+
+  const handleFormatPainter = useCallback(() => {
+    if (formatPainterActive) {
+      setFormatPainterActive(false)
+      setCopiedFormat(null)
+      formatPainterSourceRangeRef.current = null
+      return
+    }
+
+    const selection = window.getSelection()
+    const currentRange = selection && selection.rangeCount > 0 ? selection.getRangeAt(0).cloneRange() : null
+    setCopiedFormat(cloneFormatState(formatState))
+    setFormatPainterActive(true)
+    formatPainterSourceRangeRef.current = currentRange
+  }, [formatPainterActive, formatState])
+
   const handleAlignmentChange = useCallback((alignment: 'left' | 'center' | 'right' | 'justify') => {
     const editor = editorRef.current
     if (!editor) return
@@ -429,6 +474,22 @@ export function Preview({ value, onChange }: PreviewProps) {
     saveSelection()
   }, [saveSelection])
 
+  const tryApplyFormatPainter = useCallback(() => {
+    if (!formatPainterActive || !copiedFormat) return
+    const selection = window.getSelection()
+    if (!selection || selection.rangeCount === 0 || selection.isCollapsed) return
+
+    const range = selection.getRangeAt(0)
+    const editor = editorRef.current
+    if (!editor || !isRangeInsideEditor(range, editor)) return
+    if (isSameRange(range, formatPainterSourceRangeRef.current)) return
+
+    applyFormatPreset(copiedFormat)
+    setFormatPainterActive(false)
+    setCopiedFormat(null)
+    formatPainterSourceRangeRef.current = null
+  }, [applyFormatPreset, copiedFormat, formatPainterActive])
+
   return (
     <div className="preview-container">
       <div className="preview-header">
@@ -449,7 +510,17 @@ export function Preview({ value, onChange }: PreviewProps) {
           <button type="button" className={`preview-tool-btn ${formatState.bold ? 'preview-tool-btn--active' : ''}`} onMouseDown={handleToolbarMouseDown} onClick={() => handleInlineStyle('bold')}><strong>B</strong></button>
           <button type="button" className={`preview-tool-btn ${formatState.italic ? 'preview-tool-btn--active' : ''}`} onMouseDown={handleToolbarMouseDown} onClick={() => handleInlineStyle('italic')}><em>I</em></button>
           <button type="button" className={`preview-tool-btn ${formatState.underline ? 'preview-tool-btn--active' : ''}`} onMouseDown={handleToolbarMouseDown} onClick={() => handleInlineStyle('underline')}><u>U</u></button>
-          <button type="button" className="preview-tool-btn" onMouseDown={handleToolbarMouseDown} onClick={handleUndo}>撤</button>
+          <button type="button" className={`preview-tool-btn ${formatPainterActive ? 'preview-tool-btn--active' : ''}`} onMouseDown={handleToolbarMouseDown} onClick={handleFormatPainter} title="格式刷">
+            <svg viewBox="0 0 24 24" aria-hidden="true" className="preview-tool-icon">
+              <path d="M3 7h11v3h2a3 3 0 0 1 3 3v1h-2v5H9v-7l4-4H3z" fill="currentColor" />
+              <path d="M6 4h9v2H6z" fill="currentColor" />
+            </svg>
+          </button>
+          <button type="button" className="preview-tool-btn" onMouseDown={handleToolbarMouseDown} onClick={handleUndo} title="撤销">
+            <svg viewBox="0 0 24 24" aria-hidden="true" className="preview-tool-icon">
+              <path d="M9 7 4 12l5 5v-4h4a5 5 0 1 1 0 10h-2v-2h2a3 3 0 1 0 0-6H9z" fill="currentColor" />
+            </svg>
+          </button>
           <button type="button" className="preview-tool-btn" onMouseDown={handleToolbarMouseDown} onClick={() => handleAlignmentChange('left')}>左</button>
           <button type="button" className="preview-tool-btn" onMouseDown={handleToolbarMouseDown} onClick={() => handleAlignmentChange('center')}>中</button>
           <button type="button" className="preview-tool-btn" onMouseDown={handleToolbarMouseDown} onClick={() => handleAlignmentChange('right')}>右</button>
@@ -490,6 +561,15 @@ export function Preview({ value, onChange }: PreviewProps) {
               onInput={() => emitChange()}
               onBlur={() => emitChange(false)}
               onKeyDown={handleKeyDown}
+              onMouseUp={() => {
+                saveSelection()
+                syncFormatState()
+                tryApplyFormatPainter()
+              }}
+              onKeyUp={() => {
+                saveSelection()
+                syncFormatState()
+              }}
             />
           </div>
         </div>

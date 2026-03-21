@@ -52,19 +52,19 @@
 /* 公文标题: 方正小标宋_GBK 22pt 居中, 固定行距 */
 .a4-title {
   font-family: var(--title-font, 'FZXiaoBiaoSong-B05S'), 'STSong', 'SimSun', serif;
-  font-size: var(--title-size, 22px);
+  font-size: var(--title-size, 22pt);
   font-weight: bold;
   text-align: center;
-  line-height: var(--title-line-height, 29px);
+  line-height: var(--title-line-height, 29.6pt);
   margin: 0;
 }
 
 .a4-title-date {
   font-family: '楷体_GB2312', 'KaiTi', 'STKaiti', serif;
-  font-size: 16px;
+  font-size: var(--body-size, 16pt);
   font-weight: normal;
   text-align: center;
-  line-height: var(--body-line-height, 29px);
+  line-height: var(--body-line-height, 29.6pt);
   margin: 0;
   letter-spacing: var(--char-spacing, 0);
   text-indent: 0;
@@ -72,10 +72,10 @@
 
 .a4-title-secondary {
   font-family: '楷体_GB2312', 'KaiTi', 'STKaiti', serif;
-  font-size: 16px;
+  font-size: var(--body-size, 16pt);
   font-weight: normal;
   text-align: center;
-  line-height: var(--body-line-height, 29px);
+  line-height: var(--body-line-height, 29.6pt);
   margin: 0;
   letter-spacing: var(--char-spacing, 0);
   text-indent: 0;
@@ -83,6 +83,7 @@
 
 /* 一级标题段落: 基础样式（含首句拆分时的段落容器） */
 .a4-h1 {
+  font-family: var(--h1-font, 'SimHei'), 'Heiti SC', sans-serif;
   font-size: var(--h1-size, 16px);
   font-weight: normal;
   text-indent: var(--body-indent, 2em);
@@ -98,6 +99,7 @@
 
 /* 二级标题段落: 楷体_GB2312 基础样式（含首句拆分时的段落容器） */
 .a4-h2 {
+  font-family: var(--h2-font, 'KaiTi_GB2312'), 'KaiTi', 'STKaiti', serif;
   font-size: var(--h2-size, 16px);
   font-weight: normal;
   font-style: normal;
