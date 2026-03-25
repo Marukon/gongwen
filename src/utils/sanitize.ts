@@ -21,7 +21,6 @@ const PUNCTUATION_REPLACEMENTS = new Map<string, string>([
 
 export interface SanitizeResult {
   text: string
-  /** 总修复次数 */
   count: number
 }
 
@@ -56,7 +55,10 @@ function isDigitOrChineseNumeral(char: string): boolean {
   return DIGIT_OR_CJK_NUMERAL.test(char)
 }
 
-function replaceWhenNeeded(text: string, shouldReplace: (index: number, source: string) => boolean): SanitizeResult {
+function replaceWhenNeeded(
+  text: string,
+  shouldReplace: (index: number, source: string) => boolean,
+): SanitizeResult {
   let count = 0
   const chars = Array.from(text)
 
@@ -72,17 +74,42 @@ function replaceWhenNeeded(text: string, shouldReplace: (index: number, source: 
   return { text: chars.join(''), count }
 }
 
+/**
+ * 处理双引号（交替 “ ”）
+ */
+function replaceQuotes(text: string): SanitizeResult {
+  let count = 0
+  let open = true
+  const chars = Array.from(text)
+
+  for (let i = 0; i < chars.length; i++) {
+    if (chars[i] !== '"') continue
+
+    chars[i] = open ? '“' : '”'
+    open = !open
+    count++
+  }
+
+  return { text: chars.join(''), count }
+}
+
 export function replaceEnglishPunctuation(text: string): SanitizeResult {
   let result = text
   let count = 0
 
+  // 普通标点
   const common = replaceWhenNeeded(result, (index, source) => {
     const current = charAt(source, index)
     const previous = charAt(source, index - 1)
     const next = charAt(source, index + 1)
 
     if (current === '(' || current === ')') {
-      return isDigitOrChineseNumeral(previous) || isDigitOrChineseNumeral(next) || isCjkChar(previous) || isCjkChar(next)
+      return (
+        isDigitOrChineseNumeral(previous) ||
+        isDigitOrChineseNumeral(next) ||
+        isCjkChar(previous) ||
+        isCjkChar(next)
+      )
     }
 
     return isCjkOrFullwidthChar(previous) || isCjkOrFullwidthChar(next)
@@ -91,6 +118,7 @@ export function replaceEnglishPunctuation(text: string): SanitizeResult {
   result = common.text
   count += common.count
 
+  // 句号
   result = result.replace(/\./g, (match, offset, source) => {
     const previous = charAt(source, offset - 1)
     const next = charAt(source, offset + 1)
@@ -101,6 +129,11 @@ export function replaceEnglishPunctuation(text: string): SanitizeResult {
     count++
     return '。'
   })
+
+  // 双引号（最后处理，避免干扰判断）
+  const quoteResult = replaceQuotes(result)
+  result = quoteResult.text
+  count += quoteResult.count
 
   return { text: result, count }
 }
@@ -162,6 +195,7 @@ export function autoFixDocumentText(
   const punctuation = options.convertEnglishPunctuation
     ? replaceEnglishPunctuation(text)
     : { text, count: 0 }
+
   const whitespace = options.removeRedundantSpaces
     ? removeRedundantSpaces(punctuation.text)
     : { text: punctuation.text, count: 0 }
@@ -174,7 +208,10 @@ export function autoFixDocumentText(
   }
 }
 
-export function sanitizeText(text: string, options: TextFixOptions = DEFAULT_TEXT_FIX_OPTIONS): SanitizeResult {
+export function sanitizeText(
+  text: string,
+  options: TextFixOptions = DEFAULT_TEXT_FIX_OPTIONS,
+): SanitizeResult {
   const result = autoFixDocumentText(text, options)
   return { text: result.text, count: result.count }
 }
