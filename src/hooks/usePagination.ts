@@ -39,7 +39,7 @@ export interface PaginationConfig {
     lineSpacing: number
     firstLineIndent: number
   }
-  headings: {
+  advanced: {
     h1: {
       fontFamily: string
       fontSize: number
@@ -48,7 +48,10 @@ export interface PaginationConfig {
       fontFamily: string
       fontSize: number
     }
-    h3FontFamily: string
+    h3: {
+      fontFamily: string
+      fontSize: number
+    }
   }
   specialOptions: {
     boldFirstSentence: boolean

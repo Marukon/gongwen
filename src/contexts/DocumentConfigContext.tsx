@@ -8,6 +8,19 @@ import { DocumentConfigContext } from './documentConfigContext'
 
 const STORAGE_KEY = 'docx-document-config'
 
+type LegacyDocumentConfig = DeepPartial<DocumentConfig> & {
+  headings?: {
+    h1?: {
+      fontFamily?: string
+      fontSize?: number
+    }
+    h2?: {
+      fontFamily?: string
+      fontSize?: number
+    }
+  }
+}
+
 // ---- 深合并工具 ----
 
 /** 将 patch 深合并到 target，返回新对象 */
@@ -51,12 +64,35 @@ function configReducer(state: DocumentConfig, action: Action): DocumentConfig {
   }
 }
 
+function migrateLegacyHeadingConfig(parsed: LegacyDocumentConfig): DeepPartial<DocumentConfig> {
+  if (!parsed.headings) return parsed
+
+  const { headings, advanced, ...rest } = parsed
+
+  return {
+    ...rest,
+    advanced: {
+      ...advanced,
+      h1: {
+        ...advanced?.h1,
+        fontFamily: advanced?.h1?.fontFamily ?? headings.h1?.fontFamily,
+        fontSize: advanced?.h1?.fontSize ?? headings.h1?.fontSize,
+      },
+      h2: {
+        ...advanced?.h2,
+        fontFamily: advanced?.h2?.fontFamily ?? headings.h2?.fontFamily,
+        fontSize: advanced?.h2?.fontSize ?? headings.h2?.fontSize,
+      },
+    },
+  }
+}
+
 /** 从 localStorage 读取配置，深合并到默认值（兼容旧版缺字段） */
 function loadConfig(): DocumentConfig {
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
     if (raw) {
-      const parsed = JSON.parse(raw) as DeepPartial<DocumentConfig>
+      const parsed = migrateLegacyHeadingConfig(JSON.parse(raw) as LegacyDocumentConfig)
       return deepMerge(DEFAULT_CONFIG, parsed)
     }
   } catch {

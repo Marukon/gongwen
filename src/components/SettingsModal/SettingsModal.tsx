@@ -456,44 +456,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
             </div>
           </section>
 
-          {/* 区块 3: 各级标题字体 */}
-          <section className="settings-section">
-            <h3 className="settings-section-title">各级标题</h3>
-            <div className="settings-grid settings-grid--2">
-              <FontSelectField
-                label="一级标题字体"
-                value={config.headings.h1.fontFamily}
-                {...fontFieldProps}
-                onChange={(v) => patch({ headings: { h1: { fontFamily: v } } })}
-              />
-              <NumberInputField
-                label="一级标题字号"
-                value={config.headings.h1.fontSize}
-                min={FONT_SIZE_MIN}
-                max={FONT_SIZE_MAX}
-                unit="pt"
-                options={FONT_SIZE_OPTIONS}
-                onChange={(v) => patch({ headings: { h1: { fontSize: v } } })}
-              />
-              <FontSelectField
-                label="二级标题字体"
-                value={config.headings.h2.fontFamily}
-                {...fontFieldProps}
-                onChange={(v) => patch({ headings: { h2: { fontFamily: v } } })}
-              />
-              <NumberInputField
-                label="二级标题字号"
-                value={config.headings.h2.fontSize}
-                min={FONT_SIZE_MIN}
-                max={FONT_SIZE_MAX}
-                unit="pt"
-                options={FONT_SIZE_OPTIONS}
-                onChange={(v) => patch({ headings: { h2: { fontSize: v } } })}
-              />
-            </div>
-          </section>
-
-          {/* 区块 4: 正文格式 */}
+          {/* 区块 3: 正文格式 */}
           <section className="settings-section">
             <h3 className="settings-section-title">正文格式</h3>
             <div className="settings-grid settings-grid--2">
@@ -529,7 +492,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                 onChange={(v) => patch({ body: { firstLineIndent: Number(v) } })}
               />
             </div>
-            <p className="settings-hint">正文格式同时应用于三级标题、四级标题、附件说明和成文日期</p>
+            <p className="settings-hint">正文行距和首行缩进同时应用于三级标题、四级标题、附件说明和成文日期</p>
           </section>
 
           {/* 区块 5: 特殊选项 */}
@@ -607,7 +570,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
             </button>
             {showAdvanced && (
               <div className="settings-advanced">
-                <p className="settings-hint">按元素类型独立配置中文字体、英数字体和字号</p>
+                <p className="settings-hint">一级、二级、三级标题统一在此配置中文字体、英数字体和字号</p>
                 {(
                   [
                     ['h1', '一级标题'],

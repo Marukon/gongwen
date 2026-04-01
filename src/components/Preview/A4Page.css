@@ -115,7 +115,7 @@
 /* 三级标题: 段落容器（不设 bold，由 inline 控制首句加粗） */
 .a4-h3 {
   font-family: var(--h3-font, 'FangSong_GB2312'), 'FangSong', 'STFangsong', serif;
-  font-size: var(--body-size, 16px);
+  font-size: var(--h3-size, 16px);
   font-weight: normal;
   text-indent: var(--body-indent, 2em);
   line-height: var(--body-line-height, 29px);

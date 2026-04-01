@@ -20,12 +20,6 @@ export interface TitleConfig {
   lineSpacing: number // 磅 (固定行距)
 }
 
-/** 各级标题字体 */
-export interface HeadingsConfig {
-  h1: { fontFamily: string; fontSize: number }
-  h2: { fontFamily: string; fontSize: number }
-}
-
 /** 正文格式 */
 export interface BodyConfig {
   fontFamily: string
@@ -92,7 +86,6 @@ export interface FooterNoteConfig {
 export interface DocumentConfig {
   margins: MarginsConfig
   title: TitleConfig
-  headings: HeadingsConfig
   body: BodyConfig
   specialOptions: SpecialOptionsConfig
   advanced: AdvancedConfig
@@ -118,10 +111,6 @@ export const DEFAULT_CONFIG: DocumentConfig = {
     fontFamily: '方正小标宋_GBK',
     fontSize: 22,
     lineSpacing: 29.6,
-  },
-  headings: {
-    h1: { fontFamily: '黑体', fontSize: 16 },
-    h2: { fontFamily: '楷体_GB2312', fontSize: 16 },
   },
   body: {
     fontFamily: '仿宋_GB2312',
