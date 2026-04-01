@@ -28,6 +28,11 @@ function App() {
   const sanitized = useMemo(() => sanitizeText(text).text, [text])
   const ast = useDocumentParser(sanitized)
   const { config } = useDocumentConfig()
+  const configRef = useRef(config)
+
+  useEffect(() => {
+    configRef.current = config
+  }, [config])
 
   // Auto-Save: debounce 500ms 写入 localStorage
   const timerRef = useRef<ReturnType<typeof setTimeout>>(undefined)
@@ -45,12 +50,12 @@ function App() {
 
   const handleExport = useCallback(async () => {
     try {
-      await downloadDocx(ast, config)
+      await downloadDocx(ast, configRef.current)
     } catch (err) {
       console.error('导出失败:', err)
       alert('导出失败，请检查控制台日志')
     }
-  }, [ast, config])
+  }, [ast])
 
   const handleClear = useCallback(() => {
     setText('')

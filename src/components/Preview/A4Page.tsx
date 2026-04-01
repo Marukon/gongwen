@@ -1,3 +1,4 @@
+import { memo } from 'react'
 import type { DocumentNode } from '../../types/ast'
 import type { HeaderConfig, FooterNoteConfig } from '../../types/documentConfig'
 import { DocumentFlow } from './DocumentFlow'
@@ -31,7 +32,7 @@ interface A4PageProps {
   hasStamp: boolean
 }
 
-export function A4Page({
+export const A4Page = memo(function A4Page({
   title,
   body,
   pageNumber,
@@ -99,4 +100,4 @@ export function A4Page({
       )}
     </div>
   )
-}
+})

@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, type DragEvent } from 'react'
+import { memo, useState, useCallback, useRef, type DragEvent } from 'react'
 import './Editor.css'
 
 interface EditorProps {
@@ -10,7 +10,7 @@ interface EditorProps {
   importing?: boolean
 }
 
-export function Editor({ value, onChange, onFileImport, importing }: EditorProps) {
+export const Editor = memo(function Editor({ value, onChange, onFileImport, importing }: EditorProps) {
   const [dragging, setDragging] = useState(false)
 
   // 使用 ref 计数器避免子元素触发 dragLeave 导致闪烁
@@ -76,4 +76,4 @@ export function Editor({ value, onChange, onFileImport, importing }: EditorProps
       )}
     </div>
   )
-}
+})

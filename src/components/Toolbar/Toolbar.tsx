@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from 'react'
+import { memo, useState, useRef, useCallback } from 'react'
 import type { GongwenAST } from '../../types/ast'
 import { SettingsModal } from '../SettingsModal/SettingsModal'
 import './Toolbar.css'
@@ -13,7 +13,13 @@ interface ToolbarProps {
   importing?: boolean
 }
 
-export function Toolbar({ ast, onExport, onClear, onImport, importing }: ToolbarProps) {
+export const Toolbar = memo(function Toolbar({
+  ast,
+  onExport,
+  onClear,
+  onImport,
+  importing,
+}: ToolbarProps) {
   const hasContent = ast.title !== null || ast.body.length > 0
   const nodeCount = (ast.title ? 1 : 0) + ast.body.length
   const [showSettings, setShowSettings] = useState(false)
@@ -88,4 +94,4 @@ export function Toolbar({ ast, onExport, onClear, onImport, importing }: Toolbar
       {showSettings && <SettingsModal onClose={() => setShowSettings(false)} />}
     </div>
   )
-}
+})

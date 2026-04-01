@@ -1,4 +1,4 @@
-import React, { type CSSProperties } from 'react'
+import React, { memo, type CSSProperties } from 'react'
 import { NodeType } from '../../types/ast'
 import type { AttachmentNode, DocumentNode, GongwenAST } from '../../types/ast'
 import {
@@ -42,7 +42,7 @@ function getNodeStyle(
   return undefined
 }
 
-export function DocumentFlow({
+export const DocumentFlow = memo(function DocumentFlow({
   title,
   body,
   boldFirstSentence,
@@ -104,4 +104,4 @@ export function DocumentFlow({
       )}
     </>
   )
-}
+})
