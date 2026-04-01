@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { getAttachmentParagraphStyle, getParagraphStyle } from '../styleFactory'
+import {
+  createCharacterFirstLineIndent,
+  getAttachmentParagraphStyle,
+  getParagraphStyle,
+  shouldUseCharacterFirstLineIndent,
+} from '../styleFactory'
 import { NodeType } from '../../types/ast'
 import { DEFAULT_CONFIG } from '../../types/documentConfig'
 
@@ -15,6 +20,26 @@ describe('getParagraphStyle', () => {
     const style = getParagraphStyle(NodeType.ADDRESSEE, DEFAULT_CONFIG)
 
     expect(style.spacing).toMatchObject({ before: 0, after: 0 })
+  })
+
+  it('正文类段落使用字符级首行缩进', () => {
+    expect(shouldUseCharacterFirstLineIndent(NodeType.PARAGRAPH)).toBe(true)
+    expect(shouldUseCharacterFirstLineIndent(NodeType.HEADING_1)).toBe(true)
+    expect(shouldUseCharacterFirstLineIndent(NodeType.ADDRESSEE)).toBe(false)
+  })
+
+  it('字符级首行缩进组件输出 firstLineChars', () => {
+    const indent = createCharacterFirstLineIndent(DEFAULT_CONFIG)
+    const xml = indent.prepForXml({ stack: [] } as never)
+
+    expect(xml).toMatchObject({
+      'w:ind': {
+        _attr: {
+          'w:left': 0,
+          'w:firstLineChars': 200,
+        },
+      },
+    })
   })
 })
 

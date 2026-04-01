@@ -1,5 +1,6 @@
 import {
   AlignmentType,
+  BuilderElement,
   type IParagraphOptions,
   type IRunOptions,
   type IFontAttributesProperties,
@@ -31,6 +32,26 @@ function font(eastAsia: string, ascii = 'Times New Roman'): IFontAttributesPrope
  */
 function calculateFirstLineIndent(config: DocumentConfig): number {
   return calculateCharWidth(config) * config.body.firstLineIndent
+}
+
+export function shouldUseCharacterFirstLineIndent(type: NodeType): boolean {
+  return type === NodeType.HEADING_1
+    || type === NodeType.HEADING_2
+    || type === NodeType.HEADING_3
+    || type === NodeType.HEADING_4
+    || type === NodeType.PARAGRAPH
+}
+
+export function createCharacterFirstLineIndent(config: DocumentConfig): BuilderElement {
+  return new BuilderElement({
+    name: 'w:ind',
+    attributes: {
+      left: { key: 'w:left', value: 0 },
+      // OOXML uses 1/100 character as the unit for firstLineChars.
+      firstLineChars: { key: 'w:firstLineChars', value: config.body.firstLineIndent * 100 },
+      firstLine: { key: 'w:firstLine', value: calculateFirstLineIndent(config) },
+    },
+  })
 }
 
 /**

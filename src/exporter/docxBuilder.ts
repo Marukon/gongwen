@@ -9,7 +9,14 @@ import type { GongwenAST, DocumentNode, AttachmentNode } from '../types/ast'
 import { NodeType } from '../types/ast'
 import type { DocumentConfig } from '../types/documentConfig'
 import { cmToTwip, ptToTwip } from '../types/documentConfig'
-import { getParagraphStyle, getRunStyle, getAttachmentParagraphStyle, getAttachmentRunStyle } from './styleFactory'
+import {
+  createCharacterFirstLineIndent,
+  getParagraphStyle,
+  getRunStyle,
+  getAttachmentParagraphStyle,
+  getAttachmentRunStyle,
+  shouldUseCharacterFirstLineIndent,
+} from './styleFactory'
 
 // ---- 无边框定义（用于版头表格） ----
 
@@ -170,6 +177,7 @@ function nodeToParagraph(
 ): Paragraph {
   let paragraphStyle = getParagraphStyle(node.type, config, signatureContent, dateContent)
   const runStyle = getRunStyle(node.type, config)
+  const useCharacterIndent = shouldUseCharacterFirstLineIndent(node.type)
 
   // 外部传入的额外 spacing.before（如版头后标题空二行）
   if (spacingBefore > 0) {
@@ -179,6 +187,29 @@ function nodeToParagraph(
     }
   }
 
+  const baseParagraphStyle = useCharacterIndent
+    ? { ...paragraphStyle, indent: undefined }
+    : paragraphStyle
+
+  function createParagraph(children: TextRun[]): Paragraph {
+    const paragraph = new Paragraph({
+      ...baseParagraphStyle,
+      children,
+    })
+
+    if (useCharacterIndent) {
+      (
+        paragraph as unknown as {
+          properties: {
+            push: (item: ReturnType<typeof createCharacterFirstLineIndent>) => void
+          }
+        }
+      ).properties.push(createCharacterFirstLineIndent(config))
+    }
+
+    return paragraph
+  }
+
   // 一至四级标题：首句用标题样式，句号后切换为正文样式
   if (
     node.type === NodeType.HEADING_1 ||
@@ -186,29 +217,20 @@ function nodeToParagraph(
     node.type === NodeType.HEADING_3 ||
     node.type === NodeType.HEADING_4
   ) {
-    return new Paragraph({
-      ...paragraphStyle,
-      children: splitHeadingSentence(node.content, runStyle, config),
-    })
+    return createParagraph(splitHeadingSentence(node.content, runStyle, config))
   }
 
   // 正文首句加粗
   if (node.type === NodeType.PARAGRAPH && config.specialOptions.boldFirstSentence) {
-    return new Paragraph({
-      ...paragraphStyle,
-      children: splitBoldFirstSentence(node.content, runStyle),
-    })
+    return createParagraph(splitBoldFirstSentence(node.content, runStyle))
   }
 
-  return new Paragraph({
-    ...paragraphStyle,
-    children: [
-      new TextRun({
-        ...runStyle,
-        text: node.content,
-      }),
-    ],
-  })
+  return createParagraph([
+    new TextRun({
+      ...runStyle,
+      text: node.content,
+    }),
+  ])
 }
 
 /** 将完整 GongwenAST 转换为 docx Document */
