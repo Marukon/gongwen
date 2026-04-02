@@ -66,7 +66,7 @@ function readRecentUpdates(limit = 5): string[] {
 const packageVersion = readPackageVersion()
 const gitShortSha = readGitShortSha()
 const releaseStyleVersion = gitShortSha ? `v${formatDate(new Date())}-${gitShortSha}` : packageVersion
-const recentUpdates = readRecentUpdates()
+const recentUpdates = readRecentUpdates(8)
 // 与 release.yml 的 TAG 规则保持一致；支持用 APP_VERSION 显式覆盖
 const appVersion = process.env.APP_VERSION?.trim() || releaseStyleVersion
 

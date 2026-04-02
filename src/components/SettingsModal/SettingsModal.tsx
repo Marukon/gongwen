@@ -33,6 +33,11 @@ const PROJECT_INFO = {
   recentUpdates: __APP_RECENT_UPDATES__,
 }
 
+const DONATION_QR_CODES = [
+  { label: '支付宝', src: `${import.meta.env.BASE_URL}alipay.png` },
+  { label: '微信', src: `${import.meta.env.BASE_URL}wechat.png` },
+]
+
 /** 通用 select 组件 */
 function SelectField({
   label,
