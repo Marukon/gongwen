@@ -433,9 +433,7 @@
   position: absolute;
   left: 0;
   bottom: calc(100% + 10px);
-  width: min(460px, calc(90vw - 48px));
-  max-height: 300px;
-  overflow-y: auto;
+  width: min(560px, calc(90vw - 48px));
   padding: 12px;
   border: 1px solid #e5e7eb;
   border-radius: 8px;
@@ -447,10 +445,28 @@
   gap: 10px;
 }
 
+.settings-info-layout {
+  display: flex;
+  align-items: flex-start;
+  gap: 20px;
+}
+
+.settings-info-main {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
 .settings-info-item {
   display: flex;
   flex-direction: column;
   gap: 4px;
+}
+
+.settings-info-contact {
+  max-width: 220px;
 }
 
 .settings-info-label {
@@ -459,11 +475,17 @@
   color: #374151;
 }
 
+.settings-info-label--support {
+  text-align: center;
+}
+
 .settings-info-link {
   font-size: 12px;
   color: #2563eb;
   text-decoration: none;
-  width: fit-content;
+  width: auto;
+  max-width: 100%;
+  overflow-wrap: anywhere;
 }
 
 .settings-info-link:hover {
@@ -480,6 +502,43 @@
   color: #4b5563;
 }
 
+.settings-donate {
+  display: flex;
+  flex-direction: column;
+  flex: 0 0 auto;
+  width: 150px;
+  gap: 8px;
+}
+
+.settings-donate-grid {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 10px;
+}
+
+.settings-donate-card {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.settings-donate-image {
+  width: 132px;
+  height: 132px;
+  object-fit: cover;
+  border-radius: 8px;
+  border: 1px solid #e5e7eb;
+  background: #ffffff;
+}
+
+.settings-donate-name {
+  font-size: 12px;
+  color: #6b7280;
+}
+
 @media (max-width: 720px) {
   .settings-special-grid,
   .settings-dual-panels {
@@ -490,6 +549,29 @@
     left: 0;
     width: min(420px, calc(100vw - 72px));
     bottom: calc(100% + 6px);
+  }
+
+  .settings-info-layout {
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .settings-info-contact {
+    max-width: none;
+  }
+
+  .settings-donate {
+    width: auto;
+  }
+
+  .settings-donate-grid {
+    align-items: flex-start;
+    gap: 10px;
+  }
+
+  .settings-donate-image {
+    width: 104px;
+    height: 104px;
   }
 }
 
