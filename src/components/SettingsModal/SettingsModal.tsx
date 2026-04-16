@@ -8,6 +8,7 @@ import {
   LINE_SPACING_OPTIONS,
   INDENT_OPTIONS,
   PAGE_NUMBER_STYLE_OPTIONS,
+  formatFontSizeLabel,
   type DeepPartial,
   type DocumentConfig,
   type PageNumberStyle,
@@ -137,6 +138,7 @@ function NumberInputField({
   const filteredOptions = filterText.length > 0
     ? options.filter((opt) => opt.label.includes(filterText) || String(opt.value).includes(filterText))
     : options
+  const selectedOption = options.find((opt) => opt.value === value)
   const {
     activeIdx,
     closeDropdown,
@@ -159,6 +161,9 @@ function NumberInputField({
     onEscape: () => setDraft(String(value)),
   })
   const noResults = open && filterText.length > 0 && filteredOptions.length === 0
+  const displayValue = open
+    ? draft
+    : selectedOption?.label ?? (unit === 'pt' ? formatFontSizeLabel(value) : String(value))
 
   function parseNumber(raw: string): number | null {
     const trimmed = raw.trim()
@@ -205,7 +210,7 @@ function NumberInputField({
               className="settings-number font-combo-input"
               type="text"
               inputMode="decimal"
-              value={open ? draft : String(value)}
+              value={displayValue}
               onChange={(e: ChangeEvent<HTMLInputElement>) => {
                 const next = e.target.value
                 setDraft(next)
@@ -227,7 +232,7 @@ function NumberInputField({
                   onMouseDown={(e) => { e.preventDefault(); handleSelect(opt.value) }}
                   onMouseEnter={() => setActiveIdx(idx)}
                 >
-                  <span className="font-combo-item-text">{opt.value}</span>
+                  <span className="font-combo-item-text">{opt.label}</span>
                 </div>
               ))}
               {noResults && (

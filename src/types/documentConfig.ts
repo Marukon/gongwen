@@ -168,16 +168,43 @@ export const ASCII_FONT_OPTIONS: { label: string; value: string }[] = [
   { label: '（跟随中文字体）', value: '' },
 ]
 
+const FONT_SIZE_PRESET_LABELS = new Map<number, string>([
+  [42, '初号'],
+  [36, '小初'],
+  [26, '一号'],
+  [24, '小一'],
+  [22, '二号'],
+  [18, '小二'],
+  [16, '三号'],
+  [15, '小三'],
+  [14, '四号'],
+  [12, '小四'],
+  [10.5, '五号'],
+  [9, '小五'],
+])
+
+export function formatFontSizeLabel(value: number): string {
+  const presetName = FONT_SIZE_PRESET_LABELS.get(value)
+  return presetName ? `${value}（${presetName}）` : String(value)
+}
+
 export const FONT_SIZE_OPTIONS: { label: string; value: number }[] = [
-  { label: '小四 (12pt)', value: 12 },
-  { label: '四号 (14pt)', value: 14 },
-  { label: '小三 (15pt)', value: 15 },
-  { label: '三号 (16pt)', value: 16 },
-  { label: '小二 (18pt)', value: 18 },
-  { label: '二号 (22pt)', value: 22 },
-  { label: '小一 (24pt)', value: 24 },
-  { label: '一号 (26pt)', value: 26 },
-]
+  42,
+  36,
+  26,
+  24,
+  22,
+  18,
+  16,
+  15,
+  14,
+  12,
+  10.5,
+  9,
+].map((value) => ({
+  label: formatFontSizeLabel(value),
+  value,
+}))
 
 export const LINE_SPACING_OPTIONS: { label: string; value: number }[] = [
   { label: '22磅', value: 22 },

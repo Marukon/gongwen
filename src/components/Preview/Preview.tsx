@@ -3,6 +3,7 @@ import type { GongwenAST } from '../../types/ast'
 import { useDocumentConfig } from '../../contexts/useDocumentConfig'
 import { cmToPagePercent, CHARS_PER_LINE } from '../../types/documentConfig'
 import { usePagination } from '../../hooks/usePagination'
+import { getPreviewFontFamily } from '../../utils/fontAliases'
 import { A4Page } from './A4Page'
 import { DocumentFlow } from './DocumentFlow'
 import './A4Page.css'
@@ -114,21 +115,21 @@ export function Preview({ ast }: PreviewProps) {
       '--margin-right': `${cmToPagePercent(deferredConfig.margins.right, 'x')}%`,
       // 版记绝对定位使用 y 轴百分比（相对页面高度 297mm，而非宽度 210mm）
       '--margin-bottom-y': `${cmToPagePercent(deferredConfig.margins.bottom, 'y')}%`,
-      '--title-font': deferredConfig.title.fontFamily,
+      '--title-font': getPreviewFontFamily(deferredConfig.title.fontFamily),
       '--title-size': `${deferredConfig.title.fontSize}px`,
       '--title-line-height': `${deferredConfig.title.lineSpacing}px`,
-      '--body-font': deferredConfig.body.fontFamily,
+      '--body-font': getPreviewFontFamily(deferredConfig.body.fontFamily),
       '--body-size': `${deferredConfig.body.fontSize}px`,
       '--body-line-height': `${deferredConfig.body.lineSpacing}px`,
       '--body-indent': `${deferredConfig.body.firstLineIndent}em`,
       '--char-spacing': `${charSpacingPx.toFixed(4)}px`,
-      '--h1-font': deferredConfig.advanced.h1.fontFamily,
+      '--h1-font': getPreviewFontFamily(deferredConfig.advanced.h1.fontFamily),
       '--h1-size': `${deferredConfig.advanced.h1.fontSize}px`,
-      '--h2-font': deferredConfig.advanced.h2.fontFamily,
+      '--h2-font': getPreviewFontFamily(deferredConfig.advanced.h2.fontFamily),
       '--h2-size': `${deferredConfig.advanced.h2.fontSize}px`,
-      '--h3-font': deferredConfig.advanced.h3.fontFamily,
+      '--h3-font': getPreviewFontFamily(deferredConfig.advanced.h3.fontFamily),
       '--h3-size': `${deferredConfig.advanced.h3.fontSize}px`,
-      '--page-number-font': deferredConfig.specialOptions.pageNumberFont,
+      '--page-number-font': getPreviewFontFamily(deferredConfig.specialOptions.pageNumberFont),
     } as CSSProperties
   }, [deferredConfig])
 
