@@ -13,8 +13,6 @@ interface ToolbarProps {
   importing?: boolean
   /** 是否正在导出中 */
   exporting?: boolean
-  /** 导出状态文案 */
-  exportMessage?: string
 }
 
 export const Toolbar = memo(function Toolbar({
@@ -24,7 +22,6 @@ export const Toolbar = memo(function Toolbar({
   onImport,
   importing,
   exporting,
-  exportMessage,
 }: ToolbarProps) {
   const hasContent = ast.title !== null || ast.body.length > 0
   const nodeCount = (ast.title ? 1 : 0) + ast.body.length
@@ -97,7 +94,7 @@ export const Toolbar = memo(function Toolbar({
           onClick={onExport}
           disabled={!hasContent || exporting}
         >
-          {exporting ? (exportMessage || '导出中…') : '导出 Word'}
+          导出 Word
         </button>
       </div>
       {showSettings && <SettingsModal onClose={() => setShowSettings(false)} />}
