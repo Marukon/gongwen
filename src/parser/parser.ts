@@ -187,7 +187,8 @@ function parseAttachment(
  * 2. 第一个非空行视为公文标题（DOCUMENT_TITLE）
  * 3. 后续行通过正则检测类型
  * 4. 解析完成后识别发文机关署名：
- *    仅当 DATE 位于末尾，且 DATE 前一个段落满足“短句 + 机关关键词”时改为 SIGNATURE
+ *    - 当 DATE 位于末尾，且 DATE 前一个段落满足“短句 + 机关关键词”时改为 SIGNATURE
+ *    - 当文末只有单位署名、没有 DATE 时，若末尾段落满足“短句 + 机关关键词”也改为 SIGNATURE
  */
 export function parseGongwen(text: string): GongwenAST {
   const lines = text.split('\n')
@@ -242,12 +243,18 @@ export function parseGongwen(text: string): GongwenAST {
     i++
   }
 
-  // 识别发文机关署名：仅处理末尾成文日期，降低误判
+  // 识别发文机关署名：优先处理“署名 + 日期”场景。
   for (let j = 1; j < body.length; j++) {
     if (body[j].type !== NodeType.DATE || j !== body.length - 1) continue
     if (isPossibleSignature(body[j - 1]) && hasSignatureOrgHint(body[j - 1].content)) {
       body[j - 1] = { ...body[j - 1], type: NodeType.SIGNATURE }
     }
+  }
+
+  // 兼容“只有单位、没有日期”的文末署名。
+  const lastNode = body[body.length - 1]
+  if (isPossibleSignature(lastNode) && hasSignatureOrgHint(lastNode.content)) {
+    body[body.length - 1] = { ...lastNode, type: NodeType.SIGNATURE }
   }
 
   return { title, body }
