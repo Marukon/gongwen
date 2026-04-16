@@ -78,11 +78,19 @@ function App() {
   }, [fixFeedback])
 
   const handleExport = useCallback(async () => {
+    setExporting(true)
+
+    await new Promise<void>((resolve) => {
+      requestAnimationFrame(() => resolve())
+    })
+
     try {
       await downloadDocx(ast, configRef.current)
     } catch (err) {
       console.error('导出失败:', err)
       alert('导出失败，请检查控制台日志')
+    } finally {
+      setExporting(false)
     }
   }, [ast])
 
@@ -141,6 +149,7 @@ function App() {
         onClear={handleClear}
         onImport={handleImport}
         importing={importing}
+        exporting={exporting}
       />
       <div className="app-main">
         <div className="app-editor">

@@ -11,6 +11,8 @@ interface ToolbarProps {
   onImport: (file: File) => void
   /** 是否正在导入中 */
   importing?: boolean
+  /** 是否正在导出中 */
+  exporting?: boolean
 }
 
 export function Toolbar({
@@ -19,6 +21,7 @@ export function Toolbar({
   onClear,
   onImport,
   importing,
+  exporting,
 }: ToolbarProps) {
   const hasContent = ast.title !== null || ast.body.length > 0
   const nodeCount = (ast.title ? 1 : 0) + ast.body.length
@@ -89,7 +92,7 @@ export function Toolbar({
         <button
           className="toolbar-btn toolbar-btn--export"
           onClick={onExport}
-          disabled={!hasContent}
+          disabled={!hasContent || exporting}
         >
           导出 Word
         </button>

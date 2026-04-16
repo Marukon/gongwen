@@ -378,6 +378,22 @@ describe('发文机关署名识别', () => {
     expect(ast.body[1].type).toBe(NodeType.DATE)
   })
 
+  it('文末只有单位没有日期时也识别为 SIGNATURE', () => {
+    const text = [
+      '标题',
+      '',
+      '一、有关要求',
+      '请各单位认真抓好落实。',
+      '国务院办公厅',
+    ].join('\n')
+    const ast = parseGongwen(text)
+
+    expect(ast.body).toHaveLength(3)
+    expect(ast.body[0].type).toBe(NodeType.HEADING_1)
+    expect(ast.body[1].type).toBe(NodeType.PARAGRAPH)
+    expect(ast.body[2].type).toBe(NodeType.SIGNATURE)
+  })
+
   it('日期非末尾时不识别 SIGNATURE', () => {
     const text = [
       '标题',
@@ -404,5 +420,18 @@ describe('发文机关署名识别', () => {
 
     expect(ast.body[0].type).toBe(NodeType.PARAGRAPH)
     expect(ast.body[1].type).toBe(NodeType.DATE)
+  })
+
+  it('文末普通短句即使没有日期也不误识别为 SIGNATURE', () => {
+    const text = [
+      '标题',
+      '',
+      '一、有关要求',
+      '请认真执行',
+    ].join('\n')
+    const ast = parseGongwen(text)
+
+    expect(ast.body[0].type).toBe(NodeType.HEADING_1)
+    expect(ast.body[1].type).toBe(NodeType.PARAGRAPH)
   })
 })
