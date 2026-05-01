@@ -239,6 +239,12 @@ interface A4PageProps {
   hasStamp: boolean
 }
 
+function ensureChinesePeriod(text: string): string {
+  const trimmed = text.trim()
+  if (!trimmed) return ''
+  return /[。！？!?]$/.test(trimmed) ? trimmed : `${trimmed}。`
+}
+
 export const A4Page = memo(function A4Page({
   title,
   body,
@@ -367,7 +373,13 @@ export const A4Page = memo(function A4Page({
         <div className="a4-footer-note">
           <div className="a4-footer-note-line-top"></div>
           {footerNoteConfig.cc && (
-            <div className="a4-footer-note-cc">抄送：{footerNoteConfig.cc}</div>
+            <div className="a4-footer-note-cc">
+              <span className="a4-footer-note-cc-label">抄送：</span>
+              <span className="a4-footer-note-cc-text">{ensureChinesePeriod(footerNoteConfig.cc)}</span>
+            </div>
+          )}
+          {footerNoteConfig.cc && (footerNoteConfig.printer || footerNoteConfig.printDate) && (
+            <div className="a4-footer-note-line-middle"></div>
           )}
           {(footerNoteConfig.printer || footerNoteConfig.printDate) && (
             <div className="a4-footer-note-printer">

@@ -148,6 +148,12 @@ function pageNumberParagraph(
   })
 }
 
+function ensureChinesePeriod(text: string): string {
+  const trimmed = text.trim()
+  if (!trimmed) return ''
+  return /[。！？!?]$/.test(trimmed) ? trimmed : `${trimmed}。`
+}
+
 /**
  * 拆分标题首句：首句（到第一个"。"）用标题字体/样式，其余用仿宋正文样式
  * 适用于一至四级标题（黑体/楷体/仿宋加粗 + 仿宋正文）
@@ -530,7 +536,7 @@ export function buildDocument(ast: GongwenAST, config: DocumentConfig): Document
     const bodyFont = {
       ascii: 'Times New Roman',
       eastAsia: config.body.fontFamily,
-      hAnsi: 'Times New Roman',
+      hAnsi: config.body.fontFamily,
       cs: 'Times New Roman',
     }
     const footerNoteSize = 28 // 四号 14pt = 28 half-point
@@ -540,103 +546,104 @@ export function buildDocument(ast: GongwenAST, config: DocumentConfig): Document
     // 粗线（首条、末条分隔线）
     const thickBorder: IBorderOptions = {
       style: BorderStyle.SINGLE,
-      size: 12, // 1.5pt
+      size: 8, // 约 0.35mm
       color: '000000',
     }
     // 细线（抄送与印发之间的分隔线）
     const thinBorder: IBorderOptions = {
       style: BorderStyle.SINGLE,
-      size: 4, // 0.5pt
+      size: 6, // 约 0.25mm
       color: '000000',
     }
 
     const hasCc = !!config.footerNote.cc
     const hasPrint = !!(config.footerNote.printer || config.footerNote.printDate)
+    const footerRows: TableRow[] = []
 
-    // 版记内容：全部放入浮动表格的唯一单元格
-    const footerNoteChildren: (Paragraph | Table)[] = []
-
-    // 1. 首条粗线
-    footerNoteChildren.push(new Paragraph({
-      spacing: { before: 0, after: 0 },
-      border: { bottom: thickBorder },
-      children: [],
-    }))
-
-    // 2. 抄送行（左右各空一字）
     if (hasCc) {
-      footerNoteChildren.push(new Paragraph({
-        alignment: AlignmentType.LEFT,
-        indent: { left: fnOneCharIndent, right: fnOneCharIndent },
-        children: [new TextRun({
-          text: `抄送：${config.footerNote.cc}`,
-          font: bodyFont,
-          size: footerNoteSize,
-        })],
+      footerRows.push(new TableRow({
+        children: [
+          new TableCell({
+            columnSpan: 2,
+            margins: { top: 0, bottom: 0, left: 0, right: 0 },
+            children: [new Paragraph({
+              alignment: AlignmentType.LEFT,
+              indent: {
+                left: fnOneCharIndent * 4,
+                hanging: fnOneCharIndent * 3,
+                right: fnOneCharIndent,
+              },
+              spacing: { before: 0, after: 0 },
+              children: [new TextRun({
+                text: `抄送：${ensureChinesePeriod(config.footerNote.cc)}`,
+                font: bodyFont,
+                size: footerNoteSize,
+              })],
+            })],
+          }),
+        ],
       }))
     }
 
-    // 3. 中间细线（仅在抄送和印发行同时存在时出现）
-    if (hasCc && hasPrint) {
-      footerNoteChildren.push(new Paragraph({
-        spacing: { before: 0, after: 0 },
-        border: { bottom: thinBorder },
-        children: [],
-      }))
-    }
-
-    // 4. 印发机关 + 印发日期（嵌套无边框表格：左空一字，右空一字）
     if (hasPrint) {
       const printerText = config.footerNote.printer || ''
       const dateText = config.footerNote.printDate
         ? `${config.footerNote.printDate}印发`
         : ''
 
-      footerNoteChildren.push(new Table({
-        width: { size: 100, type: WidthType.PERCENTAGE },
-        borders: TABLE_NO_BORDERS,
-        rows: [
-          new TableRow({
-            children: [
-              new TableCell({
-                width: { size: 50, type: WidthType.PERCENTAGE },
-                borders: TABLE_NO_BORDERS,
-                children: [new Paragraph({
-                  alignment: AlignmentType.LEFT,
-                  indent: { left: fnOneCharIndent },
-                  children: printerText
-                    ? [new TextRun({ text: printerText, font: bodyFont, size: footerNoteSize })]
-                    : [],
-                })],
-              }),
-              new TableCell({
-                width: { size: 50, type: WidthType.PERCENTAGE },
-                borders: TABLE_NO_BORDERS,
-                children: [new Paragraph({
-                  alignment: AlignmentType.RIGHT,
-                  indent: { right: fnOneCharIndent },
-                  children: dateText
-                    ? [new TextRun({ text: dateText, font: bodyFont, size: footerNoteSize })]
-                    : [],
-                })],
-              }),
-            ],
+      footerRows.push(new TableRow({
+        children: [
+          new TableCell({
+            width: { size: 50, type: WidthType.PERCENTAGE },
+            margins: { top: 0, bottom: 0, left: 0, right: 0 },
+            children: [new Paragraph({
+              alignment: AlignmentType.LEFT,
+              indent: { left: fnOneCharIndent },
+              spacing: { before: 0, after: 0 },
+              children: printerText
+                ? [new TextRun({ text: printerText, font: bodyFont, size: footerNoteSize })]
+                : [],
+            })],
+          }),
+          new TableCell({
+            width: { size: 50, type: WidthType.PERCENTAGE },
+            margins: { top: 0, bottom: 0, left: 0, right: 0 },
+            children: [new Paragraph({
+              alignment: AlignmentType.RIGHT,
+              indent: { right: fnOneCharIndent },
+              spacing: { before: 0, after: 0 },
+              children: dateText
+                ? [new TextRun({ text: dateText, font: bodyFont, size: footerNoteSize })]
+                : [],
+            })],
           }),
         ],
       }))
     }
 
-    // 5. 末条粗线
-    footerNoteChildren.push(new Paragraph({
-      spacing: { before: 0, after: 0 },
-      border: { bottom: thickBorder },
-      children: [],
-    }))
+    if (footerRows.length === 0) {
+      footerRows.push(new TableRow({
+        children: [
+          new TableCell({
+            columnSpan: 2,
+            margins: { top: 0, bottom: 0, left: 0, right: 0 },
+            children: [new Paragraph({ spacing: { before: 0, after: 0 }, children: [] })],
+          }),
+        ],
+      }))
+    }
 
-    // 浮动表格包装器：无边框 1×1 表格，锚定在版心底部
     children.push(new Table({
       width: { size: 100, type: WidthType.PERCENTAGE },
-      borders: TABLE_NO_BORDERS,
+      columnWidths: [5000, 5000],
+      borders: {
+        top: thickBorder,
+        bottom: thickBorder,
+        left: NO_BORDER,
+        right: NO_BORDER,
+        insideHorizontal: hasCc && hasPrint ? thinBorder : NO_BORDER,
+        insideVertical: NO_BORDER,
+      },
       float: {
         horizontalAnchor: TableAnchorType.MARGIN,
         verticalAnchor: TableAnchorType.MARGIN,
@@ -644,17 +651,7 @@ export function buildDocument(ast: GongwenAST, config: DocumentConfig): Document
         relativeVerticalPosition: RelativeVerticalPosition.BOTTOM,
         overlap: OverlapType.NEVER,
       },
-      rows: [
-        new TableRow({
-          children: [
-            new TableCell({
-              borders: TABLE_NO_BORDERS,
-              margins: { top: 0, bottom: 0, left: 0, right: 0 },
-              children: footerNoteChildren,
-            }),
-          ],
-        }),
-      ],
+      rows: footerRows,
     }))
   }
 
