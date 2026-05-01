@@ -79,4 +79,35 @@ describe('getWordHeadingMeta', () => {
     expect(xml).toContain('w:outlineLvl w:val="1"')
     expect(xml).toContain('w:i w:val="false"')
   })
+
+  it('版记导出包含首末粗线、中间细线和左右空字缩进', async () => {
+    const ast: GongwenAST = {
+      title: null,
+      body: [],
+    }
+    const config = {
+      ...DEFAULT_CONFIG,
+      specialOptions: {
+        ...DEFAULT_CONFIG.specialOptions,
+        showPageNumber: false,
+      },
+      footerNote: {
+        enabled: true,
+        cc: '甲单位',
+        printer: '办公室',
+        printDate: '2026年5月1日',
+      },
+    }
+
+    const buffer = await Packer.toBuffer(buildDocument(ast, config))
+    const zip = await JSZip.loadAsync(buffer)
+    const xml = await zip.file('word/document.xml')?.async('string')
+
+    expect(xml).toBeDefined()
+    expect(xml).toContain('<w:top w:val="single" w:color="000000" w:sz="8"/>')
+    expect(xml).toContain('<w:bottom w:val="single" w:color="000000" w:sz="8"/>')
+    expect(xml).toContain('<w:insideH w:val="single" w:color="000000" w:sz="6"/>')
+    expect(xml).toContain('抄送：甲单位。')
+    expect(xml).toMatch(/<w:ind[^>]*w:left="1280"[^>]*w:right="320"[^>]*w:hanging="960"/)
+  })
 })

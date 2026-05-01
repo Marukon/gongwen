@@ -345,18 +345,35 @@
 }
 
 .a4-footer-note-line-top {
-  border-top: 1px solid #000;
+  height: 0;
+  border-top: 0.35mm solid #000;
+}
+
+.a4-footer-note-line-middle {
+  height: 0;
+  border-top: 0.25mm solid #000;
 }
 
 .a4-footer-note-line-bottom {
-  border-top: 2px solid #000;
+  height: 0;
+  border-top: 0.35mm solid #000;
 }
 
 .a4-footer-note-cc {
-  text-indent: 0;
+  display: flex;
+  padding: 0 1em;
+}
+
+.a4-footer-note-cc-label {
+  flex: 0 0 auto;
+}
+
+.a4-footer-note-cc-text {
+  flex: 1 1 auto;
 }
 
 .a4-footer-note-printer {
   display: flex;
   justify-content: space-between;
+  padding: 0 1em;
 }

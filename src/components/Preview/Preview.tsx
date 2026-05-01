@@ -1,4 +1,4 @@
-import { startTransition, useDeferredValue, useMemo, useRef, useState, type CSSProperties } from 'react'
+import { startTransition, useDeferredValue, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import type { GongwenAST } from '../../types/ast'
 import { useDocumentConfig } from '../../contexts/useDocumentConfig'
 import { cmToPagePercent, CHARS_PER_LINE } from '../../types/documentConfig'
@@ -15,11 +15,26 @@ interface PreviewProps {
 
 const LARGE_DOCUMENT_PREVIEW_THRESHOLD = 5000
 const LARGE_DOCUMENT_SAMPLE_SIZE = 200
+const MEASURE_SAMPLE_CHAR = '测'
+const PREVIEW_LINE_FIT_TOLERANCE_PX = 1
+
+interface CharacterMeasure {
+  textWidth: number
+  letterSpacingUnits: number
+}
 
 export function Preview({ ast }: PreviewProps) {
   const measurerRef = useRef<HTMLDivElement>(null)
+  const scrollRef = useRef<HTMLDivElement>(null)
+  const [pageWidthPx, setPageWidthPx] = useState(595)
+  const [contentWidthPx, setContentWidthPx] = useState<number | null>(null)
+  const [characterMeasure, setCharacterMeasure] = useState<CharacterMeasure | null>(null)
   const { config } = useDocumentConfig()
   const deferredConfig = useDeferredValue(config)
+  const bodyPreviewFontFamily = useMemo(
+    () => getPreviewFontFamily(deferredConfig.body.fontFamily),
+    [deferredConfig.body.fontFamily]
+  )
   const isLargeDocument = ast.body.length > LARGE_DOCUMENT_PREVIEW_THRESHOLD
   const previewDocKey = `${ast.title?.content ?? ''}:${ast.body.length}:${ast.body[0]?.content ?? ''}`
   const [fullPreviewDocKey, setFullPreviewDocKey] = useState<string | null>(null)
@@ -79,6 +94,8 @@ export function Preview({ ast }: PreviewProps) {
       boldHeading3: deferredConfig.specialOptions.boldHeading3,
       hasStamp: deferredConfig.specialOptions.hasStamp,
     },
+    previewPageWidth: pageWidthPx,
+    previewContentWidth: contentWidthPx,
   }), [
     deferredConfig.margins.top,
     deferredConfig.margins.bottom,
@@ -108,18 +125,101 @@ export function Preview({ ast }: PreviewProps) {
     deferredConfig.specialOptions.boldFirstSentence,
     deferredConfig.specialOptions.boldHeading3,
     deferredConfig.specialOptions.hasStamp,
+    pageWidthPx,
+    contentWidthPx,
   ])
   const pages = usePagination(ast.title, previewBody, measurerRef, paginationConfig)
+
+  useEffect(() => {
+    const scroll = scrollRef.current
+    if (!scroll) return
+
+    function syncPageMetrics() {
+      const current = scrollRef.current
+      if (!current) return
+      const style = getComputedStyle(current)
+      const contentWidth = current.clientWidth
+        - parseFloat(style.paddingLeft)
+        - parseFloat(style.paddingRight)
+      const nextWidth = Math.min(595, Math.max(1, contentWidth))
+      setPageWidthPx((prev) => (Math.abs(prev - nextWidth) > 0.5 ? nextWidth : prev))
+
+      const viewport = current.querySelector('.a4-page .a4-content-viewport') as HTMLElement | null
+      if (viewport) {
+        const nextContentWidth = viewport.getBoundingClientRect().width
+        setContentWidthPx((prev) => (
+          prev === null || Math.abs(prev - nextContentWidth) > 0.5 ? nextContentWidth : prev
+        ))
+      }
+    }
+
+    syncPageMetrics()
+    const frameId = requestAnimationFrame(syncPageMetrics)
+    const observer = new ResizeObserver(syncPageMetrics)
+    observer.observe(scroll)
+    return () => {
+      cancelAnimationFrame(frameId)
+      observer.disconnect()
+    }
+  }, [pages.length])
+
+  useEffect(() => {
+    let cancelled = false
+
+    function measureCharacterWidth() {
+      if (cancelled) return
+      const text = MEASURE_SAMPLE_CHAR.repeat(CHARS_PER_LINE)
+      const probe = document.createElement('span')
+      probe.textContent = text
+      probe.style.position = 'absolute'
+      probe.style.left = '-9999px'
+      probe.style.top = '-9999px'
+      probe.style.visibility = 'hidden'
+      probe.style.whiteSpace = 'nowrap'
+      probe.style.fontFamily = bodyPreviewFontFamily
+      probe.style.fontSize = `${deferredConfig.body.fontSize}px`
+      probe.style.fontWeight = 'normal'
+      probe.style.fontStyle = 'normal'
+      probe.style.lineHeight = 'normal'
+      probe.style.letterSpacing = '0'
+      document.body.appendChild(probe)
+
+      const textWidth = probe.getBoundingClientRect().width
+      probe.style.letterSpacing = '1px'
+      const textWidthWithSpacing = probe.getBoundingClientRect().width
+      document.body.removeChild(probe)
+
+      const letterSpacingUnits = Math.max(1, textWidthWithSpacing - textWidth)
+      setCharacterMeasure((prev) => {
+        if (
+          prev
+          && Math.abs(prev.textWidth - textWidth) <= 0.01
+          && Math.abs(prev.letterSpacingUnits - letterSpacingUnits) <= 0.01
+        ) {
+          return prev
+        }
+        return { textWidth, letterSpacingUnits }
+      })
+    }
+
+    measureCharacterWidth()
+    document.fonts?.ready.then(measureCharacterWidth)
+
+    return () => {
+      cancelled = true
+    }
+  }, [bodyPreviewFontFamily, deferredConfig.body.fontSize])
 
   /** 将 config 转换为 CSS 自定义属性 */
   const cssVars = useMemo((): CSSProperties => {
     // 计算字符间距，使每行恰好容纳 28 字 (GB/T 9704)
-    // 预览以 72dpi 渲染，1pt = 1px，页面宽度 595px
-    const pageWidthPx = 595
     const marginLeftPct = deferredConfig.margins.left * 10 / 210
     const marginRightPct = deferredConfig.margins.right * 10 / 210
-    const availablePx = pageWidthPx * (1 - marginLeftPct - marginRightPct)
-    const charSpacingPx = availablePx / CHARS_PER_LINE - deferredConfig.body.fontSize
+    const availablePx = contentWidthPx ?? pageWidthPx * (1 - marginLeftPct - marginRightPct)
+    const fallbackTextWidth = deferredConfig.body.fontSize * CHARS_PER_LINE
+    const textWidth = characterMeasure?.textWidth ?? fallbackTextWidth
+    const letterSpacingUnits = characterMeasure?.letterSpacingUnits ?? Math.max(1, CHARS_PER_LINE - 1)
+    const charSpacingPx = (availablePx - textWidth - PREVIEW_LINE_FIT_TOLERANCE_PX) / letterSpacingUnits
 
     return {
       '--margin-top': `${cmToPagePercent(deferredConfig.margins.top, 'x')}%`,
@@ -131,7 +231,7 @@ export function Preview({ ast }: PreviewProps) {
       '--title-font': getPreviewFontFamily(deferredConfig.title.fontFamily),
       '--title-size': `${deferredConfig.title.fontSize}px`,
       '--title-line-height': `${deferredConfig.title.lineSpacing}px`,
-      '--body-font': getPreviewFontFamily(deferredConfig.body.fontFamily),
+      '--body-font': bodyPreviewFontFamily,
       '--body-size': `${deferredConfig.body.fontSize}px`,
       '--body-line-height': `${deferredConfig.body.lineSpacing}px`,
       '--body-indent': `${deferredConfig.body.firstLineIndent}em`,
@@ -144,7 +244,7 @@ export function Preview({ ast }: PreviewProps) {
       '--h3-size': `${deferredConfig.advanced.h3.fontSize}px`,
       '--page-number-font': getPreviewFontFamily(deferredConfig.specialOptions.pageNumberFont),
     } as CSSProperties
-  }, [deferredConfig])
+  }, [bodyPreviewFontFamily, characterMeasure, contentWidthPx, deferredConfig, pageWidthPx])
 
   const boldFirst = deferredConfig.specialOptions.boldFirstSentence
   const boldHeading3 = deferredConfig.specialOptions.boldHeading3
@@ -181,7 +281,7 @@ export function Preview({ ast }: PreviewProps) {
           </div>
         )}
       </div>
-      <div className="preview-scroll" style={cssVars}>
+      <div ref={scrollRef} className="preview-scroll" style={cssVars}>
         {/* 隐藏度量容器：渲染全部节点用于高度测量（与 A4Page 使用相同的 CSS 类和渲染逻辑） */}
         <div ref={measurerRef} className="a4-measurer" aria-hidden="true">
           <div className="a4-measurer-content">

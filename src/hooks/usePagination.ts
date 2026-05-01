@@ -58,6 +58,8 @@ export interface PaginationConfig {
     boldHeading3: boolean
     hasStamp: boolean
   }
+  previewPageWidth?: number
+  previewContentWidth?: number | null
 }
 
 function arePagesEqual(prev: PageSlice[], next: PageSlice[]): boolean {

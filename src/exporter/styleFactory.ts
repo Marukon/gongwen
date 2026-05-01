@@ -62,7 +62,10 @@ export function createCharacterFirstLineIndent(config: DocumentConfig): BuilderE
  */
 function calculateCharWidth(config: DocumentConfig): number {
   const availableTwips = 11906 - cmToTwip(config.margins.left) - cmToTwip(config.margins.right)
-  const charSpacingTwips = Math.floor(availableTwips / CHARS_PER_LINE - config.body.fontSize * 20)
+  const charGapCount = Math.max(1, CHARS_PER_LINE - 1)
+  const charSpacingTwips = Math.floor(
+    (availableTwips - config.body.fontSize * 20 * CHARS_PER_LINE) / charGapCount
+  )
   return config.body.fontSize * 20 + charSpacingTwips
 }
 
@@ -195,7 +198,10 @@ export function getRunStyle(type: NodeType, config: DocumentConfig): Partial<IRu
   // 字符间距微调：使每行恰好 28 字 (GB/T 9704)
   // characterSpacing 单位为 twips (1/20 pt)，向下取整确保不超出可用宽度
   const availableTwips = 11906 - cmToTwip(config.margins.left) - cmToTwip(config.margins.right)
-  const charSpacing = Math.floor(availableTwips / CHARS_PER_LINE - config.body.fontSize * 20)
+  const charGapCount = Math.max(1, CHARS_PER_LINE - 1)
+  const charSpacing = Math.floor(
+    (availableTwips - config.body.fontSize * 20 * CHARS_PER_LINE) / charGapCount
+  )
 
   switch (type) {
     case NodeType.DOCUMENT_TITLE:
@@ -311,7 +317,10 @@ export function getAttachmentParagraphStyle(
 export function getAttachmentRunStyle(config: DocumentConfig): Partial<IRunOptions> {
   const bodyFontSize = config.body.fontSize * 2
   const availableTwips = 11906 - cmToTwip(config.margins.left) - cmToTwip(config.margins.right)
-  const charSpacing = Math.floor(availableTwips / CHARS_PER_LINE - config.body.fontSize * 20)
+  const charGapCount = Math.max(1, CHARS_PER_LINE - 1)
+  const charSpacing = Math.floor(
+    (availableTwips - config.body.fontSize * 20 * CHARS_PER_LINE) / charGapCount
+  )
 
   return {
     font: {
