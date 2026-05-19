@@ -85,6 +85,7 @@ function App() {
     })
 
     try {
+      const { downloadDocx } = await import('./exporter/download')
       await downloadDocx(ast, configRef.current)
     } catch (err) {
       console.error('导出失败:', err)
@@ -111,6 +112,7 @@ function App() {
 
     setImporting(true)
     try {
+      const { importFile } = await import('./utils/fileImporter')
       const result = await importFile(file)
       setText(result.text)
     } catch (err) {
