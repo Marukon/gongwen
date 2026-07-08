@@ -11,7 +11,7 @@ interface EditorProps {
   importing?: boolean
 }
 
-export function Editor({
+export const Editor = memo(function Editor({
   value,
   onChange,
   canTextCleanup,

@@ -15,7 +15,7 @@ interface ToolbarProps {
   exporting?: boolean
 }
 
-export function Toolbar({
+export const Toolbar = memo(function Toolbar({
   ast,
   onExport,
   onClear,

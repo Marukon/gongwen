@@ -430,8 +430,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                     </>
                   )}
                 </div>
-              </div>
-
+              )}
               <div className="settings-panel">
                 <div className="settings-options">
                   <CheckboxField
