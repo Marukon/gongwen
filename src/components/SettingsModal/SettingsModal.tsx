@@ -711,14 +711,6 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
             style={{ display: 'none' }}
           />
           <div className="settings-footer-actions settings-footer-actions--left">
-            <a
-              className="settings-btn settings-btn--download"
-              href="https://github.com/hehecat/gongwen/releases/latest/download/gongwen.html"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              下载离线版
-            </a>
           </div>
           <div className="settings-footer-spacer" />
           <div className="settings-footer-actions settings-footer-actions--right">
