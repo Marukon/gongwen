@@ -394,6 +394,21 @@ function nodeToParagraph(
   ])
 }
 
+function insertEmptyLine(children: (Paragraph | Table)[], config: DocumentConfig) {
+  const bodyLineSpacing = ptToTwip(config.body.lineSpacing)
+  const bodyFont = {
+    ascii: 'Times New Roman',
+    eastAsia: config.body.fontFamily,
+    hAnsi: config.body.fontFamily,
+    cs: 'Times New Roman',
+  }
+  const bodyFontSize = config.body.fontSize * 2
+  children.push(new Paragraph({
+    spacing: { line: bodyLineSpacing, lineRule: LineRuleType.EXACT, before: 0, after: 0 },
+    children: [new TextRun({ font: bodyFont, size: bodyFontSize, text: '' })],
+  }))
+}
+
 /** 将完整 GongwenAST 转换为 docx Document */
 export function buildDocument(ast: GongwenAST, config: DocumentConfig): Document {
   const cache = createBuildStyleCache(config)
@@ -527,6 +542,14 @@ export function buildDocument(ast: GongwenAST, config: DocumentConfig): Document
 
   if (ast.title) {
     children.push(nodeToParagraph(ast.title, config, cache, titleSpacingBefore))
+    if (ast.body.length > 0) {
+      const firstNode = ast.body[0]
+      const isFirstNodeName = isTitleNameLine(firstNode.content)
+      const isFirstNodeDate = isTitleDateLine(firstNode.content)
+      if (!isFirstNodeName && !isFirstNodeDate) {
+        insertEmptyLine(children, config)
+      }
+    }
   }
 
   for (let i = 0; i < ast.body.length; i++) {
@@ -538,20 +561,8 @@ export function buildDocument(ast: GongwenAST, config: DocumentConfig): Document
     
     // 发文机关署名前插入 2 个空行
     if (node.type === NodeType.SIGNATURE) {
-      const bodyLineSpacing = ptToTwip(config.body.lineSpacing)
-      const bodyFont = {
-        ascii: 'Times New Roman',
-        eastAsia: config.body.fontFamily,
-        hAnsi: config.body.fontFamily,
-        cs: 'Times New Roman',
-      }
-      const bodyFontSize = config.body.fontSize * 2
-      
       for (let j = 0; j < 2; j++) {
-        children.push(new Paragraph({
-          spacing: { line: bodyLineSpacing, lineRule: LineRuleType.EXACT, before: 0, after: 0 },
-          children: [new TextRun({ font: bodyFont, size: bodyFontSize, text: '' })],
-        }))
+        insertEmptyLine(children, config)
       }
     }
     
@@ -571,6 +582,11 @@ export function buildDocument(ast: GongwenAST, config: DocumentConfig): Document
       children.push(nodeToParagraph(node, config, cache, 0, node.content, ast.body[i + 1].content))
     } else {
       children.push(nodeToParagraph(node, config, cache, 0, undefined, undefined, isTitleDate, isTitleName, shouldNoIndent))
+    }
+
+    // 如果有日期，和正文空一行
+    if (isTitleDate && i + 1 < ast.body.length) {
+      insertEmptyLine(children, config)
     }
   }
 

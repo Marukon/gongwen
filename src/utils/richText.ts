@@ -253,6 +253,11 @@ export function astToStyledHtml(ast: GongwenAST, config: DocumentConfig): string
 
   if (ast.title) {
     html.push(paragraphHtml(ast.title, 'a4-title'))
+    if (ast.body.length > 0) {
+      if (!isTitleNameNode(ast, 0) && !isTitleDateNode(ast, 0)) {
+        html.push('<p><br></p>')
+      }
+    }
   }
 
   ast.body.forEach((node, index) => {
@@ -268,6 +273,9 @@ export function astToStyledHtml(ast: GongwenAST, config: DocumentConfig): string
 
     if (isTitleDateNode(ast, index)) {
       html.push(paragraphHtml(node, 'a4-title-date'))
+      if (index + 1 < ast.body.length) {
+        html.push('<p><br></p>')
+      }
       return
     }
 
