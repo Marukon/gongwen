@@ -697,6 +697,11 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                       checked={config.textFixOptions.removeRedundantSpaces}
                       onChange={(v) => patch({ textFixOptions: { removeRedundantSpaces: v } })}
                     />
+                    <CheckboxField
+                      label="一键修复和实时解析时，去掉无意义的回车"
+                      checked={config.textFixOptions.removeMeaninglessLineBreaks}
+                      onChange={(v) => patch({ textFixOptions: { removeMeaninglessLineBreaks: v } })}
+                    />
                     <p className="settings-hint">
                       关闭某项后，预览解析与“一键修复”都会跳过对应处理，仅保留你启用的文本修复规则。
                     </p>

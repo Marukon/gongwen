@@ -1,3 +1,6 @@
+import { NodeType } from '../types/ast'
+import { detectNodeType } from '../parser/matchers'
+
 /**
  * 文本修复工具
  *
@@ -27,16 +30,19 @@ export interface SanitizeResult {
 export interface AutoFixResult extends SanitizeResult {
   punctuationCount: number
   whitespaceCount: number
+  lineBreakCount: number
 }
 
 export interface TextFixOptions {
   convertEnglishPunctuation: boolean
   removeRedundantSpaces: boolean
+  removeMeaninglessLineBreaks: boolean
 }
 
 const DEFAULT_TEXT_FIX_OPTIONS: TextFixOptions = {
   convertEnglishPunctuation: true,
   removeRedundantSpaces: true,
+  removeMeaninglessLineBreaks: true,
 }
 
 function charAt(text: string, index: number): string {
@@ -188,6 +194,79 @@ export function removeRedundantSpaces(text: string): SanitizeResult {
   return { text: result, count }
 }
 
+export function removeMeaninglessLineBreaks(text: string): SanitizeResult {
+  const lines = text.split(/\r?\n/)
+  const resultLines: string[] = []
+  let count = 0
+
+  let titleIndex = -1
+  for (let i = 0; i < lines.length; i++) {
+    if (lines[i].trim().length > 0) {
+      titleIndex = i
+      break
+    }
+  }
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i]
+    if (resultLines.length === 0) {
+      resultLines.push(line)
+      continue
+    }
+
+    const prevLine = resultLines[resultLines.length - 1]
+    const prevTrimmed = prevLine.trim()
+    const currentTrimmed = line.trim()
+
+    if (prevTrimmed.length === 0 || currentTrimmed.length === 0) {
+      resultLines.push(line)
+      continue
+    }
+
+    let nonEmptyCount = 0
+    for (const l of resultLines) {
+      if (l.trim().length > 0) {
+        nonEmptyCount++
+      }
+    }
+    const isPrevTitleLine = nonEmptyCount === 1
+
+    if (isPrevTitleLine) {
+      resultLines.push(line)
+      continue
+    }
+
+    const prevType = detectNodeType(prevTrimmed)
+    const currentType = detectNodeType(currentTrimmed)
+
+    const isPrevHeading = prevType !== NodeType.PARAGRAPH
+    const isCurrentHeading = currentType !== NodeType.PARAGRAPH
+
+    const LIST_MARKER_RE = /^([①②③④⑤⑥⑦⑧⑨⑩]|\s*[-*•+])/
+    const isCurrentListMarker = LIST_MARKER_RE.test(currentTrimmed)
+    const hasIndent = /^(?:\s{2,}|\u3000+)/.test(line)
+    const endsWithColon = /[：:]$/.test(prevTrimmed)
+
+    if (
+      isPrevHeading ||
+      isCurrentHeading ||
+      isCurrentListMarker ||
+      hasIndent ||
+      endsWithColon
+    ) {
+      resultLines.push(line)
+    } else {
+      const lastChar = prevLine[prevLine.length - 1]
+      const firstChar = line[0]
+      const needsSpace = /[A-Za-z0-9]/.test(lastChar) && /[A-Za-z0-9]/.test(firstChar)
+      resultLines[resultLines.length - 1] = prevLine + (needsSpace ? ' ' : '') + currentTrimmed
+      count++
+    }
+  }
+
+  return { text: resultLines.join('\n'), count }
+}
+
 export function autoFixDocumentText(
   text: string,
   options: TextFixOptions = DEFAULT_TEXT_FIX_OPTIONS,
@@ -196,15 +275,20 @@ export function autoFixDocumentText(
     ? replaceEnglishPunctuation(text)
     : { text, count: 0 }
 
-  const whitespace = options.removeRedundantSpaces
-    ? removeRedundantSpaces(punctuation.text)
+  const lineBreaks = options.removeMeaninglessLineBreaks
+    ? removeMeaninglessLineBreaks(punctuation.text)
     : { text: punctuation.text, count: 0 }
+
+  const whitespace = options.removeRedundantSpaces
+    ? removeRedundantSpaces(lineBreaks.text)
+    : { text: lineBreaks.text, count: 0 }
 
   return {
     text: whitespace.text,
     punctuationCount: punctuation.count,
     whitespaceCount: whitespace.count,
-    count: punctuation.count + whitespace.count,
+    lineBreakCount: lineBreaks.count,
+    count: punctuation.count + whitespace.count + lineBreaks.count,
   }
 }
 

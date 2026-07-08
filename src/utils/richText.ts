@@ -89,6 +89,7 @@ export function autoFixEditorHtml(html: string, options: TextFixOptions): AutoFi
 
   let punctuationCount = 0
   let whitespaceCount = 0
+  let lineBreakCount = 0
 
   const walker = doc!.createTreeWalker(root, NodeFilter.SHOW_TEXT)
   let currentNode = walker.nextNode()
@@ -100,6 +101,7 @@ export function autoFixEditorHtml(html: string, options: TextFixOptions): AutoFi
       currentNode.textContent = fixed.text
       punctuationCount += fixed.punctuationCount
       whitespaceCount += fixed.whitespaceCount
+      lineBreakCount += fixed.lineBreakCount
     }
     currentNode = walker.nextNode()
   }
@@ -108,12 +110,56 @@ export function autoFixEditorHtml(html: string, options: TextFixOptions): AutoFi
     text: normalizeEditorHtml(root.innerHTML),
     punctuationCount,
     whitespaceCount,
-    count: punctuationCount + whitespaceCount,
+    lineBreakCount,
+    count: punctuationCount + whitespaceCount + lineBreakCount,
   }
 }
 
 function escapeAttribute(value: string): string {
   return value.replace(/"/g, '&quot;')
+}
+
+function hasRichStyleOverrides(runs?: RichTextRun[]): boolean {
+  return !!runs?.some((run) => (
+    run.bold ||
+    run.italic ||
+    run.underline ||
+    !!run.fontFamily ||
+    !!run.fontSize
+  ))
+}
+
+function renderHeading1Html(content: string): string {
+  const idx = content.indexOf('。')
+  if (idx === -1 || idx === content.length - 1) {
+    return `<span class="a4-h1-inline">${escapeHtml(content)}</span>`
+  }
+  return `<span class="a4-h1-inline">${escapeHtml(content.slice(0, idx + 1))}</span><span class="a4-paragraph-inline">${escapeHtml(content.slice(idx + 1))}</span>`
+}
+
+function renderHeading2Html(content: string): string {
+  const idx = content.indexOf('。')
+  if (idx === -1 || idx === content.length - 1) {
+    return `<span class="a4-h2-inline">${escapeHtml(content)}</span>`
+  }
+  return `<span class="a4-h2-inline">${escapeHtml(content.slice(0, idx + 1))}</span><span class="a4-paragraph-inline">${escapeHtml(content.slice(idx + 1))}</span>`
+}
+
+function renderHeading3Html(content: string, bold = true): string {
+  const headingClassName = bold ? 'a4-h3-inline a4-h3-inline--bold' : 'a4-h3-inline'
+  const idx = content.indexOf('。')
+  if (idx === -1 || idx === content.length - 1) {
+    return `<span class="${headingClassName}">${escapeHtml(content)}</span>`
+  }
+  return `<span class="${headingClassName}">${escapeHtml(content.slice(0, idx + 1))}</span><span class="a4-paragraph-inline">${escapeHtml(content.slice(idx + 1))}</span>`
+}
+
+function renderHeading4Html(content: string): string {
+  const idx = content.indexOf('。')
+  if (idx === -1 || idx === content.length - 1) {
+    return `<span class="a4-h4-inline">${escapeHtml(content)}</span>`
+  }
+  return `<span class="a4-h4-inline">${escapeHtml(content.slice(0, idx + 1))}</span><span class="a4-paragraph-inline">${escapeHtml(content.slice(idx + 1))}</span>`
 }
 
 function renderBoldFirstSentence(text: string): string {
@@ -127,10 +173,15 @@ function renderBoldFirstSentence(text: string): string {
   return `<strong>${escapeHtml(firstSentence)}</strong>${escapeHtml(rest)}`
 }
 
-function paragraphHtml(node: DocumentNode, className: string, boldFirstSentence = false): string {
+function paragraphHtml(
+  node: DocumentNode,
+  className: string,
+  boldFirstSentence = false,
+  boldHeading3 = true
+): string {
   const alignmentStyle = node.alignment ? ` style="text-align:${escapeAttribute(node.alignment)}"` : ''
   const noIndentAttr = node.noIndent ? ' data-no-indent="true"' : ''
-  if (node.runs && node.runs.length > 0) {
+  if (node.runs && node.runs.length > 0 && hasRichStyleOverrides(node.runs)) {
     const runHtml = node.runs.map((run) => {
       const styles: string[] = []
       if (run.fontFamily) styles.push(`font-family:${run.fontFamily}`)
@@ -143,9 +194,22 @@ function paragraphHtml(node: DocumentNode, className: string, boldFirstSentence 
     return `<p class="${className}"${alignmentStyle}${noIndentAttr}>${runHtml || '<br>'}</p>`
   }
 
-  const content = node.content
-    ? (boldFirstSentence ? renderBoldFirstSentence(node.content) : escapeHtml(node.content))
-    : '<br>'
+  let content = '<br>'
+  if (node.content) {
+    if (node.type === NodeType.HEADING_1) {
+      content = renderHeading1Html(node.content)
+    } else if (node.type === NodeType.HEADING_2) {
+      content = renderHeading2Html(node.content)
+    } else if (node.type === NodeType.HEADING_3) {
+      content = renderHeading3Html(node.content, boldHeading3)
+    } else if (node.type === NodeType.HEADING_4) {
+      content = renderHeading4Html(node.content)
+    } else if (boldFirstSentence) {
+      content = renderBoldFirstSentence(node.content)
+    } else {
+      content = escapeHtml(node.content)
+    }
+  }
   return `<p class="${className}"${alignmentStyle}${noIndentAttr}>${content}</p>`
 }
 
@@ -229,7 +293,8 @@ export function astToStyledHtml(ast: GongwenAST, config: DocumentConfig): string
       config.specialOptions.boldFirstSentence &&
       node.type === NodeType.PARAGRAPH
     )
-    html.push(paragraphHtml({ ...node, noIndent: shouldNoIndent }, className, shouldBoldFirstSentence))
+    const boldHeading3 = config.specialOptions.boldHeading3
+    html.push(paragraphHtml({ ...node, noIndent: shouldNoIndent }, className, shouldBoldFirstSentence, boldHeading3))
   })
 
   return html.join('') || '<p><br></p>'

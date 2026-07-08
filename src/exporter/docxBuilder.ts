@@ -525,7 +525,7 @@ export function buildDocument(ast: GongwenAST, config: DocumentConfig): Document
     if (node.type === NodeType.SIGNATURE && i + 1 < ast.body.length && ast.body[i + 1].type === NodeType.DATE) {
       children.push(nodeToParagraph(node, config, cache, 0, node.content, ast.body[i + 1].content))
     } else {
-      children.push(nodeToParagraph(node, config, 0, undefined, undefined, isTitleDate, isTitleName, shouldNoIndent))
+      children.push(nodeToParagraph(node, config, cache, 0, undefined, undefined, isTitleDate, isTitleName, shouldNoIndent))
     }
   }
 

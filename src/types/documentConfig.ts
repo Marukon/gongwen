@@ -51,6 +51,7 @@ export interface SpecialOptionsConfig {
 export interface TextFixOptionsConfig {
   convertEnglishPunctuation: boolean
   removeRedundantSpaces: boolean
+  removeMeaninglessLineBreaks: boolean
 }
 
 /** 高级设置 — 单个元素配置 */
@@ -139,6 +140,7 @@ export const DEFAULT_CONFIG: DocumentConfig = {
   textFixOptions: {
     convertEnglishPunctuation: true,
     removeRedundantSpaces: true,
+    removeMeaninglessLineBreaks: true,
   },
   advanced: {
     h1: { fontFamily: '黑体', asciiFontFamily: 'Times New Roman', fontSize: 16 },

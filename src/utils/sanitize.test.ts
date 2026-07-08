@@ -3,6 +3,7 @@ import {
   autoFixDocumentText,
   removeRedundantSpaces,
   replaceEnglishPunctuation,
+  removeMeaninglessLineBreaks,
   sanitizeText,
 } from './sanitize'
 
@@ -51,24 +52,58 @@ describe('removeRedundantSpaces', () => {
   })
 })
 
+describe('removeMeaninglessLineBreaks', () => {
+  it('合并无意义的回车，保留标题、一级标题、空行、缩进等', () => {
+    const text = `公文拟办工作规范（试行）
+
+为进一步提高省政府办公厅公文拟办工作质效，更好地
+发挥参谋助手作用，不断提升“四个服务”水平，结合工作实际，制定本规范。
+一、重要意义
+公文拟办是省政府办公厅一项关键性、基础性工作，是发挥参谋助手作用、辅
+助领导科学决策的重要方式。高质量的公文拟办意见，能够让领导快速了解公文主旨，及时作出准确批示，加快公文办理效率，促进工作有效落实。`
+    
+    const expected = `公文拟办工作规范（试行）
+
+为进一步提高省政府办公厅公文拟办工作质效，更好地发挥参谋助手作用，不断提升“四个服务”水平，结合工作实际，制定本规范。
+一、重要意义
+公文拟办是省政府办公厅一项关键性、基础性工作，是发挥参谋助手作用、辅助领导科学决策的重要方式。高质量的公文拟办意见，能够让领导快速了解公文主旨，及时作出准确批示，加快公文办理效率，促进工作有效落实。`
+
+    const result = removeMeaninglessLineBreaks(text)
+    expect(result.text).toBe(expected)
+    expect(result.count).toBe(2)
+  })
+
+  it('不合带有缩进的行或以冒号结尾的行', () => {
+    const text = `主送机关：
+  第一行缩进
+  第二行缩进`
+    const result = removeMeaninglessLineBreaks(text)
+    expect(result.text).toBe(text)
+    expect(result.count).toBe(0)
+  })
+})
+
 describe('autoFixDocumentText', () => {
-  it('组合修复英文标点和多余空格', () => {
-    const result = autoFixDocumentText('各 单位: 请 认真 贯彻 落实, 确保成效!')
+  it('组合修复英文标点、回车和多余空格', () => {
+    const result = autoFixDocumentText('各 单位: 请\n 认真 贯彻 落实, 确保成效!')
 
     expect(result.text).toBe('各单位：请认真贯彻落实，确保成效！')
     expect(result.punctuationCount).toBe(3)
+    expect(result.lineBreakCount).toBe(1)
     expect(result.whitespaceCount).toBeGreaterThan(0)
-    expect(result.count).toBe(result.punctuationCount + result.whitespaceCount)
+    expect(result.count).toBe(result.punctuationCount + result.whitespaceCount + result.lineBreakCount)
   })
 
   it('支持按配置关闭部分修复能力', () => {
-    const result = autoFixDocumentText('各 单位: 请 认真 落实!', {
+    const result = autoFixDocumentText('各 单位: 请\n 认真 落实!', {
       convertEnglishPunctuation: false,
       removeRedundantSpaces: true,
+      removeMeaninglessLineBreaks: false,
     })
 
-    expect(result.text).toBe('各单位: 请认真落实!')
+    expect(result.text).toBe('各单位: 请\n认真落实!')
     expect(result.punctuationCount).toBe(0)
+    expect(result.lineBreakCount).toBe(0)
     expect(result.whitespaceCount).toBeGreaterThan(0)
   })
 })

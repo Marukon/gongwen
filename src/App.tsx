@@ -124,7 +124,11 @@ function App() {
 
   const handleAutoFix = useCallback(() => {
     const { textFixOptions } = config
-    if (!textFixOptions.convertEnglishPunctuation && !textFixOptions.removeRedundantSpaces) {
+    if (
+      !textFixOptions.convertEnglishPunctuation &&
+      !textFixOptions.removeRedundantSpaces &&
+      !textFixOptions.removeMeaninglessLineBreaks
+    ) {
       setFixFeedback('高级设置中已关闭全部文本修复选项')
       return
     }
@@ -133,13 +137,14 @@ function App() {
     setText(result.text)
 
     if (result.count === 0) {
-      setFixFeedback('未发现需要修复的标点或空格')
+      setFixFeedback('未发现需要修复的文本问题')
       return
     }
 
     const segments = []
     if (result.punctuationCount > 0) segments.push(`标点 ${result.punctuationCount} 处`)
     if (result.whitespaceCount > 0) segments.push(`空格 ${result.whitespaceCount} 处`)
+    if (result.lineBreakCount > 0) segments.push(`回车 ${result.lineBreakCount} 处`)
     setFixFeedback(`已修复 ${result.count} 处：${segments.join('，')}`)
   }, [config, text])
 
