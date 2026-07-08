@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, useCallback, type CSSProperties, type KeyboardEvent } from 'react'
-import { useDocumentConfig } from '../../contexts/DocumentConfigContext'
+import { useDocumentConfig } from '../../contexts/useDocumentConfig'
 import { CHARS_PER_LINE, FONT_OPTIONS, FONT_SIZE_OPTIONS, cmToPagePercent } from '../../types/documentConfig'
 import { normalizeEditorHtml } from '../../utils/richText'
 import './A4Page.css'
@@ -79,21 +79,20 @@ export function Preview({ value, onChange }: PreviewProps) {
     [config.header.orgName, config.margins.left, config.margins.right],
   )
   const headerOrgChars = useMemo(
-    () => Array.from(config.header.orgName.trim()),
+    () => config.header.orgName.trim().split(''),
     [config.header.orgName],
   )
 
   const cssVars = useMemo((): CSSProperties => {
     const pageWidthPx = 595
-    const marginLeftPct = deferredConfig.margins.left * 10 / 210
-    const marginRightPct = deferredConfig.margins.right * 10 / 210
-    const availablePx = contentWidthPx ?? pageWidthPx * (1 - marginLeftPct - marginRightPct)
-    const fallbackTextWidth = deferredConfig.body.fontSize * CHARS_PER_LINE
-    const textWidth = characterMeasure?.textWidth ?? fallbackTextWidth
-    const letterSpacingUnits = characterMeasure?.letterSpacingUnits ?? Math.max(1, CHARS_PER_LINE - 1)
-    const charSpacingPx = (availablePx - textWidth - PREVIEW_LINE_FIT_TOLERANCE_PX) / letterSpacingUnits
+    const marginLeftPx = (config.margins.left / 21) * pageWidthPx
+    const marginRightPx = (config.margins.right / 21) * pageWidthPx
+    const availablePx = pageWidthPx - marginLeftPx - marginRightPx
+    const textWidth = config.body.fontSize * CHARS_PER_LINE
+    const letterSpacingUnits = CHARS_PER_LINE - 1
+    const charSpacingPx = (availablePx - textWidth) / letterSpacingUnits
 
-    return {
+    return { 
       '--margin-top': `${cmToPagePercent(config.margins.top, 'x')}%`,
       '--margin-bottom': `${cmToPagePercent(config.margins.bottom, 'x')}%`,
       '--margin-left': `${cmToPagePercent(config.margins.left, 'x')}%`,
@@ -107,14 +106,14 @@ export function Preview({ value, onChange }: PreviewProps) {
       '--body-line-height': `${config.body.lineSpacing}pt`,
       '--body-indent': `${config.body.firstLineIndent}em`,
       '--char-spacing': `${charSpacingPx.toFixed(4)}px`,
-      '--h1-font': config.headings.h1.fontFamily,
-      '--h1-size': `${config.headings.h1.fontSize}pt`,
-      '--h2-font': config.headings.h2.fontFamily,
-      '--h2-size': `${config.headings.h2.fontSize}pt`,
+      '--h1-font': config.advanced.h1.fontFamily,
+      '--h1-size': `${config.advanced.h1.fontSize}pt`,
+      '--h2-font': config.advanced.h2.fontFamily,
+      '--h2-size': `${config.advanced.h2.fontSize}pt`,
       '--h3-font': config.advanced.h3.fontFamily,
       '--page-number-font': config.specialOptions.pageNumberFont,
     } as CSSProperties
-  }, [bodyPreviewFontFamily, characterMeasure, contentWidthPx, deferredConfig, pageWidthPx])
+  }, [config])
 
   useEffect(() => {
     const editor = editorRef.current

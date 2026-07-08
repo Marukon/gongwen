@@ -4,10 +4,8 @@ import { Preview } from './components/Preview/Preview'
 import { Toolbar } from './components/Toolbar/Toolbar'
 import { useDocumentParser } from './hooks/useDocumentParser'
 import { useDocumentConfig } from './contexts/useDocumentConfig'
-import { downloadDocx } from './exporter'
 import { parseGongwen } from './parser'
 import { autoFixDocumentText, sanitizeText } from './utils/sanitize'
-import { importFile } from './utils/fileImporter'
 import {
   astToStyledHtml,
 } from './utils/richText'
@@ -37,9 +35,12 @@ function App() {
   const [text, setText] = useState(loadSourceText)
   const [formattedHtml, setFormattedHtml] = useState(loadFormattedHtml)
   const [importing, setImporting] = useState(false)
+  const [exporting, setExporting] = useState(false)
   const [fixFeedback, setFixFeedback] = useState('')
 
   const { config } = useDocumentConfig()
+  const configRef = useRef(config)
+  configRef.current = config
   const ast = useDocumentParser(formattedHtml)
 
   // Auto-Save: debounce 500ms 写入 localStorage

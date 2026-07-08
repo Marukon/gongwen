@@ -1,4 +1,4 @@
-import { useState, type ChangeEvent, type ReactNode } from 'react'
+import { useState, useRef, type ChangeEvent, type ReactNode } from 'react'
 import { useDocumentConfig } from '../../contexts/useDocumentConfig'
 import { useCustomFonts } from '../../hooks/useCustomFonts'
 import {
@@ -11,7 +11,7 @@ import {
   HEADER_MODE_OPTIONS,
   type DeepPartial,
   type DocumentConfig,
-  type PageNumberStyle,
+  formatFontSizeLabel,
 } from '../../types/documentConfig'
 import { FontSelectField } from './FontSelectField'
 import { TemplateManagerSection } from './TemplateManagerSection'
@@ -27,17 +27,7 @@ const INDENT_SELECT_OPTIONS = INDENT_OPTIONS.map((opt) => ({
   label: String(opt.value),
 }))
 
-const PROJECT_INFO = {
-  repoUrl: 'https://github.com/hehecat/gongwen',
-  releasesUrl: 'https://github.com/hehecat/gongwen/releases',
-  authorEmail: 'hehecat@outlook.com',
-  recentUpdates: __APP_RECENT_UPDATES__,
-}
 
-const DONATION_QR_CODES = [
-  { label: '支付宝', src: `${import.meta.env.BASE_URL}alipay.png` },
-  { label: '微信', src: `${import.meta.env.BASE_URL}wechat.png` },
-]
 
 /** 通用 select 组件 */
 function SelectField({

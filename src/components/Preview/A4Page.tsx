@@ -1,4 +1,4 @@
-import React, { type CSSProperties } from 'react'
+import React, { type CSSProperties, memo } from 'react'
 import { NodeType } from '../../types/ast'
 import type { DocumentNode, AttachmentNode, RichTextRun } from '../../types/ast'
 import type { HeaderConfig, FooterNoteConfig, SpecialOptionsConfig } from '../../types/documentConfig'
@@ -117,14 +117,15 @@ export function renderHeading2(content: string) {
 /**
  * 渲染三级标题：首句（到第一个"。"）用仿宋加粗，其余用仿宋正文样式
  */
-export function renderHeading3(content: string) {
+export function renderHeading3(content: string, bold = true) {
   const idx = content.indexOf('。')
+  const className = bold ? 'a4-h3-inline a4-h3-inline--bold' : 'a4-h3-inline'
   if (idx === -1 || idx === content.length - 1) {
-    return <span className="a4-h3-inline">{content}</span>
+    return <span className={className}>{content}</span>
   }
   return (
     <>
-      <span className="a4-h3-inline">{content.slice(0, idx + 1)}</span>
+      <span className={className}>{content.slice(0, idx + 1)}</span>
       <span className="a4-paragraph-inline">{content.slice(idx + 1)}</span>
     </>
   )
@@ -215,8 +216,6 @@ interface A4PageProps {
   clipHeight: number
   /** 是否显示页码 */
   showPageNumber: boolean
-  /** 页码样式 */
-  pageNumberStyle: PageNumberStyle
   /** 是否对正文首句加粗 */
   boldFirstSentence: boolean
   /** 是否对三级标题加粗 */
@@ -252,7 +251,6 @@ export const A4Page = memo(function A4Page({
   offsetY,
   clipHeight,
   showPageNumber,
-  pageNumberStyle,
   boldFirstSentence,
   boldHeading3,
   headerConfig,
@@ -348,7 +346,7 @@ export const A4Page = memo(function A4Page({
                       : node.type === NodeType.HEADING_2
                         ? renderHeading2(node.content)
                         : node.type === NodeType.HEADING_3
-                          ? renderHeading3(node.content)
+                          ? renderHeading3(node.content, boldHeading3)
                           : node.type === NodeType.HEADING_4
                             ? renderHeading4(node.content)
                             : (boldFirstSentence && node.type === NodeType.PARAGRAPH)
