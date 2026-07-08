@@ -39,6 +39,7 @@ export interface SpecialOptionsConfig {
   showPageNumber: boolean
   pageNumberFont: string
   pageNumberLayout: 'center' | 'mirrored'
+  boldHeading3: boolean
   /**
    * 是否加盖印章
    * - true: 成文日期右空四字 (GB/T 9704 7.3.5.1 加盖印章的公文)
@@ -135,6 +136,7 @@ export const DEFAULT_CONFIG: DocumentConfig = {
     showPageNumber: true,
     pageNumberFont: '宋体',
     pageNumberLayout: 'mirrored',
+    boldHeading3: true,
     hasStamp: false,
   },
   textFixOptions: {

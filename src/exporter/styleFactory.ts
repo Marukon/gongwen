@@ -13,6 +13,7 @@ import { ptToTwip, cmToTwip, CHARS_PER_LINE } from '../types/documentConfig'
 
 const TITLE_DATE_RE = /^[（(]?\d{4}年\d{1,2}月\d{1,2}日[）)]?$/
 const TITLE_NAME_RE = /^[\u4e00-\u9fff]{2,4}$/
+const DEFAULT_TEXT_COLOR = '000000'
 
 function getBodyAsciiFont(config: DocumentConfig): string {
   return config.body.asciiFontFamily || config.body.fontFamily

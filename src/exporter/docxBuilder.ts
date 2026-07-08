@@ -148,6 +148,44 @@ function pageNumberParagraph(
   })
 }
 
+export interface PageNumberParagraphOptions {
+  evenAndOddHeaderAndFooters: boolean
+  defaultOptions: {
+    alignment: typeof AlignmentType.LEFT | typeof AlignmentType.RIGHT | typeof AlignmentType.CENTER
+    indent: { left?: number; right?: number }
+  }
+  evenOptions?: {
+    alignment: typeof AlignmentType.LEFT | typeof AlignmentType.RIGHT | typeof AlignmentType.CENTER
+    indent: { left?: number; right?: number }
+  }
+}
+
+export function getPageNumberParagraphOptions(
+  style: PageNumberStyle,
+  indent: number,
+): PageNumberParagraphOptions {
+  if (style === 'mirrored') {
+    return {
+      evenAndOddHeaderAndFooters: true,
+      defaultOptions: {
+        alignment: AlignmentType.RIGHT,
+        indent: { right: indent },
+      },
+      evenOptions: {
+        alignment: AlignmentType.LEFT,
+        indent: { left: indent },
+      },
+    }
+  }
+  return {
+    evenAndOddHeaderAndFooters: false,
+    defaultOptions: {
+      alignment: AlignmentType.CENTER,
+      indent: {},
+    },
+  }
+}
+
 function ensureChinesePeriod(text: string): string {
   const trimmed = text.trim()
   if (!trimmed) return ''
@@ -318,6 +356,11 @@ function nodeToParagraph(
     }
   }
 
+  const createParagraph = (children: TextRun[]) => new Paragraph({
+    ...paragraphStyle,
+    children,
+  })
+
   if (hasRichStyleOverrides(node.runs)) {
     return new Paragraph({
       ...paragraphStyle,
@@ -353,6 +396,7 @@ function nodeToParagraph(
 
 /** 将完整 GongwenAST 转换为 docx Document */
 export function buildDocument(ast: GongwenAST, config: DocumentConfig): Document {
+  const cache = createBuildStyleCache(config)
   const children: (Paragraph | Table)[] = []
   const isLeadingNameDate = Boolean(
     ast.title &&
@@ -490,6 +534,7 @@ export function buildDocument(ast: GongwenAST, config: DocumentConfig): Document
     const isTitleName = isLeadingNameDate && i === 0
     const isTitleDate = (i === 0 && ast.title !== null && isTitleDateLine(node.content)) || (isLeadingNameDate && i === 1)
     const shouldNoIndent = config.specialOptions.firstParagraphNoIndent && i === firstBodyParagraphIndex
+    const isFirstBodyNode = i === 0
     
     // 发文机关署名前插入 2 个空行
     if (node.type === NodeType.SIGNATURE) {
@@ -665,25 +710,37 @@ export function buildDocument(ast: GongwenAST, config: DocumentConfig): Document
   const pageNumSize = 28 // 四号 14pt
   // 奇偶页各空一字（四号字 14pt = 280 twips）
   const pageNumIndent = ptToTwip(14)
-  const pageNumberOptions = getPageNumberParagraphOptions(config.specialOptions.pageNumberStyle, pageNumIndent)
+  const pageNumberOptions = getPageNumberParagraphOptions(config.specialOptions.pageNumberLayout, pageNumIndent)
 
   // 页脚配置：支持居中或双面打印奇右偶左
   let footers: { default: Footer; even?: Footer } | undefined
   if (config.specialOptions.showPageNumber) {
-    footers = config.specialOptions.pageNumberLayout === 'center'
-      ? {
-          default: new Footer({
-            children: [pageNumberParagraph(AlignmentType.CENTER, {}, pageNumFont, pageNumSize)],
-          }),
-        }
-      : {
-          default: new Footer({
-            children: [pageNumberParagraph(AlignmentType.RIGHT, { right: pageNumIndent }, pageNumFont, pageNumSize)],
-          }),
-          even: new Footer({
-            children: [pageNumberParagraph(AlignmentType.LEFT, { left: pageNumIndent }, pageNumFont, pageNumSize)],
-          }),
-        }
+    footers = {
+      default: new Footer({
+        children: [
+          pageNumberParagraph(
+            pageNumberOptions.defaultOptions.alignment,
+            pageNumberOptions.defaultOptions.indent,
+            pageNumFont,
+            pageNumSize,
+          ),
+        ],
+      }),
+      ...(pageNumberOptions.evenOptions
+        ? {
+            even: new Footer({
+              children: [
+                pageNumberParagraph(
+                  pageNumberOptions.evenOptions.alignment,
+                  pageNumberOptions.evenOptions.indent,
+                  pageNumFont,
+                  pageNumSize,
+                ),
+              ],
+            }),
+          }
+        : {}),
+    }
   }
 
   return new Document({

@@ -1,4 +1,4 @@
-import type { GongwenAST, DocumentNode, AttachmentNode } from '../types/ast'
+import type { GongwenAST, DocumentNode, AttachmentNode, RichTextRun } from '../types/ast'
 import { NodeType } from '../types/ast'
 import type { DocumentConfig } from '../types/documentConfig'
 import type { AutoFixResult, TextFixOptions } from './sanitize'

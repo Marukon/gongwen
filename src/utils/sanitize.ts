@@ -199,14 +199,6 @@ export function removeMeaninglessLineBreaks(text: string): SanitizeResult {
   const resultLines: string[] = []
   let count = 0
 
-  let titleIndex = -1
-  for (let i = 0; i < lines.length; i++) {
-    if (lines[i].trim().length > 0) {
-      titleIndex = i
-      break
-    }
-  }
-
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i]
     if (resultLines.length === 0) {
