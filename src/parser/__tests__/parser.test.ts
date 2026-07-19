@@ -26,6 +26,13 @@ describe('detectNodeType', () => {
     expect(detectNodeType('12．完善制度体系')).toBe(NodeType.HEADING_3)
   })
 
+  it('识别三级标题（中文数字+是/要）', () => {
+    expect(detectNodeType('一是加强组织领导')).toBe(NodeType.HEADING_3)
+    expect(detectNodeType('二是落实责任分工')).toBe(NodeType.HEADING_3)
+    expect(detectNodeType('三要完善制度体系')).toBe(NodeType.HEADING_3)
+    expect(detectNodeType('十一是总结经验')).toBe(NodeType.HEADING_3)
+  })
+
   it('识别四级标题（阿拉伯数字+括号）', () => {
     expect(detectNodeType('（1）制定实施方案')).toBe(NodeType.HEADING_4)
     expect(detectNodeType('(2)明确责任分工')).toBe(NodeType.HEADING_4)
@@ -34,6 +41,11 @@ describe('detectNodeType', () => {
   it('正文段落', () => {
     expect(detectNodeType('为深入贯彻落实党的二十大精神')).toBe(NodeType.PARAGRAPH)
     expect(detectNodeType('现就有关事项通知如下：')).toBe(NodeType.PARAGRAPH)
+  })
+
+  it('行首非标题模式不误判为三级标题', () => {
+    expect(detectNodeType('不是问题所在')).toBe(NodeType.PARAGRAPH)
+    expect(detectNodeType('只要努力就能成功')).toBe(NodeType.PARAGRAPH)
   })
 
   it('识别附件说明（全角冒号）', () => {
@@ -108,6 +120,12 @@ describe('parseGongwen', () => {
     expect(ast.body[4].type).toBe(NodeType.HEADING_3)
     expect(ast.body[5].type).toBe(NodeType.HEADING_4)
     expect(ast.body[6].type).toBe(NodeType.PARAGRAPH)
+  })
+
+  it('正文中含「一是」不误判为标题', () => {
+    const ast = parseGongwen('标题\n\n正文内容如下：一是加强组织领导，二是落实责任分工。')
+    expect(ast.title!.content).toBe('标题')
+    expect(ast.body[0].type).toBe(NodeType.PARAGRAPH)
   })
 
   it('正确记录行号', () => {
@@ -433,5 +451,210 @@ describe('发文机关署名识别', () => {
 
     expect(ast.body[0].type).toBe(NodeType.HEADING_1)
     expect(ast.body[1].type).toBe(NodeType.PARAGRAPH)
+  })
+
+  // ---- Phase 3: 带附件时的署名识别 ----
+  it('附件在前：正文 + 附件 + 单位 + 日期 → 单位识别为 SIGNATURE', () => {
+    const text = [
+      '标题',
+      '',
+      '请认真落实。',
+      '附件：1.实施方案',
+      '国务院办公厅',
+      '2025年10月21日',
+    ].join('\n')
+    const ast = parseGongwen(text)
+
+    expect(ast.body).toHaveLength(4)
+    expect(ast.body[0].type).toBe(NodeType.PARAGRAPH)
+    expect(ast.body[1].type).toBe(NodeType.ATTACHMENT)
+    expect(ast.body[2].type).toBe(NodeType.SIGNATURE)
+    expect(ast.body[3].type).toBe(NodeType.DATE)
+  })
+
+  it('附件在后：正文 + 单位 + 日期 + 附件 → 单位为 SIGNATURE，附件保持 ATTACHMENT', () => {
+    const text = [
+      '标题',
+      '',
+      '请认真落实。',
+      '国务院办公厅',
+      '2025年10月21日',
+      '附件：实施方案',
+    ].join('\n')
+    const ast = parseGongwen(text)
+
+    expect(ast.body).toHaveLength(4)
+    expect(ast.body[0].type).toBe(NodeType.PARAGRAPH)
+    expect(ast.body[1].type).toBe(NodeType.SIGNATURE)
+    expect(ast.body[2].type).toBe(NodeType.DATE)
+    expect(ast.body[3].type).toBe(NodeType.ATTACHMENT)
+  })
+
+  it('多附件 trailing：单位 + 日期 + 两个附件 → 仍识别 SIGNATURE', () => {
+    const text = [
+      '标题',
+      '',
+      '国务院办公厅',
+      '2025年10月21日',
+      '附件：1.实施方案',
+      '2.责任清单',
+    ].join('\n')
+    const ast = parseGongwen(text)
+
+    expect(ast.body).toHaveLength(3)
+    expect(ast.body[0].type).toBe(NodeType.SIGNATURE)
+    expect(ast.body[1].type).toBe(NodeType.DATE)
+    expect(ast.body[2].type).toBe(NodeType.ATTACHMENT)
+  })
+
+  it('附件在前且无日期：正文 + 附件 + 单位 → SIGNATURE', () => {
+    const text = [
+      '标题',
+      '',
+      '请认真落实。',
+      '附件：实施方案',
+      '国务院办公厅',
+    ].join('\n')
+    const ast = parseGongwen(text)
+
+    expect(ast.body).toHaveLength(3)
+    expect(ast.body[0].type).toBe(NodeType.PARAGRAPH)
+    expect(ast.body[1].type).toBe(NodeType.ATTACHMENT)
+    expect(ast.body[2].type).toBe(NodeType.SIGNATURE)
+  })
+
+  it('单位与日期之间夹联系人段落 → 单位不升 SIGNATURE', () => {
+    const text = [
+      '标题',
+      '',
+      '国务院办公厅',
+      '联系人：张三',
+      '2025年10月21日',
+    ].join('\n')
+    const ast = parseGongwen(text)
+
+    expect(ast.body).toHaveLength(3)
+    expect(ast.body[0].type).toBe(NodeType.PARAGRAPH)
+    expect(ast.body[1].type).toBe(NodeType.PARAGRAPH) // "联系人：张三" 仍为正文
+    expect(ast.body[2].type).toBe(NodeType.DATE)
+  })
+})
+
+describe('文头标题识别', () => {
+  it('单位+标题无空行 → title 正确，单位不在 body', () => {
+    const text = [
+      'XX市人民政府办公厅',
+      '关于加强安全生产工作的通知',
+      '各单位：',
+    ].join('\n')
+    const ast = parseGongwen(text)
+    expect(ast.title!.content).toBe('关于加强安全生产工作的通知')
+    expect(ast.title!.lineNumber).toBe(2)
+    expect(ast.body[0].type).toBe(NodeType.ADDRESSEE)
+    expect(ast.body[0].content).toBe('各单位：')
+    expect(ast.body.some(n => n.content.includes('办公厅'))).toBe(false)
+  })
+
+  it('两行拆标题合并', () => {
+    const text = [
+      '关于进一步规范劳务派遣单位参加',
+      '工伤保险有关工作的通知',
+    ].join('\n')
+    const ast = parseGongwen(text)
+    expect(ast.title!.content).toBe('关于进一步规范劳务派遣单位参加工伤保险有关工作的通知')
+    expect(ast.title!.lineNumber).toBe(1)
+    expect(ast.body).toHaveLength(0)
+  })
+
+  it('三行拆标题合并', () => {
+    const text = [
+      '关于认真学习贯彻',
+      '习近平总书记重要讲话',
+      '精神的通知',
+    ].join('\n')
+    const ast = parseGongwen(text)
+    expect(ast.title!.content).toBe('关于认真学习贯彻习近平总书记重要讲话精神的通知')
+    expect(ast.title!.lineNumber).toBe(1)
+    expect(ast.body).toHaveLength(0)
+  })
+
+  it('单位+两行标题', () => {
+    const text = [
+      '国务院办公厅',
+      '关于进一步规范劳务派遣单位参加',
+      '工伤保险有关工作的通知',
+    ].join('\n')
+    const ast = parseGongwen(text)
+    expect(ast.title!.content).toBe('关于进一步规范劳务派遣单位参加工伤保险有关工作的通知')
+    expect(ast.title!.lineNumber).toBe(2)
+    expect(ast.body.some(n => n.content.includes('办公厅'))).toBe(false)
+  })
+
+  it('单行标题保持不变', () => {
+    const ast = parseGongwen('关于加强安全生产工作的通知')
+    expect(ast.title!.content).toBe('关于加强安全生产工作的通知')
+    expect(ast.title!.lineNumber).toBe(1)
+  })
+
+  it('标题+主送 现有行为不变', () => {
+    const text = [
+      '关于加强安全生产工作的通知',
+      '',
+      '各省、自治区、直辖市人民政府：',
+      '一、总体要求',
+    ].join('\n')
+    const ast = parseGongwen(text)
+    expect(ast.title!.content).toBe('关于加强安全生产工作的通知')
+    expect(ast.body[0].type).toBe(NodeType.ADDRESSEE)
+  })
+
+  it('以「一、总体要求」开头 → title null, body[0] HEADING_1', () => {
+    const text = '一、总体要求\n正文内容'
+    const ast = parseGongwen(text)
+    expect(ast.title).toBeNull()
+    expect(ast.body[0].type).toBe(NodeType.HEADING_1)
+    expect(ast.body[1].type).toBe(NodeType.PARAGRAPH)
+  })
+
+  it('单位与标题间有空行 → 单位不在 AST', () => {
+    const text = [
+      '国务院办公厅',
+      '',
+      '关于做好有关工作的通知',
+    ].join('\n')
+    const ast = parseGongwen(text)
+    expect(ast.title!.content).toBe('关于做好有关工作的通知')
+    expect(ast.title!.lineNumber).toBe(3)
+    expect(ast.body.some(n => n.content.includes('办公厅'))).toBe(false)
+  })
+
+  it('标题后长正文不并入标题（长段有句号）', () => {
+    const text = [
+      '关于加强安全生产工作的通知',
+      '为深入贯彻落实党的二十大精神和习近平总书记关于安全生产重要指示批示精神，现就有关事项通知如下。',
+      '一、总体要求',
+    ].join('\n')
+    const ast = parseGongwen(text)
+    expect(ast.title!.content).toBe('关于加强安全生产工作的通知')
+    expect(ast.body[0].type).toBe(NodeType.PARAGRAPH)
+    expect(ast.body[1].type).toBe(NodeType.HEADING_1)
+  })
+
+  it('仅机关名无标题时机关行当标题', () => {
+    const ast = parseGongwen('国务院办公厅')
+    expect(ast.title!.content).toBe('国务院办公厅')
+    expect(ast.title!.lineNumber).toBe(1)
+    expect(ast.body).toHaveLength(0)
+  })
+
+  it('机关名后紧跟结构节点时机关行当标题', () => {
+    const text = [
+      '国务院办公厅',
+      '一、总体要求',
+    ].join('\n')
+    const ast = parseGongwen(text)
+    expect(ast.title!.content).toBe('国务院办公厅')
+    expect(ast.title!.lineNumber).toBe(1)
+    expect(ast.body[0].type).toBe(NodeType.HEADING_1)
   })
 })
