@@ -229,6 +229,7 @@ export function getRunStyle(type: NodeType, config: DocumentConfig): Partial<IRu
       return {
         font: font(config.advanced.h2.fontFamily, config.advanced.h2.asciiFontFamily || config.advanced.h2.fontFamily),
         size: config.advanced.h2.fontSize * 2,
+        bold: config.specialOptions.boldHeading2,
         characterSpacing: charSpacing,
         color: DEFAULT_TEXT_COLOR,
         italics: false,

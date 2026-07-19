@@ -551,6 +551,14 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
 
               <div className="settings-special-card">
                 <CheckboxField
+                  label="二级标题加粗"
+                  checked={config.specialOptions.boldHeading2}
+                  onChange={(v) => patch({ specialOptions: { boldHeading2: v } })}
+                />
+              </div>
+
+              <div className="settings-special-card">
+                <CheckboxField
                   label="三级小标题加粗"
                   checked={config.specialOptions.boldHeading3}
                   onChange={(v) => patch({ specialOptions: { boldHeading3: v } })}

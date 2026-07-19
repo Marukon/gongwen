@@ -92,6 +92,10 @@
   font-style: normal;
 }
 
+.a4-h2-inline--bold {
+  font-weight: bold;
+}
+
 /* 标题后续正文 inline: 仿宋，显式重置 bold 防止继承 */
 .a4-paragraph-inline {
   font-family: var(--body-font, 'FangSong_GB2312'), 'FangSong', 'STFangsong', serif;

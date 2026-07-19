@@ -18,6 +18,8 @@ interface A4PageProps {
   pageNumberStyle: PageNumberStyle
   /** 是否对正文首句加粗 */
   boldFirstSentence: boolean
+  /** 是否对二级标题加粗 */
+  boldHeading2: boolean
   /** 是否对三级标题加粗 */
   boldHeading3: boolean
   /** 版头配置 */
@@ -51,6 +53,7 @@ export const A4Page = memo(function A4Page({
   showPageNumber,
   pageNumberStyle,
   boldFirstSentence,
+  boldHeading2,
   boldHeading3,
   headerConfig,
   footerNoteConfig,
@@ -83,6 +86,7 @@ export const A4Page = memo(function A4Page({
               title={title}
               body={body}
               boldFirstSentence={boldFirstSentence}
+              boldHeading2={boldHeading2}
               boldHeading3={boldHeading3}
               hasStamp={hasStamp}
               showPlaceholder

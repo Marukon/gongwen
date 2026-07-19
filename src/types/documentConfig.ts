@@ -35,6 +35,7 @@ export type PageNumberStyle = 'mirrored' | 'center'
 
 export interface SpecialOptionsConfig {
   boldFirstSentence: boolean
+  boldHeading2: boolean
   boldHeading3: boolean
   showPageNumber: boolean
   pageNumberFont: string
@@ -122,6 +123,7 @@ export const DEFAULT_CONFIG: DocumentConfig = {
   },
   specialOptions: {
     boldFirstSentence: false,
+    boldHeading2: false,
     boldHeading3: true,
     showPageNumber: true,
     pageNumberFont: '宋体',

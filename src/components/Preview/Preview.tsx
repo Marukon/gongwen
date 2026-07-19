@@ -95,6 +95,7 @@ export function Preview({ ast }: PreviewProps) {
     },
     specialOptions: {
       boldFirstSentence: deferredConfig.specialOptions.boldFirstSentence,
+      boldHeading2: deferredConfig.specialOptions.boldHeading2,
       boldHeading3: deferredConfig.specialOptions.boldHeading3,
       hasStamp: deferredConfig.specialOptions.hasStamp,
     },
@@ -128,6 +129,7 @@ export function Preview({ ast }: PreviewProps) {
     deferredConfig.advanced.h3.fontFamily,
     deferredConfig.advanced.h3.fontSize,
     deferredConfig.specialOptions.boldFirstSentence,
+    deferredConfig.specialOptions.boldHeading2,
     deferredConfig.specialOptions.boldHeading3,
     deferredConfig.specialOptions.hasStamp,
     pageWidthPx,
@@ -252,6 +254,7 @@ export function Preview({ ast }: PreviewProps) {
   }, [bodyPreviewFontFamily, characterMeasure, contentWidthPx, deferredConfig, pageWidthPx])
 
   const boldFirst = deferredConfig.specialOptions.boldFirstSentence
+  const boldHeading2 = deferredConfig.specialOptions.boldHeading2
   const boldHeading3 = deferredConfig.specialOptions.boldHeading3
 
   return (
@@ -294,6 +297,7 @@ export function Preview({ ast }: PreviewProps) {
               title={ast.title}
               body={previewBody}
               boldFirstSentence={boldFirst}
+              boldHeading2={boldHeading2}
               boldHeading3={boldHeading3}
               hasStamp={deferredConfig.specialOptions.hasStamp}
             />
@@ -312,6 +316,7 @@ export function Preview({ ast }: PreviewProps) {
             showPageNumber={deferredConfig.specialOptions.showPageNumber}
             pageNumberStyle={deferredConfig.specialOptions.pageNumberStyle}
             boldFirstSentence={boldFirst}
+            boldHeading2={boldHeading2}
             boldHeading3={boldHeading3}
             headerConfig={deferredConfig.header}
             footerNoteConfig={deferredConfig.footerNote}
