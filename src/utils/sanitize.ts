@@ -15,6 +15,9 @@ const DIGIT_OR_CJK_NUMERAL = /[0-9一二三四五六七八九十百千万零]/
 /** 枚举子项：中文数字 + “是”，如「一是」「十二是」（不应被合并进上一段） */
 const SUB_ITEM_RE = /^[一二三四五六七八九十]+是/
 
+/** 日期行：全角或半角括号包裹的 YYYY年M月D日，或裸日期 */
+const DATE_LINE_RE = /^(?:（|\()?\d{4}年\d{1,2}月\d{1,2}日(?:）|\))?$/
+
 const PUNCTUATION_REPLACEMENTS = new Map<string, string>([
   [',', '，'],
   [':', '：'],
@@ -241,16 +244,26 @@ export function removeMeaninglessLineBreaks(text: string): SanitizeResult {
     const isCurrentListMarker = LIST_MARKER_RE.test(currentTrimmed)
     const hasIndent = /^(?:\s{2,}|\u3000+)/.test(line)
     const endsWithColon = /[：:]$/.test(prevTrimmed)
+    const isPrevSentenceComplete = /[。！？]$/.test(prevTrimmed)
+    // 当前行以冒号结尾（如主送机关、通知如下等），应作为独立段落，不向前合并
+    const isCurrentColonEnding = /[：:]$/.test(currentTrimmed)
+    // 日期行（如（2026年7月24日））应独立，避免与姓名/机关署名合并
+    const isCurrentDateLine = DATE_LINE_RE.test(currentTrimmed)
+    const isPrevDateLine = DATE_LINE_RE.test(prevTrimmed)
     // 「一是/二是/三是…」等中文数字+“是”开头的枚举子项，应作为独立段落，
     // 不向前合并（否则会因上一段不以冒号结尾而被吞并，导致仅首句被加粗）。
     const isCurrentSubItem = SUB_ITEM_RE.test(currentTrimmed)
 
     if (
+      isPrevSentenceComplete ||
       isPrevHeading ||
       isCurrentHeading ||
       isCurrentListMarker ||
       hasIndent ||
       endsWithColon ||
+      isCurrentColonEnding ||
+      isCurrentDateLine ||
+      isPrevDateLine ||
       isCurrentSubItem
     ) {
       resultLines.push(line)

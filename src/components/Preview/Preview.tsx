@@ -202,7 +202,6 @@ export function Preview({ value, onChange }: PreviewProps) {
     <div className="preview-container">
       <div className="preview-header">
         <div className="preview-header-main">
-          <span className="preview-label">预览</span>
           {showPrintPreview && pageCount > 0 && (
             <span className="preview-hint">共 {pageCount} 页</span>
           )}

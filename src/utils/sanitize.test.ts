@@ -95,6 +95,31 @@ describe('removeMeaninglessLineBreaks', () => {
     // 三个子项各自独立成行，未被合并
     expect(result.count).toBe(0)
   })
+
+  it('不合并姓名、日期与主送机关', () => {
+    const text = `在“上传下达”中淬炼坚强党性
+张旭虎
+（2026年7月24日）
+尊敬的各位领导、同志们：
+大家下午好！`
+    const result = removeMeaninglessLineBreaks(text)
+    const lines = result.text.split('\n')
+    expect(lines).toContain('张旭虎')
+    expect(lines).toContain('（2026年7月24日）')
+    expect(lines).toContain('尊敬的各位领导、同志们：')
+    // 日期与主送机关不应被合并
+    expect(lines.some((l) => l.includes('（2026年7月24日）尊敬的'))).toBe(false)
+  })
+
+  it('完整段落结束后保留换行，不把结束语和致谢语合并', () => {
+    const text = `发言完毕，不当之处请各位领导和同志们批评指正。
+谢谢大家！`
+    const result = removeMeaninglessLineBreaks(text)
+    const lines = result.text.split('\n')
+    expect(lines).toHaveLength(2)
+    expect(lines[0]).toContain('发言完毕')
+    expect(lines[1]).toContain('谢谢大家')
+  })
 })
 
 describe('autoFixDocumentText', () => {
