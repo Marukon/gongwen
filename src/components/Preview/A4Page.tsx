@@ -4,8 +4,6 @@ import type { DocumentNode, AttachmentNode, RichTextRun } from '../../types/ast'
 import type { HeaderConfig, FooterNoteConfig, SpecialOptionsConfig } from '../../types/documentConfig'
 import './A4Page.css'
 
-const TITLE_DATE_RE = /^[（(]?\d{4}年\d{1,2}月\d{1,2}日[）)]?$/
-
 /** 节点类型 → CSS 类名映射 */
 export const NODE_CLASS_MAP: Record<NodeType, string> = {
   [NodeType.DOCUMENT_TITLE]: 'a4-title',
@@ -57,8 +55,31 @@ export function calculateSignatureIndentEm(
   return Math.max(0, baseIndent + centerOffset)
 }
 
-function isTitleDateNode(node: DocumentNode, index: number, title: DocumentNode | null): boolean {
-  return title !== null && index === 0 && TITLE_DATE_RE.test(node.content.trim())
+export function ensureTitleDateParentheses(content: string): string {
+  const trimmed = content.trim()
+  if (/^[（(]\d{4}年\d{1,2}月\d{1,2}日[）)]$/.test(trimmed)) return trimmed
+  if (/^\d{4}年\d{1,2}月\d{1,2}日$/.test(trimmed)) return `（${trimmed}）`
+  return content
+}
+
+export type TitleRole = 'name' | 'date' | null
+
+/**
+ * 计算节点是否为「标题下姓名/日期」
+ * - 完全由 specialOptions.hasTitleNameDate 控制，与 richText.ts / docxBuilder.ts 行为一致：
+ *   勾选 → 第二行(name, index 0)、第三行(date, index 1)
+ *   未勾选 → 按正文处理（纯正文，不做正则自动识别）
+ */
+export function getTitleRole(
+  _node: DocumentNode,
+  index: number,
+  title: DocumentNode | null,
+  hasTitleNameDate: boolean,
+): TitleRole {
+  if (title === null || !hasTitleNameDate) return null
+  if (index === 0) return 'name'
+  if (index === 1) return 'date'
+  return null
 }
 
 function hasRichStyleOverrides(runs?: RichTextRun[]): boolean {
@@ -236,6 +257,12 @@ interface A4PageProps {
    * - false: 成文日期右空二字 (GB/T 9704 7.3.5.2)
    */
   hasStamp: boolean
+  /**
+   * 是否「标题下署名 + 日期」版式（「有人名日期」复选框）
+   * - true: 第二行渲染为姓名(a4-title-secondary)、第三行为日期(a4-title-date)
+   * - false: 第二行起按正文处理
+   */
+  hasTitleNameDate: boolean
 }
 
 function ensureChinesePeriod(text: string): string {
@@ -259,6 +286,7 @@ export const A4Page = memo(function A4Page({
   isLastPage,
   pageNumberLayout,
   hasStamp,
+  hasTitleNameDate,
 }: A4PageProps) {
   /**
    * 计算节点的动态样式
@@ -266,7 +294,7 @@ export const A4Page = memo(function A4Page({
    * - DATE: 根据 hasStamp 右空四字或二字
    */
   function getNodeStyle(node: DocumentNode, index: number): CSSProperties | undefined {
-    if (isTitleDateNode(node, index, title)) return undefined
+    if (getTitleRole(node, index, title, hasTitleNameDate) !== null) return undefined
     if (node.type === NodeType.SIGNATURE) {
       // 查找下一个节点是否为 DATE
       const nextNode = body[index + 1]
@@ -329,31 +357,49 @@ export const A4Page = memo(function A4Page({
                   </React.Fragment>
                 )
               } else {
+                const role = getTitleRole(node, index, title, hasTitleNameDate)
+                let nodeClassName: string
+                let nodeContent: React.ReactNode
+
+                if (role === 'name') {
+                  nodeClassName = 'a4-title-secondary'
+                  nodeContent = hasRichStyleOverrides(node.runs)
+                    ? renderRichRuns(node.runs ?? [])
+                    : node.content
+                } else if (role === 'date') {
+                  nodeClassName = 'a4-title-date'
+                  nodeContent = hasRichStyleOverrides(node.runs)
+                    ? renderRichRuns(node.runs ?? [])
+                    : ensureTitleDateParentheses(node.content)
+                } else if (node.type === NodeType.HEADING_1) {
+                  nodeClassName = 'a4-h1'
+                  nodeContent = renderHeading1(node.content)
+                } else if (node.type === NodeType.HEADING_2) {
+                  nodeClassName = 'a4-h2'
+                  nodeContent = renderHeading2(node.content)
+                } else if (node.type === NodeType.HEADING_3) {
+                  nodeClassName = 'a4-h3'
+                  nodeContent = renderHeading3(node.content, boldHeading3)
+                } else if (node.type === NodeType.HEADING_4) {
+                  nodeClassName = 'a4-h4'
+                  nodeContent = renderHeading4(node.content)
+                } else if (boldFirstSentence && node.type === NodeType.PARAGRAPH) {
+                  nodeClassName = NODE_CLASS_MAP[node.type]
+                  nodeContent = renderBoldFirstSentence(node.content)
+                } else {
+                  nodeClassName = NODE_CLASS_MAP[node.type]
+                  nodeContent = hasRichStyleOverrides(node.runs)
+                    ? renderRichRuns(node.runs ?? [])
+                    : node.content
+                }
+
                 elements.push(
                   <p
                     key={node.lineNumber}
-                    className={
-                      isTitleDateNode(node, index, title)
-                        ? 'a4-title-date'
-                        : node.type === NodeType.HEADING_1 ? 'a4-h1'
-                        : node.type === NodeType.HEADING_2 ? 'a4-h2'
-                        : NODE_CLASS_MAP[node.type]
-                    }
+                    className={nodeClassName}
                     style={getNodeStyle(node, index)}
                   >
-                    {node.type === NodeType.HEADING_1
-                      ? renderHeading1(node.content)
-                      : node.type === NodeType.HEADING_2
-                        ? renderHeading2(node.content)
-                        : node.type === NodeType.HEADING_3
-                          ? renderHeading3(node.content, boldHeading3)
-                          : node.type === NodeType.HEADING_4
-                            ? renderHeading4(node.content)
-                            : (boldFirstSentence && node.type === NodeType.PARAGRAPH)
-                              ? renderBoldFirstSentence(node.content)
-                              : hasRichStyleOverrides(node.runs)
-                                ? renderRichRuns(node.runs ?? [])
-                                : node.content}
+                    {nodeContent}
                   </p>
                 )
               }

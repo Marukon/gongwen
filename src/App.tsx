@@ -38,7 +38,7 @@ function App() {
   const [exporting, setExporting] = useState(false)
   const [fixFeedback, setFixFeedback] = useState('')
 
-  const { config } = useDocumentConfig()
+  const { config, updateConfig } = useDocumentConfig()
   const configRef = useRef(config)
   configRef.current = config
   const ast = useDocumentParser(formattedHtml)
@@ -169,6 +169,10 @@ function App() {
             canTextCleanup={text.trim().length > 0}
             fixFeedback={fixFeedback}
             onTextCleanup={handleAutoFix}
+            hasTitleNameDate={config.specialOptions.hasTitleNameDate}
+            onToggleHasTitleNameDate={(value) =>
+              updateConfig({ specialOptions: { hasTitleNameDate: value } })
+            }
           />
         </div>
         <div className="app-preview">

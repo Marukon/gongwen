@@ -9,6 +9,10 @@ interface EditorProps {
   onFileImport: (file: File) => void
   onTextCleanup: () => void
   importing?: boolean
+  /** 是否启用「标题下署名 + 日期」版式（第二行姓名 / 第三行日期） */
+  hasTitleNameDate?: boolean
+  /** 切换「标题下署名 + 日期」版式 */
+  onToggleHasTitleNameDate?: (value: boolean) => void
 }
 
 export const Editor = memo(function Editor({
@@ -19,6 +23,8 @@ export const Editor = memo(function Editor({
   onFileImport,
   onTextCleanup,
   importing,
+  hasTitleNameDate = false,
+  onToggleHasTitleNameDate,
 }: EditorProps) {
   const [dragging, setDragging] = useState(false)
   const dragCounterRef = useRef(0)
@@ -70,6 +76,19 @@ export const Editor = memo(function Editor({
             <span className="editor-feedback" title={fixFeedback}>
               {fixFeedback}
             </span>
+          )}
+          {onToggleHasTitleNameDate && (
+            <label
+              className="editor-checkbox"
+              title="勾选后：第二行识别为姓名，第三行识别为日期（日期自动加括号，姓名与日期楷体居中三号）"
+            >
+              <input
+                type="checkbox"
+                checked={hasTitleNameDate}
+                onChange={(e) => onToggleHasTitleNameDate(e.target.checked)}
+              />
+              <span>有人名日期</span>
+            </label>
           )}
           <button
             type="button"

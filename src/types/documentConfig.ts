@@ -46,6 +46,13 @@ export interface SpecialOptionsConfig {
    * - false: 成文日期右空二字 (GB/T 9704 7.3.5.2 不加盖印章的公文)
    */
   hasStamp: boolean
+  /**
+   * 是否「标题下署名 + 日期」版式
+   * - true: 强制将正文第二行识别为姓名、第三行识别为日期，日期自动加全角括号，
+   *         姓名与日期均使用楷体、居中、三号字 (GB/T 9704 标题下署名版式)
+   * - false: 默认按正文处理（仅当第二、三行恰好匹配姓名/日期正则时才自动识别）
+   */
+  hasTitleNameDate: boolean
 }
 
 /** 文本修复选项 */
@@ -138,6 +145,7 @@ export const DEFAULT_CONFIG: DocumentConfig = {
     pageNumberLayout: 'mirrored',
     boldHeading3: true,
     hasStamp: false,
+    hasTitleNameDate: false,
   },
   textFixOptions: {
     convertEnglishPunctuation: true,

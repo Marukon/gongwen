@@ -16,11 +16,17 @@ import {
   getAttachmentRunStyle,
   getTitleDateRunStyle,
   getTitleNameRunStyle,
-  isTitleDateLine,
-  isTitleNameLine,
   buildRunStyleOverride,
   hasRichStyleOverrides,
 } from './styleFactory'
+
+/** 为标题下日期补全省份全角括号：已带括号则不处理，纯日期则包裹 */
+function ensureTitleDateParentheses(content: string): string {
+  const trimmed = content.trim()
+  if (/^[（(]\d{4}年\d{1,2}月\d{1,2}日[）)]$/.test(trimmed)) return trimmed
+  if (/^\d{4}年\d{1,2}月\d{1,2}日$/.test(trimmed)) return `（${trimmed}）`
+  return content
+}
 
 type StaticParagraphType =
   | NodeType.DOCUMENT_TITLE
@@ -414,16 +420,13 @@ export function buildDocument(ast: GongwenAST, config: DocumentConfig): Document
   const cache = createBuildStyleCache(config)
   const children: (Paragraph | Table)[] = []
   const isLeadingNameDate = Boolean(
-    ast.title &&
-    ast.body.length >= 2 &&
-    isTitleNameLine(ast.body[0].content) &&
-    isTitleDateLine(ast.body[1].content),
+    config.specialOptions.hasTitleNameDate && ast.title && ast.body.length >= 1,
   )
   const firstBodyParagraphIndex = ast.body.findIndex((node, index) => (
     node.type === NodeType.PARAGRAPH &&
+    node.content.trim() !== '' &&
     !(isLeadingNameDate && index === 0) &&
-    !(isLeadingNameDate && index === 1) &&
-    !(index === 0 && isTitleDateLine(node.content))
+    !(isLeadingNameDate && index === 1)
   ))
 
   // ---- 版头段落 ----
@@ -544,9 +547,9 @@ export function buildDocument(ast: GongwenAST, config: DocumentConfig): Document
     children.push(nodeToParagraph(ast.title, config, cache, titleSpacingBefore))
     if (ast.body.length > 0) {
       const firstNode = ast.body[0]
-      const isFirstNodeName = isTitleNameLine(firstNode.content)
-      const isFirstNodeDate = isTitleDateLine(firstNode.content)
-      if (!isFirstNodeName && !isFirstNodeDate) {
+      const isFirstNodeName = config.specialOptions.hasTitleNameDate && !!firstNode && firstNode.content.trim() !== ''
+      // 标题后空一行；但若已被预览中的空段落占位（用户增删回车），则不重复插入以免双空行
+      if (!isFirstNodeName && !(firstNode && firstNode.content.trim() === '')) {
         insertEmptyLine(children, config)
       }
     }
@@ -555,17 +558,20 @@ export function buildDocument(ast: GongwenAST, config: DocumentConfig): Document
   for (let i = 0; i < ast.body.length; i++) {
     const node = ast.body[i]
     const isTitleName = isLeadingNameDate && i === 0
-    const isTitleDate = (i === 0 && ast.title !== null && isTitleDateLine(node.content)) || (isLeadingNameDate && i === 1)
+    const isTitleDate = isLeadingNameDate && i === 1
     const shouldNoIndent = config.specialOptions.firstParagraphNoIndent && i === firstBodyParagraphIndex
     const isFirstBodyNode = i === 0
     
-    // 发文机关署名前插入 2 个空行
+    // 发文机关署名前插入 2 个空行（若前一个节点已是空段落占位则不重复插入）
     if (node.type === NodeType.SIGNATURE) {
-      for (let j = 0; j < 2; j++) {
-        insertEmptyLine(children, config)
+      const prevNode = ast.body[i - 1]
+      if (!(prevNode && prevNode.content.trim() === '')) {
+        for (let j = 0; j < 2; j++) {
+          insertEmptyLine(children, config)
+        }
       }
     }
-    
+
     // 附件说明特殊处理
     if (node.type === NodeType.ATTACHMENT) {
       const attachmentParagraphs = attachmentToParagraphs(
@@ -576,16 +582,26 @@ export function buildDocument(ast: GongwenAST, config: DocumentConfig): Document
       children.push(...attachmentParagraphs)
       continue
     }
-    
-    // 对于 SIGNATURE 节点，查找下一个节点是否为 DATE
-    if (node.type === NodeType.SIGNATURE && i + 1 < ast.body.length && ast.body[i + 1].type === NodeType.DATE) {
-      children.push(nodeToParagraph(node, config, cache, 0, node.content, ast.body[i + 1].content))
+
+    // 标题下日期：勾选「有人名日期」时，自动为无括号日期补全省份全角括号
+    const exportNode = isTitleDate && config.specialOptions.hasTitleNameDate && !hasRichStyleOverrides(node.runs)
+      ? { ...node, content: ensureTitleDateParentheses(node.content) }
+      : node
+
+    // 对于 SIGNATURE 节点，查找下一个节点是否为 DATE（跳过空段落占位）
+    if (node.type === NodeType.SIGNATURE) {
+      const nextDate = ast.body.slice(i + 1).find((n) => n.type === NodeType.DATE && n.content.trim() !== '')
+      if (nextDate) {
+        children.push(nodeToParagraph(node, config, cache, 0, node.content, nextDate.content))
+      } else {
+        children.push(nodeToParagraph(exportNode, config, cache, 0, undefined, undefined, isTitleDate, isTitleName, shouldNoIndent))
+      }
     } else {
-      children.push(nodeToParagraph(node, config, cache, 0, undefined, undefined, isTitleDate, isTitleName, shouldNoIndent))
+      children.push(nodeToParagraph(exportNode, config, cache, 0, undefined, undefined, isTitleDate, isTitleName, shouldNoIndent))
     }
 
-    // 如果有日期，和正文空一行
-    if (isTitleDate && i + 1 < ast.body.length) {
+    // 如果有日期，和正文空一行（若下一个节点已是空段落占位则不重复插入）
+    if (isTitleDate && i + 1 < ast.body.length && !(ast.body[i + 1] && ast.body[i + 1].content.trim() === '')) {
       insertEmptyLine(children, config)
     }
   }

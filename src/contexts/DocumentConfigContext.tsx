@@ -1,4 +1,5 @@
 import {
+  createContext,
   useReducer,
   useEffect,
   type ReactNode,
@@ -10,7 +11,15 @@ import {
   normalizeLineSpacing,
   type LegacyDocumentConfig,
 } from '../utils/documentConfigHelpers'
-import { DocumentConfigContext } from './documentConfigContext'
+
+export interface DocumentConfigContextValue {
+  config: DocumentConfig
+  updateConfig: (patch: DeepPartial<DocumentConfig>) => void
+  replaceConfig: (nextConfig: DocumentConfig) => void
+  resetConfig: () => void
+}
+
+export const DocumentConfigContext = createContext<DocumentConfigContextValue | null>(null)
 
 const STORAGE_KEY = 'docx-document-config'
 

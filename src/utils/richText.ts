@@ -225,36 +225,42 @@ function attachmentHtml(node: AttachmentNode): string {
   ].join('')
 }
 
-const TITLE_DATE_RE = /^[（(]?\d{4}年\d{1,2}月\d{1,2}日[）)]?$/
-const TITLE_NAME_RE = /^[\u4e00-\u9fff]{2,4}$/
-
-function isTitleDateNode(ast: GongwenAST, index: number): boolean {
+function isTitleDateNode(ast: GongwenAST, index: number, hasTitleNameDate = false): boolean {
   if (!ast.title) return false
-  if (index === 0 && TITLE_DATE_RE.test(ast.body[index].content.trim())) return true
-  return index === 1 && TITLE_NAME_RE.test(ast.body[0]?.content.trim() ?? '') && TITLE_DATE_RE.test(ast.body[1]?.content.trim() ?? '')
+  return hasTitleNameDate && index === 1
 }
 
-function isTitleNameNode(ast: GongwenAST, index: number): boolean {
+function isTitleNameNode(ast: GongwenAST, index: number, hasTitleNameDate = false): boolean {
   if (!ast.title || index !== 0) return false
-  return TITLE_NAME_RE.test(ast.body[0]?.content.trim() ?? '') && TITLE_DATE_RE.test(ast.body[1]?.content.trim() ?? '')
+  return hasTitleNameDate
 }
 
-function findFirstBodyParagraphIndex(ast: GongwenAST): number {
+/** 为标题下日期补全省份全角括号：已带括号则不处理，纯日期则包裹 */
+function ensureTitleDateParentheses(content: string): string {
+  const trimmed = content.trim()
+  if (/^[（(]\d{4}年\d{1,2}月\d{1,2}日[）)]$/.test(trimmed)) return trimmed
+  if (/^\d{4}年\d{1,2}月\d{1,2}日$/.test(trimmed)) return `（${trimmed}）`
+  return content
+}
+
+function findFirstBodyParagraphIndex(ast: GongwenAST, hasTitleNameDate = false): number {
   return ast.body.findIndex((node, index) => (
     node.type === NodeType.PARAGRAPH &&
-    !isTitleNameNode(ast, index) &&
-    !isTitleDateNode(ast, index)
+    node.content.trim() !== '' &&
+    !isTitleNameNode(ast, index, hasTitleNameDate) &&
+    !isTitleDateNode(ast, index, hasTitleNameDate)
   ))
 }
 
 export function astToStyledHtml(ast: GongwenAST, config: DocumentConfig): string {
   const html: string[] = []
-  const firstBodyParagraphIndex = findFirstBodyParagraphIndex(ast)
+  const hasTitleNameDate = config.specialOptions.hasTitleNameDate
+  const firstBodyParagraphIndex = findFirstBodyParagraphIndex(ast, hasTitleNameDate)
 
   if (ast.title) {
     html.push(paragraphHtml(ast.title, 'a4-title'))
     if (ast.body.length > 0) {
-      if (!isTitleNameNode(ast, 0) && !isTitleDateNode(ast, 0)) {
+      if (!isTitleNameNode(ast, 0, hasTitleNameDate) && !isTitleDateNode(ast, 0, hasTitleNameDate)) {
         html.push('<p><br></p>')
       }
     }
@@ -266,13 +272,16 @@ export function astToStyledHtml(ast: GongwenAST, config: DocumentConfig): string
       return
     }
 
-    if (isTitleNameNode(ast, index)) {
+    if (isTitleNameNode(ast, index, hasTitleNameDate)) {
       html.push(paragraphHtml(node, 'a4-title-secondary'))
       return
     }
 
-    if (isTitleDateNode(ast, index)) {
-      html.push(paragraphHtml(node, 'a4-title-date'))
+    if (isTitleDateNode(ast, index, hasTitleNameDate)) {
+      const dateContent = hasTitleNameDate && !hasRichStyleOverrides(node.runs)
+        ? ensureTitleDateParentheses(node.content)
+        : node.content
+      html.push(paragraphHtml({ ...node, content: dateContent }, 'a4-title-date'))
       if (index + 1 < ast.body.length) {
         html.push('<p><br></p>')
       }

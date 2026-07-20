@@ -97,23 +97,32 @@ function extractBlocks(root: HTMLElement): ParsedRichLine[] {
   for (const child of Array.from(root.childNodes)) {
     if (child.nodeType === Node.ELEMENT_NODE && BLOCK_TAGS.has((child as Element).tagName)) {
       const element = child as HTMLElement
-      const runs = mergeAdjacentRuns(extractRuns(element))
-      blocks.push({
-        text: runs.map((run) => run.text).join(''),
-        lineNumber,
-        runs,
-        alignment: parseTextAlign(element.style.textAlign || element.getAttribute('align')),
-        noIndent: element.dataset.noIndent === 'true',
-      })
+      const rawText = element.textContent?.replace(/\u00a0/g, ' ') ?? ''
+      const alignment = parseTextAlign(element.style.textAlign || element.getAttribute('align'))
+      const noIndent = element.dataset.noIndent === 'true'
+      if (rawText.trim().length === 0) {
+        // 空段落（回车）：保留为占位块，使预览中增删回车能如实反映到导出结果
+        blocks.push({ text: '', lineNumber, runs: [], alignment, noIndent })
+      } else {
+        const runs = mergeAdjacentRuns(extractRuns(element))
+        blocks.push({
+          text: runs.map((run) => run.text).join(''),
+          lineNumber,
+          runs,
+          alignment,
+          noIndent,
+        })
+      }
       lineNumber++
       continue
     }
 
     if (child.nodeType === Node.TEXT_NODE) {
+      const rawText = child.textContent?.replace(/\u00a0/g, ' ') ?? ''
       blocks.push({
-        text: child.textContent?.replace(/\u00a0/g, ' ') ?? '',
+        text: rawText,
         lineNumber,
-        runs: [{ text: child.textContent?.replace(/\u00a0/g, ' ') ?? '' }],
+        runs: [{ text: rawText }],
       })
       lineNumber++
     }
@@ -136,5 +145,5 @@ export function parseRichGongwen(html: string): GongwenAST {
   const doc = new DOMParser().parseFromString(`<div data-editor-root="true">${html}</div>`, 'text/html')
   const root = doc.body.firstElementChild as HTMLElement | null
   if (!root) return { title: null, body: [] }
-  return parseParsedLines(extractBlocks(root))
+  return parseParsedLines(extractBlocks(root), true)
 }

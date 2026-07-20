@@ -206,7 +206,7 @@ export function parseGongwen(text: string): GongwenAST {
   return parseParsedLines(lines)
 }
 
-export function parseParsedLines(lines: ParsedLineInput[]): GongwenAST {
+export function parseParsedLines(lines: ParsedLineInput[], preserveEmptyLines = false): GongwenAST {
   let title: DocumentNode | null = null
   const body: DocumentNode[] = []
 
@@ -218,8 +218,19 @@ export function parseParsedLines(lines: ParsedLineInput[]): GongwenAST {
     const source = lines[i]
     const trimmed = source.text.trim()
 
-    // 跳过空行
+    // 跳过空行（标题之前 / 普通正文之间）
     if (trimmed.length === 0) {
+      // 预览手动编辑场景下保留空行，使增删「回车」能如实反映到导出结果
+      if (preserveEmptyLines && titleFound) {
+        body.push({
+          type: NodeType.PARAGRAPH,
+          content: '',
+          lineNumber: source.lineNumber,
+          runs: source.runs,
+          alignment: source.alignment,
+          noIndent: source.noIndent,
+        })
+      }
       i++
       continue
     }
