@@ -97,3 +97,25 @@ describe('A4Page: 有人名日期 gating (mirrors richText/docxBuilder)', () => 
     expect(ensureTitleDateParentheses('张三')).toBe('张三')
   })
 })
+
+describe('正文首句加粗：支持「一是/二是/三是」枚举子项', () => {
+  const config: DocumentConfig = {
+    ...DEFAULT_CONFIG,
+    specialOptions: { ...DEFAULT_CONFIG.specialOptions, boldFirstSentence: true },
+  }
+
+  it('普通段落只加粗首句', () => {
+    const ast = parseGongwen('标题\n这是第一句话。这是第二句话。')
+    const html = astToStyledHtml(ast, config)
+    expect(html).toContain('<strong>这是第一句话。</strong>这是第二句话。')
+  })
+
+  it('「一是/二是/三是」段落中每个子项首句都加粗', () => {
+    const ast = parseGongwen('标题\n一是强化政治引领。二是聚焦中心大局。三是严守纪律规矩。发言完毕。')
+    const html = astToStyledHtml(ast, config)
+    expect(html).toContain('<span class="a4-bold-first">一是强化政治引领。</span>')
+    expect(html).toContain('<span class="a4-bold-first">二是聚焦中心大局。</span>')
+    expect(html).toContain('<span class="a4-bold-first">三是严守纪律规矩。</span>')
+    expect(html).toContain('发言完毕。')
+  })
+})

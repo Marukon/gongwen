@@ -7,12 +7,12 @@
   gap: 0;
 }
 
-/* 隐藏度量容器：结构与 A4Page 一致，供 usePagination 行高度量。
-   固定 A4 宽度，避免与 .a4-page 的 100% 宽度形成循环依赖。 */
+/* 隐藏度量容器：渲染全部节点用于高度测量（与 A4Page 使用相同的渲染逻辑） */
 .a4-measurer {
   position: absolute;
   top: 0;
   left: 0;
+  max-width: 595.28px;
   visibility: hidden;
   pointer-events: none;
   z-index: -1;

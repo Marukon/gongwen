@@ -340,13 +340,37 @@ export function renderHeading4(content: string) {
 }
 
 /**
- * 渲染正文首句加粗：首句（到第一个"。"）加粗，其余正常
+ * 渲染正文首句加粗：
+ * - 普通段落：首句（到第一个"。"）加粗，其余正常。
+ * - 枚举段落（含「一是/二是/三是…」）：每个枚举子项的首句都加粗，
+ *   剩余文本保持正常。
  */
-export function renderBoldFirstSentence(content: string) {
+export function renderBoldFirstSentence(content: string): React.ReactNode {
+  const enumItemMatches = Array.from(content.matchAll(/([一二三四五六七八九十]+是[^。]*。)/g))
+
+  if (enumItemMatches.length >= 2) {
+    const result: React.ReactNode[] = []
+    let lastIndex = 0
+    enumItemMatches.forEach((match) => {
+      const index = match.index ?? 0
+      const text = match[0]
+      if (index > lastIndex) {
+        result.push(<span key={`rest-${lastIndex}`}>{content.slice(lastIndex, index)}</span>)
+      }
+      result.push(<span key={`bold-${index}`} className="a4-bold-first">{text}</span>)
+      lastIndex = index + text.length
+    })
+    if (lastIndex < content.length) {
+      result.push(<span key="rest-end">{content.slice(lastIndex)}</span>)
+    }
+    return <>{result}</>
+  }
+
   const idx = content.indexOf('。')
   if (idx === -1 || idx === content.length - 1) {
     return <span className="a4-bold-first">{content}</span>
   }
+
   return (
     <>
       <span className="a4-bold-first">{content.slice(0, idx + 1)}</span>

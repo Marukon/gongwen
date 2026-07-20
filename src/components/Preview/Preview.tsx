@@ -129,7 +129,7 @@ export function Preview({ value, onChange }: PreviewProps) {
     syncingRef.current = true
     editor.innerHTML = normalized
     syncingRef.current = false
-  }, [value])
+  }, [value, showPrintPreview])
 
   const emitChange = useCallback(() => {
     const editor = editorRef.current

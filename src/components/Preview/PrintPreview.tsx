@@ -1,9 +1,7 @@
 import { useEffect, useMemo, useRef, type CSSProperties } from 'react'
 import {
   A4Page,
-  renderA4Header,
   renderA4Content,
-  renderA4FooterNote,
 } from './A4Page'
 import { usePagination, type PaginationConfig } from '../../hooks/usePagination'
 import type { GongwenAST } from '../../types/ast'
@@ -117,18 +115,10 @@ export function PrintPreview({ ast, config, onPageCountChange }: PrintPreviewPro
 
   return (
     <div className="print-preview" style={cssVars}>
-      {/* 隐藏度量容器：结构与 A4Page 完全一致，供 usePagination 度量行高 */}
-      <div className="a4-measurer" ref={measurerRef} aria-hidden>
-        <div className="a4-page">
-          <div className="a4-content">
-            {renderA4Header(config.header)}
-            <div className="a4-content-viewport" style={{ height: 100000 }}>
-              <div className="a4-measurer-content">
-                {renderA4Content(contentOpts)}
-              </div>
-            </div>
-            {renderA4FooterNote(config.footerNote)}
-          </div>
+      {/* 隐藏度量容器：渲染全部节点用于高度测量（与 A4Page 使用相同的渲染逻辑） */}
+      <div className="a4-measurer" ref={measurerRef} aria-hidden="true">
+        <div className="a4-measurer-content">
+          {renderA4Content(contentOpts)}
         </div>
       </div>
 
