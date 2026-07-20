@@ -2,6 +2,8 @@ import { useEffect, useMemo, useRef, useState, useCallback, type CSSProperties, 
 import { useDocumentConfig } from '../../contexts/useDocumentConfig'
 import { CHARS_PER_LINE, FONT_OPTIONS, FONT_SIZE_OPTIONS, cmToPagePercent } from '../../types/documentConfig'
 import { normalizeEditorHtml } from '../../utils/richText'
+import { useDocumentParser } from '../../hooks/useDocumentParser'
+import { PrintPreview } from './PrintPreview'
 import './A4Page.css'
 import './Preview.css'
 
@@ -74,6 +76,10 @@ export function Preview({ value, onChange }: PreviewProps) {
   const syncingRef = useRef(false)
   const [currentFont, setCurrentFont] = useState(FONT_FAMILY_OPTIONS[0])
   const [currentFontSize, setCurrentFontSize] = useState(FONT_SIZE_OPTIONS_CN[3]?.value ?? 16)
+  const [showPrintPreview, setShowPrintPreview] = useState(true)
+  // 打印预览所需的实时 AST（与导出使用同一解析管线）
+  const ast = useDocumentParser(value)
+  const [pageCount, setPageCount] = useState(0)
   const headerOrgFontSize = useMemo(
     () => getHeaderOrgFontSize(config.header.orgName, config.margins.left, config.margins.right),
     [config.header.orgName, config.margins.left, config.margins.right],
@@ -196,8 +202,19 @@ export function Preview({ value, onChange }: PreviewProps) {
     <div className="preview-container">
       <div className="preview-header">
         <div className="preview-header-main">
-          <span className="preview-label">排版</span>
+          <span className="preview-label">预览</span>
+          {showPrintPreview && pageCount > 0 && (
+            <span className="preview-hint">共 {pageCount} 页</span>
+          )}
+          <button
+            type="button"
+            className={`preview-toggle${showPrintPreview ? ' preview-toggle--active' : ''}`}
+            onClick={() => setShowPrintPreview((v) => !v)}
+          >
+            {showPrintPreview ? '编辑' : '预览'}
+          </button>
         </div>
+        {!showPrintPreview && (
         <div className="preview-toolbar">
           <select className="preview-select" value={currentFont} onChange={(e) => handleFontChange(e.target.value)}>
             {FONT_FAMILY_OPTIONS.map((font) => (
@@ -217,8 +234,12 @@ export function Preview({ value, onChange }: PreviewProps) {
           <button type="button" className="preview-tool-btn" onClick={() => handleAlignmentChange('right')}>右</button>
           <button type="button" className="preview-tool-btn" onClick={() => handleAlignmentChange('justify')}>两端</button>
         </div>
+        )}
       </div>
       <div className="preview-scroll" style={cssVars}>
+        {showPrintPreview ? (
+          <PrintPreview ast={ast} config={config} onPageCountChange={setPageCount} />
+        ) : (
         <div className="preview-page-shell">
           <div className="preview-page-content a4-content">
             {config.header.enabled && config.header.orgName && (
@@ -255,6 +276,7 @@ export function Preview({ value, onChange }: PreviewProps) {
             />
           </div>
         </div>
+        )}
       </div>
     </div>
   )

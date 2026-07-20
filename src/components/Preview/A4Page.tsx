@@ -82,6 +82,176 @@ export function getTitleRole(
   return null
 }
 
+/* ------------------------------------------------------------------ */
+/* 以下渲染函数提取为模块级，供 A4Page 与打印预览的隐藏度量容器共用， */
+/* 确保度量结构与页面完全一致、分页行高准确。                          */
+/* ------------------------------------------------------------------ */
+
+/** 版头（发文机关标识 / 文号 / 签发人） */
+export function renderA4Header(headerConfig: HeaderConfig): React.ReactNode {
+  if (!headerConfig.enabled || !headerConfig.orgName) return null
+  return (
+    <div className="a4-header-section">
+      <div className="a4-header-org">{headerConfig.orgName}</div>
+      <div className={`a4-header-meta${headerConfig.signer ? ' a4-header-meta--with-signer' : ''}`}>
+        <span>{headerConfig.docNumber}</span>
+        {headerConfig.signer && (
+          <span>
+            <span className="a4-header-signer-label">签发人：</span>
+            <span className="a4-header-signer-name">{headerConfig.signer}</span>
+          </span>
+        )}
+      </div>
+      <div className="a4-header-separator"></div>
+    </div>
+  )
+}
+
+/** 版记（抄送 / 印发机关 / 印发日期） */
+export function renderA4FooterNote(footerNoteConfig: FooterNoteConfig): React.ReactNode {
+  if (!footerNoteConfig.enabled) return null
+  return (
+    <div className="a4-footer-note">
+      <div className="a4-footer-note-line-top"></div>
+      {footerNoteConfig.cc && (
+        <div className="a4-footer-note-cc">
+          <span className="a4-footer-note-cc-label">抄送：</span>
+          <span className="a4-footer-note-cc-text">{ensureChinesePeriod(footerNoteConfig.cc)}</span>
+        </div>
+      )}
+      {footerNoteConfig.cc && (footerNoteConfig.printer || footerNoteConfig.printDate) && (
+        <div className="a4-footer-note-line-middle"></div>
+      )}
+      {(footerNoteConfig.printer || footerNoteConfig.printDate) && (
+        <div className="a4-footer-note-printer">
+          <span>{footerNoteConfig.printer}</span>
+          <span>{footerNoteConfig.printDate}{footerNoteConfig.printDate && '印发'}</span>
+        </div>
+      )}
+      <div className="a4-footer-note-line-bottom"></div>
+    </div>
+  )
+}
+
+/** 单个正文节点的缩进样式（署名/日期右空字数） */
+export function getA4NodeStyle(
+  node: DocumentNode,
+  index: number,
+  title: DocumentNode | null,
+  hasTitleNameDate: boolean,
+  hasStamp: boolean,
+  body: DocumentNode[],
+): CSSProperties | undefined {
+  if (getTitleRole(node, index, title, hasTitleNameDate) !== null) return undefined
+  if (node.type === NodeType.SIGNATURE) {
+    const nextNode = body[index + 1]
+    if (nextNode && nextNode.type === NodeType.DATE) {
+      const indent = calculateSignatureIndentEm(node.content, nextNode.content, hasStamp)
+      return { paddingRight: `${indent}em` }
+    }
+    return { paddingRight: `${hasStamp ? 4 : 2}em` }
+  }
+  if (node.type === NodeType.DATE) {
+    return { paddingRight: `${hasStamp ? 4 : 2}em` }
+  }
+  return undefined
+}
+
+export interface A4ContentRenderOptions {
+  title: DocumentNode | null
+  body: DocumentNode[]
+  hasTitleNameDate: boolean
+  boldFirstSentence: boolean
+  boldHeading3: boolean
+  hasStamp: boolean
+}
+
+/** 渲染标题 + 正文流（不含版头/版记外壳） */
+export function renderA4Content(opts: A4ContentRenderOptions): React.ReactNode {
+  const { title, body, hasTitleNameDate, boldFirstSentence, boldHeading3, hasStamp } = opts
+  return (
+    <>
+      {title && (
+        <p className={NODE_CLASS_MAP[title.type]}>
+          {hasRichStyleOverrides(title.runs) ? renderRichRuns(title.runs ?? []) : title.content}
+        </p>
+      )}
+      {body.flatMap((node, index) => {
+        const elements: React.ReactNode[] = []
+
+        // 发文机关署名前插入 2 个空行
+        if (node.type === NodeType.SIGNATURE) {
+          for (let j = 0; j < 2; j++) {
+            elements.push(
+              <p key={`empty-${node.lineNumber}-${j}`} className="a4-empty-line">{'\u200B'}</p>
+            )
+          }
+        }
+
+        // 附件说明特殊渲染
+        if (node.type === NodeType.ATTACHMENT) {
+          elements.push(
+            <React.Fragment key={node.lineNumber}>
+              {renderAttachment(node as AttachmentNode)}
+            </React.Fragment>
+          )
+        } else {
+          const role = getTitleRole(node, index, title, hasTitleNameDate)
+          let nodeClassName: string
+          let nodeContent: React.ReactNode
+
+          if (role === 'name') {
+            nodeClassName = 'a4-title-secondary'
+            nodeContent = hasRichStyleOverrides(node.runs)
+              ? renderRichRuns(node.runs ?? [])
+              : node.content
+          } else if (role === 'date') {
+            nodeClassName = 'a4-title-date'
+            nodeContent = hasRichStyleOverrides(node.runs)
+              ? renderRichRuns(node.runs ?? [])
+              : ensureTitleDateParentheses(node.content)
+          } else if (node.type === NodeType.HEADING_1) {
+            nodeClassName = 'a4-h1'
+            nodeContent = renderHeading1(node.content)
+          } else if (node.type === NodeType.HEADING_2) {
+            nodeClassName = 'a4-h2'
+            nodeContent = renderHeading2(node.content)
+          } else if (node.type === NodeType.HEADING_3) {
+            nodeClassName = 'a4-h3'
+            nodeContent = renderHeading3(node.content, boldHeading3)
+          } else if (node.type === NodeType.HEADING_4) {
+            nodeClassName = 'a4-h4'
+            nodeContent = renderHeading4(node.content)
+          } else if (boldFirstSentence && node.type === NodeType.PARAGRAPH) {
+            nodeClassName = NODE_CLASS_MAP[node.type]
+            nodeContent = node.content ? renderBoldFirstSentence(node.content) : <br />
+          } else {
+            nodeClassName = NODE_CLASS_MAP[node.type]
+            nodeContent = hasRichStyleOverrides(node.runs)
+              ? renderRichRuns(node.runs ?? [])
+              : (node.content ? node.content : <br />)
+          }
+
+          elements.push(
+            <p
+              key={node.lineNumber}
+              className={nodeClassName}
+              style={getA4NodeStyle(node, index, title, hasTitleNameDate, hasStamp, body)}
+            >
+              {nodeContent}
+            </p>
+          )
+        }
+
+        return elements
+      })}
+      {!title && body.length === 0 && (
+        <p className="a4-placeholder">预览区域</p>
+      )}
+    </>
+  )
+}
+
 function hasRichStyleOverrides(runs?: RichTextRun[]): boolean {
   return !!runs?.some((run) => run.bold || run.italic || run.underline || run.fontFamily || run.fontSize)
 }
@@ -293,147 +463,19 @@ export const A4Page = memo(function A4Page({
    * - SIGNATURE: 以成文日期为基准居中
    * - DATE: 根据 hasStamp 右空四字或二字
    */
-  function getNodeStyle(node: DocumentNode, index: number): CSSProperties | undefined {
-    if (getTitleRole(node, index, title, hasTitleNameDate) !== null) return undefined
-    if (node.type === NodeType.SIGNATURE) {
-      // 查找下一个节点是否为 DATE
-      const nextNode = body[index + 1]
-      if (nextNode && nextNode.type === NodeType.DATE) {
-        const indent = calculateSignatureIndentEm(node.content, nextNode.content, hasStamp)
-        return { paddingRight: `${indent}em` }
-      }
-      // 降级处理：使用基础右空字数
-      return { paddingRight: `${hasStamp ? 4 : 2}em` }
-    }
-    if (node.type === NodeType.DATE) {
-      return { paddingRight: `${hasStamp ? 4 : 2}em` }
-    }
-    return undefined
-  }
-
   return (
     <div className="a4-page">
       <div className="a4-content">
         {/* 版头：仅在第一页且启用时渲染 */}
-        {isFirstPage && headerConfig.enabled && headerConfig.orgName && (
-          <div className="a4-header-section">
-            <div className="a4-header-org">{headerConfig.orgName}</div>
-            <div className={`a4-header-meta${headerConfig.signer ? ' a4-header-meta--with-signer' : ''}`}>
-              <span>{headerConfig.docNumber}</span>
-              {headerConfig.signer && (
-                <span>
-                  <span className="a4-header-signer-label">签发人：</span>
-                  <span className="a4-header-signer-name">{headerConfig.signer}</span>
-                </span>
-              )}
-            </div>
-            <div className="a4-header-separator"></div>
-          </div>
-        )}
+        {isFirstPage && renderA4Header(headerConfig)}
         <div className="a4-content-viewport" style={{ height: `${clipHeight}px` }}>
           <div style={{ transform: `translateY(-${offsetY}px)` }}>
-            {title && (
-              <p className={NODE_CLASS_MAP[title.type]}>
-                {hasRichStyleOverrides(title.runs) ? renderRichRuns(title.runs ?? []) : title.content}
-              </p>
-            )}
-            {body.flatMap((node, index) => {
-              const elements: React.ReactNode[] = []
-              
-              // 发文机关署名前插入 2 个空行
-              if (node.type === NodeType.SIGNATURE) {
-                for (let j = 0; j < 2; j++) {
-                  elements.push(
-                    <p key={`empty-${node.lineNumber}-${j}`} className="a4-empty-line">{'\u200B'}</p>
-                  )
-                }
-              }
-              
-              // 附件说明特殊渲染
-              if (node.type === NodeType.ATTACHMENT) {
-                elements.push(
-                  <React.Fragment key={node.lineNumber}>
-                    {renderAttachment(node as AttachmentNode)}
-                  </React.Fragment>
-                )
-              } else {
-                const role = getTitleRole(node, index, title, hasTitleNameDate)
-                let nodeClassName: string
-                let nodeContent: React.ReactNode
-
-                if (role === 'name') {
-                  nodeClassName = 'a4-title-secondary'
-                  nodeContent = hasRichStyleOverrides(node.runs)
-                    ? renderRichRuns(node.runs ?? [])
-                    : node.content
-                } else if (role === 'date') {
-                  nodeClassName = 'a4-title-date'
-                  nodeContent = hasRichStyleOverrides(node.runs)
-                    ? renderRichRuns(node.runs ?? [])
-                    : ensureTitleDateParentheses(node.content)
-                } else if (node.type === NodeType.HEADING_1) {
-                  nodeClassName = 'a4-h1'
-                  nodeContent = renderHeading1(node.content)
-                } else if (node.type === NodeType.HEADING_2) {
-                  nodeClassName = 'a4-h2'
-                  nodeContent = renderHeading2(node.content)
-                } else if (node.type === NodeType.HEADING_3) {
-                  nodeClassName = 'a4-h3'
-                  nodeContent = renderHeading3(node.content, boldHeading3)
-                } else if (node.type === NodeType.HEADING_4) {
-                  nodeClassName = 'a4-h4'
-                  nodeContent = renderHeading4(node.content)
-                } else if (boldFirstSentence && node.type === NodeType.PARAGRAPH) {
-                  nodeClassName = NODE_CLASS_MAP[node.type]
-                  nodeContent = renderBoldFirstSentence(node.content)
-                } else {
-                  nodeClassName = NODE_CLASS_MAP[node.type]
-                  nodeContent = hasRichStyleOverrides(node.runs)
-                    ? renderRichRuns(node.runs ?? [])
-                    : node.content
-                }
-
-                elements.push(
-                  <p
-                    key={node.lineNumber}
-                    className={nodeClassName}
-                    style={getNodeStyle(node, index)}
-                  >
-                    {nodeContent}
-                  </p>
-                )
-              }
-              
-              return elements
-            })}
-            {!title && body.length === 0 && (
-              <p className="a4-placeholder">预览区域</p>
-            )}
+            {renderA4Content({ title, body, hasTitleNameDate, boldFirstSentence, boldHeading3, hasStamp })}
           </div>
         </div>
       </div>
       {/* 版记：绝对定位到最后一页底部，末条线与版心下边缘重合 */}
-      {isLastPage && footerNoteConfig.enabled && (
-        <div className="a4-footer-note">
-          <div className="a4-footer-note-line-top"></div>
-          {footerNoteConfig.cc && (
-            <div className="a4-footer-note-cc">
-              <span className="a4-footer-note-cc-label">抄送：</span>
-              <span className="a4-footer-note-cc-text">{ensureChinesePeriod(footerNoteConfig.cc)}</span>
-            </div>
-          )}
-          {footerNoteConfig.cc && (footerNoteConfig.printer || footerNoteConfig.printDate) && (
-            <div className="a4-footer-note-line-middle"></div>
-          )}
-          {(footerNoteConfig.printer || footerNoteConfig.printDate) && (
-            <div className="a4-footer-note-printer">
-              <span>{footerNoteConfig.printer}</span>
-              <span>{footerNoteConfig.printDate}{footerNoteConfig.printDate && '印发'}</span>
-            </div>
-          )}
-          <div className="a4-footer-note-line-bottom"></div>
-        </div>
-      )}
+      {isLastPage && renderA4FooterNote(footerNoteConfig)}
       {showPageNumber && (
         <div
           className={

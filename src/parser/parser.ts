@@ -24,6 +24,9 @@ const SIGNATURE_ORG_HINTS = [
   '中央',
 ]
 
+/** 主送机关通常是简短的受文机关列表；超过此长度的冒号结尾行视为正文（如"现就…通知如下："开头的长句） */
+const ADDRESSEE_MAX_LENGTH = 60
+
 export interface ParsedLineInput {
   text: string
   lineNumber: number
@@ -201,9 +204,9 @@ function parseAttachment(
  *    - 当 DATE 位于末尾，且 DATE 前一个段落满足“短句 + 机关关键词”时改为 SIGNATURE
  *    - 当文末只有单位署名、没有 DATE 时，若末尾段落满足“短句 + 机关关键词”也改为 SIGNATURE
  */
-export function parseGongwen(text: string): GongwenAST {
+export function parseGongwen(text: string, options?: { preserveEmptyLines?: boolean }): GongwenAST {
   const lines = text.split('\n').map((line, index) => ({ text: line, lineNumber: index + 1 }))
-  return parseParsedLines(lines)
+  return parseParsedLines(lines, options?.preserveEmptyLines ?? false)
 }
 
 export function parseParsedLines(lines: ParsedLineInput[], preserveEmptyLines = false): GongwenAST {
@@ -257,6 +260,7 @@ export function parseParsedLines(lines: ParsedLineInput[], preserveEmptyLines = 
       addresseeChecked = true
       if (
         (trimmed.endsWith('：') || trimmed.endsWith(':')) &&
+        trimmed.length <= ADDRESSEE_MAX_LENGTH &&
         !HEADING_1_RE.test(trimmed) &&
         !ATTACHMENT_RE.test(trimmed)
       ) {

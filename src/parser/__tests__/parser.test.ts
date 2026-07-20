@@ -115,6 +115,7 @@ describe('parseGongwen', () => {
     const ast = parseGongwen(text)
 
     expect(ast.title!.lineNumber).toBe(1)
+
     expect(ast.body[0].lineNumber).toBe(3)
     expect(ast.body[1].lineNumber).toBe(4)
   })
@@ -158,6 +159,23 @@ describe('parseGongwen', () => {
     const ast = parseGongwen(text)
 
     expect(ast.body[0].type).toBe(NodeType.PARAGRAPH)
+  })
+
+  it('默认丢弃空行（不保留空段落）', () => {
+    const text = '标题\n第一段。\n\n第二段。'
+    const ast = parseGongwen(text)
+    expect(ast.body).toHaveLength(2)
+    expect(ast.body.every((n) => n.content.trim().length > 0)).toBe(true)
+  })
+
+  it('preserveEmptyLines 保留手动空行为空段落', () => {
+    const text = '标题\n第一段。\n\n第二段。'
+    const ast = parseGongwen(text, { preserveEmptyLines: true })
+    expect(ast.body).toHaveLength(3)
+    const emptyNodes = ast.body.filter(
+      (n) => n.type === NodeType.PARAGRAPH && n.content.trim() === '',
+    )
+    expect(emptyNodes).toHaveLength(1)
   })
 
   it('完整公文含主送机关、附件、日期的端到端解析', () => {

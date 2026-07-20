@@ -362,14 +362,18 @@ function nodeToParagraph(
     }
   }
 
+  const headingOptions = getWordHeadingOptions(node.type)
+
   const createParagraph = (children: TextRun[]) => new Paragraph({
     ...paragraphStyle,
+    ...headingOptions,
     children,
   })
 
   if (hasRichStyleOverrides(node.runs)) {
     return new Paragraph({
       ...paragraphStyle,
+      ...headingOptions,
       children: (node.runs ?? []).map((run) => new TextRun(buildRunStyleOverride(runStyle, run))),
     })
   }
@@ -388,6 +392,7 @@ function nodeToParagraph(
   if (node.type === NodeType.PARAGRAPH && config.specialOptions.boldFirstSentence && !isTitleName && !isTitleDate) {
     return new Paragraph({
       ...paragraphStyle,
+      ...headingOptions,
       children: splitBoldFirstSentence(node.content, runStyle),
     })
   }

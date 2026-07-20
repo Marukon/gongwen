@@ -67,7 +67,7 @@ function App() {
 
   useEffect(() => {
     const sanitized = sanitizeText(text, config.textFixOptions).text
-    const nextAst = parseGongwen(sanitized)
+    const nextAst = parseGongwen(sanitized, { preserveEmptyLines: true })
     setFormattedHtml(astToStyledHtml(nextAst, config))
   }, [config, text])
 

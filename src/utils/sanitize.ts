@@ -12,6 +12,9 @@ const CJK_CHAR = /[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]/
 const CJK_OR_FULLWIDTH_CHAR = /[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff\u3000-\u303f\uff00-\uffef]/
 const DIGIT_OR_CJK_NUMERAL = /[0-9一二三四五六七八九十百千万零]/
 
+/** 枚举子项：中文数字 + “是”，如「一是」「十二是」（不应被合并进上一段） */
+const SUB_ITEM_RE = /^[一二三四五六七八九十]+是/
+
 const PUNCTUATION_REPLACEMENTS = new Map<string, string>([
   [',', '，'],
   [':', '：'],
@@ -221,7 +224,7 @@ export function removeMeaninglessLineBreaks(text: string): SanitizeResult {
         nonEmptyCount++
       }
     }
-    const isPrevTitleLine = nonEmptyCount === 1
+    const isPrevTitleLine = nonEmptyCount === 1 && !/[：:]/.test(prevTrimmed)
 
     if (isPrevTitleLine) {
       resultLines.push(line)
@@ -238,13 +241,17 @@ export function removeMeaninglessLineBreaks(text: string): SanitizeResult {
     const isCurrentListMarker = LIST_MARKER_RE.test(currentTrimmed)
     const hasIndent = /^(?:\s{2,}|\u3000+)/.test(line)
     const endsWithColon = /[：:]$/.test(prevTrimmed)
+    // 「一是/二是/三是…」等中文数字+“是”开头的枚举子项，应作为独立段落，
+    // 不向前合并（否则会因上一段不以冒号结尾而被吞并，导致仅首句被加粗）。
+    const isCurrentSubItem = SUB_ITEM_RE.test(currentTrimmed)
 
     if (
       isPrevHeading ||
       isCurrentHeading ||
       isCurrentListMarker ||
       hasIndent ||
-      endsWithColon
+      endsWithColon ||
+      isCurrentSubItem
     ) {
       resultLines.push(line)
     } else {

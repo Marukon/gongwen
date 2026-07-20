@@ -81,6 +81,20 @@ describe('removeMeaninglessLineBreaks', () => {
     expect(result.text).toBe(text)
     expect(result.count).toBe(0)
   })
+
+  it('不合并「一是/二是/三是」等中文数字枚举子项', () => {
+    const text = `二、思路举措：全面提升质效
+一是强化政治引领，当好排头兵。
+二是聚焦中心大局，当好信息库。
+三是严守纪律规矩，当好践行者。`
+    const result = removeMeaninglessLineBreaks(text)
+    const lines = result.text.split('\n')
+    expect(lines).toContain('一是强化政治引领，当好排头兵。')
+    expect(lines).toContain('二是聚焦中心大局，当好信息库。')
+    expect(lines).toContain('三是严守纪律规矩，当好践行者。')
+    // 三个子项各自独立成行，未被合并
+    expect(result.count).toBe(0)
+  })
 })
 
 describe('autoFixDocumentText', () => {
