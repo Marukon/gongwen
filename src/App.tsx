@@ -5,6 +5,7 @@ import { Toolbar } from './components/Toolbar/Toolbar'
 import { useDocumentParser } from './hooks/useDocumentParser'
 import { useDocumentConfig } from './contexts/useDocumentConfig'
 import { sanitizeText } from './utils/sanitize'
+import { isChunkLoadError, reloadOnceOnChunkError } from './utils/lazyImport'
 import './App.css'
 
 const STORAGE_KEY_TEXT = 'docx-editor-text'
@@ -56,10 +57,17 @@ function App() {
 
     try {
       const { downloadDocx } = await import('./exporter/download')
+      // 成功后清 flag
+      try { sessionStorage.removeItem('chunk-reload-export') } catch {}
       await downloadDocx(ast, configRef.current)
     } catch (err) {
+      if (reloadOnceOnChunkError(err, 'chunk-reload-export')) return
       console.error('导出失败:', err)
-      alert('导出失败，请检查控制台日志')
+      alert(
+        isChunkLoadError(err)
+          ? '导出模块加载失败，可能是网页版本已更新。请强制刷新页面（Ctrl+F5 / Cmd+Shift+R）后重试。'
+          : '导出失败，请检查控制台日志'
+      )
     } finally {
       setExporting(false)
     }
@@ -81,10 +89,17 @@ function App() {
     setImporting(true)
     try {
       const { importFile } = await import('./utils/fileImporter')
+      // 成功后清 flag
+      try { sessionStorage.removeItem('chunk-reload-import') } catch {}
       const result = await importFile(file)
       setText(result.text)
     } catch (err) {
-      alert(err instanceof Error ? err.message : '文件导入失败')
+      if (reloadOnceOnChunkError(err, 'chunk-reload-import')) return
+      alert(
+        isChunkLoadError(err)
+          ? '导入模块加载失败，可能是网页版本已更新。请强制刷新页面（Ctrl+F5 / Cmd+Shift+R）后重试。'
+          : err instanceof Error ? err.message : '文件导入失败'
+      )
     } finally {
       setImporting(false)
     }
