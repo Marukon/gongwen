@@ -201,7 +201,8 @@ export function Preview({ value, onChange }: PreviewProps) {
   return (
     <div className="preview-container">
       <div className="preview-header">
-        <div className="preview-header-main">
+        <div className="preview-header-top">
+          <span className="preview-label">预览</span>
           {showPrintPreview && pageCount > 0 && (
             <span className="preview-hint">共 {pageCount} 页</span>
           )}
@@ -274,6 +275,7 @@ export function Preview({ value, onChange }: PreviewProps) {
               onKeyDown={handleKeyDown}
             />
           </div>
+          <div className="a4-footer a4-footer-center">— 1 —</div>
         </div>
         )}
       </div>

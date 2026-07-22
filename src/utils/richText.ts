@@ -163,6 +163,11 @@ function renderHeading4Html(content: string): string {
 }
 
 function renderBoldFirstSentence(text: string): string {
+  // 以「一是/二是/三是…」等枚举子项开头的段落，整体加粗
+  if (/^[一二三四五六七八九十]+是/.test(text)) {
+    return `<span class="a4-bold-first">${escapeHtml(text)}</span>`
+  }
+
   const enumItemMatches = Array.from(text.matchAll(/([一二三四五六七八九十]+是[^。]*。)/g))
 
   if (enumItemMatches.length >= 2) {

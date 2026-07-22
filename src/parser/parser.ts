@@ -27,6 +27,9 @@ const SIGNATURE_ORG_HINTS = [
 /** 主送机关通常是简短的受文机关列表；超过此长度的冒号结尾行视为正文（如"现就…通知如下："开头的长句） */
 const ADDRESSEE_MAX_LENGTH = 60
 
+/** 主送机关检测窗口：标题后前 N 个非空行内首次出现的冒号结尾短行识别为主送机关 */
+const ADDRESSEE_PREAMBLE_MAX_LINES = 4
+
 export interface ParsedLineInput {
   text: string
   lineNumber: number
@@ -214,7 +217,8 @@ export function parseParsedLines(lines: ParsedLineInput[], preserveEmptyLines = 
   const body: DocumentNode[] = []
 
   let titleFound = false
-  let addresseeChecked = false
+  let nonEmptyLinesAfterTitle = 0
+  let addresseeFound = false
   let i = 0
 
   while (i < lines.length) {
@@ -238,6 +242,11 @@ export function parseParsedLines(lines: ParsedLineInput[], preserveEmptyLines = 
       continue
     }
 
+    // 标题后的非空行计数，用于主送机关检测窗口
+    if (titleFound) {
+      nonEmptyLinesAfterTitle++
+    }
+
     const lineNumber = source.lineNumber
 
     // 首个非空行 → 公文标题
@@ -255,15 +264,15 @@ export function parseParsedLines(lines: ParsedLineInput[], preserveEmptyLines = 
       continue
     }
 
-    // 主送机关检测（标题后第一个非空行 + 冒号结尾 + 短行）
-    if (!addresseeChecked) {
-      addresseeChecked = true
+    // 主送机关检测（标题后前 N 个非空行内首次出现的冒号结尾短行）
+    if (!addresseeFound && nonEmptyLinesAfterTitle <= ADDRESSEE_PREAMBLE_MAX_LINES) {
       if (
         (trimmed.endsWith('：') || trimmed.endsWith(':')) &&
         trimmed.length <= ADDRESSEE_MAX_LENGTH &&
         !HEADING_1_RE.test(trimmed) &&
         !ATTACHMENT_RE.test(trimmed)
       ) {
+        addresseeFound = true
         body.push({ type: NodeType.ADDRESSEE, content: trimmed, lineNumber, runs: source.runs, alignment: source.alignment, noIndent: source.noIndent })
         i++
         continue

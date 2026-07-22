@@ -149,6 +149,23 @@ describe('parseGongwen', () => {
     expect(ast.body[1].type).toBe(NodeType.PARAGRAPH) // 第二个冒号行为普通段落
   })
 
+  it('标题后姓名/日期之后的主送机关仍识别为 ADDRESSEE（顶格）', () => {
+    const text = [
+      '在“上传下达”中淬炼坚强党性',
+      '张旭虎',
+      '（2026年7月24日）',
+      '尊敬的各位领导、同志们：',
+      '大家下午好！',
+    ].join('\n')
+
+    const ast = parseGongwen(text)
+
+    expect(ast.body[0].type).toBe(NodeType.PARAGRAPH) // 张旭虎
+    expect(ast.body[1].type).toBe(NodeType.PARAGRAPH) // （2026年7月24日）
+    expect(ast.body[2].type).toBe(NodeType.ADDRESSEE) // 尊敬的各位领导、同志们：
+    expect(ast.body[3].type).toBe(NodeType.PARAGRAPH) // 大家下午好！
+  })
+
   it('标题后过长的冒号结尾行按正文处理，不误判为主送机关', () => {
     const text = [
       '关于进一步规范劳务派遣单位参加工伤保险有关工作的通知',

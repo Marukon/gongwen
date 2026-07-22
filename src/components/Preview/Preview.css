@@ -8,13 +8,21 @@
 
 .preview-header {
   display: flex;
-  align-items: center;
-  justify-content: flex-start;
-  gap: 6px;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0;
   padding: 10px 14px;
   border-bottom: 1px solid #e5e7eb;
   background: white;
   flex-shrink: 0;
+}
+
+.preview-header-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+  margin-right: 2px;
 }
 
 .preview-header-main {
@@ -109,7 +117,7 @@
   align-items: center;
   gap: 6px;
   flex-wrap: wrap;
-  flex: 1;
+  margin-top: 8px;
 }
 
 .preview-select {
@@ -145,6 +153,7 @@
 }
 
 .preview-page-shell {
+  position: relative;
   width: 100%;
   max-width: 595px;
   min-height: 842px;
@@ -152,6 +161,13 @@
   background: #fff;
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
   border-radius: 2px;
+}
+
+.preview-page-shell .a4-footer {
+  position: absolute;
+  bottom: 8.3%;
+  left: var(--margin-left, 13.33%);
+  right: var(--margin-right, 12.38%);
 }
 
 .preview-page-content {

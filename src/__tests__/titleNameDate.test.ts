@@ -110,12 +110,10 @@ describe('正文首句加粗：支持「一是/二是/三是」枚举子项', ()
     expect(html).toContain('<strong>这是第一句话。</strong>这是第二句话。')
   })
 
-  it('「一是/二是/三是」段落中每个子项首句都加粗', () => {
-    const ast = parseGongwen('标题\n一是强化政治引领。二是聚焦中心大局。三是严守纪律规矩。发言完毕。')
+  it('「一是/二是/三是」独立段落整体加粗', () => {
+    const ast = parseGongwen('标题\n一是强化政治引领，当好排头兵。后续内容。\n二是聚焦中心大局。')
     const html = astToStyledHtml(ast, config)
-    expect(html).toContain('<span class="a4-bold-first">一是强化政治引领。</span>')
+    expect(html).toContain('<span class="a4-bold-first">一是强化政治引领，当好排头兵。后续内容。</span>')
     expect(html).toContain('<span class="a4-bold-first">二是聚焦中心大局。</span>')
-    expect(html).toContain('<span class="a4-bold-first">三是严守纪律规矩。</span>')
-    expect(html).toContain('发言完毕。')
   })
 })

@@ -341,11 +341,17 @@ export function renderHeading4(content: string) {
 
 /**
  * 渲染正文首句加粗：
+ * - 以「一是/二是/三是…」等枚举子项开头的段落，整体加粗。
  * - 普通段落：首句（到第一个"。"）加粗，其余正常。
- * - 枚举段落（含「一是/二是/三是…」）：每个枚举子项的首句都加粗，
+ * - 枚举段落（含 ≥2 处「一是/二是/三是…」）：每个枚举子项的首句都加粗，
  *   剩余文本保持正常。
  */
 export function renderBoldFirstSentence(content: string): React.ReactNode {
+  // 以枚举子项开头的独立段落，整体加粗
+  if (/^[一二三四五六七八九十]+是/.test(content)) {
+    return <span className="a4-bold-first">{content}</span>
+  }
+
   const enumItemMatches = Array.from(content.matchAll(/([一二三四五六七八九十]+是[^。]*。)/g))
 
   if (enumItemMatches.length >= 2) {
