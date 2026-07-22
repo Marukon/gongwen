@@ -61,7 +61,7 @@
 
 .a4-title-date {
   font-family: '楷体_GB2312', 'KaiTi', 'STKaiti', serif;
-  font-size: 16px;
+  font-size: var(--body-size, 16pt);
   font-weight: normal;
   text-align: center;
   line-height: var(--body-line-height, 29px);
@@ -72,7 +72,7 @@
 
 .a4-title-secondary {
   font-family: '楷体_GB2312', 'KaiTi', 'STKaiti', serif;
-  font-size: 16px;
+  font-size: var(--body-size, 16pt);
   font-weight: normal;
   text-align: center;
   line-height: var(--body-line-height, 29px);

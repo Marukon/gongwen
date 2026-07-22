@@ -126,7 +126,6 @@
   flex: 0 0 794px;
   width: 794px;
   transform-origin: top center;
-  background: #fff;
 }
 
 .preview-toolbar {
@@ -193,6 +192,11 @@
   overflow-y: auto;
   box-sizing: border-box;
   background: #fff;
+}
+
+/* 编辑模式：确保 a4-content 的页边距 padding 生效 */
+.preview-page-content.a4-content {
+  overflow: hidden;
 }
 
 .preview-editor {

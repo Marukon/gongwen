@@ -510,13 +510,48 @@ export function buildDocument(ast: GongwenAST, config: DocumentConfig): Document
     })
   }
 
+  const hasTitleNameDate = config.specialOptions.hasTitleNameDate && ast.title !== null
+  const bodyLineSpacing = ptToTwip(config.body.lineSpacing)
+  const nameDateFont = {
+    ascii: 'Times New Roman',
+    eastAsia: '楷体_GB2312',
+    hAnsi: '楷体_GB2312',
+    cs: '楷体_GB2312',
+  }
+  const nameDateFontSize = config.body.fontSize * 2 // 三号 = body fontSize * 2 half-points
+
   for (let i = 0; i < ast.body.length; i++) {
     const node = ast.body[i]
     const isFirstBodyNode = i === 0
     
+    // hasTitleNameDate: 正文第 0 个节点为姓名，第 1 个为日期
+    if (hasTitleNameDate && i <= 1) {
+      if (i === 0) {
+        // 姓名：楷体 三号 居中
+        children.push(new Paragraph({
+          alignment: AlignmentType.CENTER,
+          spacing: { line: bodyLineSpacing, lineRule: LineRuleType.EXACT, before: 0, after: 0 },
+          children: [new TextRun({ font: nameDateFont, size: nameDateFontSize, text: node.content })],
+        }))
+        continue
+      }
+      if (i === 1) {
+        // 日期：楷体 三号 居中，自动加全角括号
+        let dateText = node.content.trim()
+        if (/^\d{4}年\d{1,2}月\d{1,2}日$/.test(dateText)) {
+          dateText = `（${dateText}）`
+        }
+        children.push(new Paragraph({
+          alignment: AlignmentType.CENTER,
+          spacing: { line: bodyLineSpacing, lineRule: LineRuleType.EXACT, before: 0, after: 0 },
+          children: [new TextRun({ font: nameDateFont, size: nameDateFontSize, text: dateText })],
+        }))
+        continue
+      }
+    }
+    
     // 发文机关署名前插入 2 个空行
     if (node.type === NodeType.SIGNATURE) {
-      const bodyLineSpacing = ptToTwip(config.body.lineSpacing)
       const bodyFont = {
         ascii: 'Times New Roman',
         eastAsia: config.body.fontFamily,
