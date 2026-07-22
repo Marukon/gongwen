@@ -90,6 +90,7 @@ function buildPaginationConfig(config: DocumentConfig): PaginationConfig {
     },
     specialOptions: {
       boldFirstSentence: config.specialOptions.boldFirstSentence,
+      boldHeading2: config.specialOptions.boldHeading2,
       boldHeading3: config.specialOptions.boldHeading3,
       hasStamp: config.specialOptions.hasStamp,
     },
@@ -173,7 +174,7 @@ export function PrintPreview({ ast, config, onPageCountChange }: PrintPreviewPro
               footerNoteConfig={config.footerNote}
               isFirstPage={i === 0}
               isLastPage={i === pages.length - 1}
-              pageNumberLayout={config.specialOptions.pageNumberLayout}
+              pageNumberLayout={config.specialOptions.pageNumberStyle}
               hasStamp={config.specialOptions.hasStamp}
               hasTitleNameDate={config.specialOptions.hasTitleNameDate}
             />

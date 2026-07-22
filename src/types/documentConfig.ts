@@ -35,11 +35,12 @@ export type PageNumberStyle = 'mirrored' | 'center'
 
 export interface SpecialOptionsConfig {
   boldFirstSentence: boolean
+  boldHeading2: boolean
+  boldHeading3: boolean
   firstParagraphNoIndent: boolean
   showPageNumber: boolean
   pageNumberFont: string
-  pageNumberLayout: 'center' | 'mirrored'
-  boldHeading3: boolean
+  pageNumberStyle: PageNumberStyle
   /**
    * 是否加盖印章
    * - true: 成文日期右空四字 (GB/T 9704 7.3.5.1 加盖印章的公文)
@@ -139,10 +140,11 @@ export const DEFAULT_CONFIG: DocumentConfig = {
   },
   specialOptions: {
     boldFirstSentence: false,
+    boldHeading2: false,
     firstParagraphNoIndent: false,
     showPageNumber: true,
     pageNumberFont: '宋体',
-    pageNumberLayout: 'mirrored',
+    pageNumberStyle: 'mirrored',
     boldHeading3: true,
     hasStamp: false,
     hasTitleNameDate: false,
@@ -251,7 +253,7 @@ export const INDENT_OPTIONS: { label: string; value: number }[] = [
   { label: '3字符', value: 3 },
 ]
 
-export const PAGE_NUMBER_LAYOUT_OPTIONS: { label: string; value: 'center' | 'mirrored' }[] = [
+export const PAGE_NUMBER_STYLE_OPTIONS: { label: string; value: 'center' | 'mirrored' }[] = [
   { label: '居中', value: 'center' },
   { label: '双面打印两侧', value: 'mirrored' },
 ]

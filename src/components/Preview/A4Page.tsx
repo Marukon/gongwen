@@ -425,7 +425,7 @@ interface A4PageProps {
   /** 是否为最后一页 */
   isLastPage: boolean
   /** 页码布局 */
-  pageNumberLayout: SpecialOptionsConfig['pageNumberLayout']
+  pageNumberLayout: SpecialOptionsConfig['pageNumberStyle']
   /**
    * 是否加盖印章
    * - true: 成文日期右空四字 (GB/T 9704 7.3.5.1)

@@ -32,6 +32,7 @@ describe('documentTemplates', () => {
       body: { ...DEFAULT_CONFIG.body },
       title: { ...DEFAULT_CONFIG.title },
       margins: { ...DEFAULT_CONFIG.margins },
+      textFixOptions: { ...DEFAULT_CONFIG.textFixOptions },
     }
 
     expect(getDocumentConfigSignature(DEFAULT_CONFIG)).toBe(
