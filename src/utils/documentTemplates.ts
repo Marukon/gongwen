@@ -210,7 +210,7 @@ export function buildTemplateSummary(config: DocumentConfig): TemplateSummary {
   ]
   const featureTags = [
     `页码: ${config.specialOptions.showPageNumber
-      ? `开启 (${config.specialOptions.pageNumberLayout === 'mirrored' ? '国标' : '居中'})`
+      ? `开启 (${config.specialOptions.pageNumberStyle === 'mirrored' ? '国标' : '居中'})`
       : '关闭'}`,
     `版头: ${config.header.enabled ? '开启' : '关闭'}`,
     `版记: ${config.footerNote.enabled ? '开启' : '关闭'}`,

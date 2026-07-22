@@ -98,9 +98,9 @@ export const DocumentFlow = memo(function DocumentFlow({
                     ? renderHeading3(node.content, boldHeading3)
                     : node.type === NodeType.HEADING_4
                       ? renderHeading4(node.content)
-                      : (node.type === NodeType.PARAGRAPH && boldFirstSentence && node.content)
+                      : (boldFirstSentence && node.type === NodeType.PARAGRAPH)
                         ? renderBoldFirstSentence(node.content)
-                        : (node.content ? node.content : <br />)}
+                        : node.content}
             </p>
           )
         }

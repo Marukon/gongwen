@@ -4,29 +4,16 @@ import './Editor.css'
 interface EditorProps {
   value: string
   onChange: (value: string) => void
-  canTextCleanup: boolean
-  fixFeedback?: string
+  /** 文件导入回调 */
   onFileImport: (file: File) => void
-  onTextCleanup: () => void
+  /** 是否正在导入中 */
   importing?: boolean
-  /** 是否启用「标题下署名 + 日期」版式（第二行姓名 / 第三行日期） */
-  hasTitleNameDate?: boolean
-  /** 切换「标题下署名 + 日期」版式 */
-  onToggleHasTitleNameDate?: (value: boolean) => void
 }
 
-export const Editor = memo(function Editor({
-  value,
-  onChange,
-  canTextCleanup,
-  fixFeedback,
-  onFileImport,
-  onTextCleanup,
-  importing,
-  hasTitleNameDate = false,
-  onToggleHasTitleNameDate,
-}: EditorProps) {
+export const Editor = memo(function Editor({ value, onChange, onFileImport, importing }: EditorProps) {
   const [dragging, setDragging] = useState(false)
+
+  // 使用 ref 计数器避免子元素触发 dragLeave 导致闪烁
   const dragCounterRef = useRef(0)
 
   const handleDragEnter = useCallback((e: DragEvent) => {
@@ -67,41 +54,9 @@ export const Editor = memo(function Editor({
       onDrop={handleDrop}
     >
       <div className="editor-header">
-        <div className="editor-header-main">
-          <span className="editor-label">原文</span>
-          <span className="editor-hint">左侧只保留原始内容输入，右侧用于排版和局部样式调整</span>
-        </div>
-        <div className="editor-header-actions">
-          {fixFeedback && (
-            <span className="editor-feedback" title={fixFeedback}>
-              {fixFeedback}
-            </span>
-          )}
-          {onToggleHasTitleNameDate && (
-            <label
-              className="editor-checkbox"
-              title="勾选后：第二行识别为姓名，第三行识别为日期（日期自动加括号，姓名与日期楷体居中三号）"
-            >
-              <input
-                type="checkbox"
-                checked={hasTitleNameDate}
-                onChange={(e) => onToggleHasTitleNameDate(e.target.checked)}
-              />
-              <span>有人名日期</span>
-            </label>
-          )}
-          <button
-            type="button"
-            className="editor-action-btn"
-            onClick={onTextCleanup}
-            disabled={!canTextCleanup}
-            title="把原文中的英文标点和多余空格整理成规范公文写法"
-          >
-            整理原文
-          </button>
-        </div>
+        <span className="editor-label">粘贴公文正文 或 拖入文件</span>
+        <span className="editor-hint">首行自动识别为标题，后续自动识别各级标题</span>
       </div>
-
       <textarea
         className="editor-textarea"
         value={value}
@@ -109,7 +64,6 @@ export const Editor = memo(function Editor({
         placeholder={`关于XXX的通知\n\n一、总体要求\n为深入贯彻落实……\n（一）指导思想\n坚持以……\n1.加强组织领导\n（1）制定实施方案\n各部门要……`}
         spellCheck={false}
       />
-
       {dragging && (
         <div className="editor-drop-overlay">
           <span>释放文件以导入</span>

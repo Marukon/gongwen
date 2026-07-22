@@ -2,7 +2,7 @@ import { useContext } from 'react'
 import {
   DocumentConfigContext,
   type DocumentConfigContextValue,
-} from './DocumentConfigContext'
+} from './documentConfigContext'
 
 export function useDocumentConfig(): DocumentConfigContextValue {
   const ctx = useContext(DocumentConfigContext)

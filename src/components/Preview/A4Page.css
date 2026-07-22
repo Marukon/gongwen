@@ -1,9 +1,9 @@
-/* A4 纸张模拟：固定真实尺寸 210mm × 297mm @ 96dpi（与打印纸张 1:1）。
-   预览时整体缩放适配，保持"真跟 A4 纸一样大"的版式比例。 */
+/* A4 纸张模拟 (按 210:297 比例缩放) */
 .a4-page {
   position: relative;
-  width: 794px;   /* A4 210mm @ 96dpi */
-  height: 1123px; /* A4 297mm @ 96dpi */
+  width: 100%;
+  max-width: 595.28px; /* A4 210mm @ 72dpi */
+  aspect-ratio: 210 / 297;
   margin: 0 auto;
   background: white;
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
@@ -57,28 +57,7 @@
   text-align: center;
   line-height: var(--title-line-height, 29px);
   margin: 0;
-}
-
-.a4-title-date {
-  font-family: '楷体_GB2312', 'KaiTi', 'STKaiti', serif;
-  font-size: 16px;
-  font-weight: normal;
-  text-align: center;
-  line-height: var(--body-line-height, 29px);
-  margin: 0;
-  letter-spacing: var(--char-spacing, 0);
-  text-indent: 0;
-}
-
-.a4-title-secondary {
-  font-family: '楷体_GB2312', 'KaiTi', 'STKaiti', serif;
-  font-size: 16px;
-  font-weight: normal;
-  text-align: center;
-  line-height: var(--body-line-height, 29px);
-  margin: 0;
-  letter-spacing: var(--char-spacing, 0);
-  text-indent: 0;
+  margin-bottom: var(--body-line-height, 29px);
 }
 
 /* 一级标题段落: 基础样式（含首句拆分时的段落容器） */
@@ -166,14 +145,6 @@
   text-align: justify;
   line-height: var(--body-line-height, 29px);
   margin: 0;
-}
-
-.a4-paragraph[data-no-indent='true'],
-.a4-h1[data-no-indent='true'],
-.a4-h2[data-no-indent='true'],
-.a4-h3[data-no-indent='true'],
-.a4-h4[data-no-indent='true'] {
-  text-indent: 0;
 }
 
 /* 空状态占位 */
@@ -331,26 +302,17 @@
 
 .a4-header-org {
   font-family: '方正小标宋_GBK', 'STSong', serif;
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 0;
+  font-size: 30px;
   color: #e00000;
+  text-align: center;
   line-height: 1.4;
-  width: 100%;
-  box-sizing: border-box;
-  text-align: justify;
-  text-align-last: justify;
-}
-
-.a4-header-org-char {
-  flex: 0 0 auto;
+  letter-spacing: 0;
 }
 
 /* 红色分隔线：单条红线，位于发文字号/签发人之下 */
 .a4-header-separator {
   border-bottom: 2px solid #e00000;
-  margin-top: 0;
+  margin-top: 8px;
 }
 
 /* 发文字号 / 签发人行 */
