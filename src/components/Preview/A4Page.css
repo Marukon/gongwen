@@ -52,10 +52,10 @@
 /* 公文标题: 方正小标宋_GBK 22pt 居中, 固定行距 */
 .a4-title {
   font-family: var(--title-font, 'FZXiaoBiaoSong-B05S'), 'STSong', 'SimSun', serif;
-  font-size: var(--title-size, 22px);
+  font-size: var(--title-size, 22pt);
   font-weight: bold;
   text-align: center;
-  line-height: var(--title-line-height, 29px);
+  line-height: var(--title-line-height, 29pt);
   margin: 0;
 }
 
@@ -64,7 +64,7 @@
   font-size: var(--body-size, 16pt);
   font-weight: normal;
   text-align: center;
-  line-height: var(--body-line-height, 29px);
+  line-height: var(--body-line-height, 29pt);
   margin: 0;
   letter-spacing: var(--char-spacing, 0);
   text-indent: 0;
@@ -75,7 +75,7 @@
   font-size: var(--body-size, 16pt);
   font-weight: normal;
   text-align: center;
-  line-height: var(--body-line-height, 29px);
+  line-height: var(--body-line-height, 29pt);
   margin: 0;
   letter-spacing: var(--char-spacing, 0);
   text-indent: 0;
@@ -83,11 +83,11 @@
 
 /* 一级标题段落: 基础样式（含首句拆分时的段落容器） */
 .a4-h1 {
-  font-size: var(--h1-size, 16px);
+  font-size: var(--h1-size, 16pt);
   font-weight: normal;
   text-indent: var(--body-indent, 2em);
   text-align: justify;
-  line-height: var(--body-line-height, 29px);
+  line-height: var(--body-line-height, 29pt);
   margin: 0;
 }
 
@@ -98,12 +98,12 @@
 
 /* 二级标题段落: 楷体_GB2312 基础样式（含首句拆分时的段落容器） */
 .a4-h2 {
-  font-size: var(--h2-size, 16px);
+  font-size: var(--h2-size, 16pt);
   font-weight: normal;
   font-style: normal;
   text-indent: var(--body-indent, 2em);
   text-align: justify;
-  line-height: var(--body-line-height, 29px);
+  line-height: var(--body-line-height, 29pt);
   margin: 0;
 }
 
@@ -136,31 +136,31 @@
 /* 三级标题: 段落容器（不设 bold，由 inline 控制首句加粗） */
 .a4-h3 {
   font-family: var(--h3-font, 'FangSong_GB2312'), 'FangSong', 'STFangsong', serif;
-  font-size: var(--h3-size, 16px);
+  font-size: var(--h3-size, 16pt);
   font-weight: normal;
   text-indent: var(--body-indent, 2em);
-  line-height: var(--body-line-height, 29px);
+  line-height: var(--body-line-height, 29pt);
   margin: 0;
 }
 
 /* 四级标题: 仿宋 */
 .a4-h4 {
   font-family: var(--body-font, 'FangSong_GB2312'), 'FangSong', 'STFangsong', serif;
-  font-size: var(--body-size, 16px);
+  font-size: var(--body-size, 16pt);
   font-weight: normal;
   text-indent: var(--body-indent, 2em);
-  line-height: var(--body-line-height, 29px);
+  line-height: var(--body-line-height, 29pt);
   margin: 0;
 }
 
 /* 正文: 仿宋 两端对齐 首行缩进 */
 .a4-paragraph {
   font-family: var(--body-font, 'FangSong_GB2312'), 'FangSong', 'STFangsong', serif;
-  font-size: var(--body-size, 16px);
+  font-size: var(--body-size, 16pt);
   font-weight: normal;
   text-indent: var(--body-indent, 2em);
   text-align: justify;
-  line-height: var(--body-line-height, 29px);
+  line-height: var(--body-line-height, 29pt);
   margin: 0;
 }
 
@@ -184,11 +184,11 @@
 /* 主送机关: 顶格 仿宋，段前空一行 */
 .a4-addressee {
   font-family: var(--body-font, 'FangSong_GB2312'), 'FangSong', 'STFangsong', serif;
-  font-size: var(--body-size, 16px);
+  font-size: var(--body-size, 16pt);
   text-indent: 0;
   text-align: justify;
-  line-height: var(--body-line-height, 29px);
-  margin: var(--body-line-height, 29px) 0 0 0;
+  line-height: var(--body-line-height, 29pt);
+  margin: var(--body-line-height, 29pt) 0 0 0;
 }
 
 /* 标题负责与紧随其后的主送机关/附件之间的留白，避免段后和段前重复控制 */
@@ -200,12 +200,12 @@
 /* 附件说明基础样式：左空二字，段前空一行 */
 .a4-attachment {
   font-family: var(--body-font, 'FangSong_GB2312'), 'FangSong', 'STFangsong', serif;
-  font-size: var(--body-size, 16px);
+  font-size: var(--body-size, 16pt);
   text-indent: 0;
   padding-left: var(--body-indent, 2em);
   text-align: justify;
-  line-height: var(--body-line-height, 29px);
-  margin: var(--body-line-height, 29px) 0 0 0;
+  line-height: var(--body-line-height, 29pt);
+  margin: var(--body-line-height, 29pt) 0 0 0;
 }
 
 /* 单附件换行悬挂缩进：首行正常，后续行缩进 3 字符 */
@@ -223,9 +223,9 @@
 /* 多附件项：从第二个附件开始，每项单独一行 */
 .a4-attachment-item {
   font-family: var(--body-font, 'FangSong_GB2312'), 'FangSong', 'STFangsong', serif;
-  font-size: var(--body-size, 16px);
+  font-size: var(--body-size, 16pt);
   text-align: justify;
-  line-height: var(--body-line-height, 29px);
+  line-height: var(--body-line-height, 29pt);
   margin: 0;
   letter-spacing: var(--char-spacing, 0);
 }
@@ -242,11 +242,11 @@
  */
 .a4-date {
   font-family: var(--body-font, 'FangSong_GB2312'), 'FangSong', 'STFangsong', serif;
-  font-size: var(--body-size, 16px);
+  font-size: var(--body-size, 16pt);
   text-indent: 0;
   text-align: right;
   padding-right: 4em;
-  line-height: var(--body-line-height, 29px);
+  line-height: var(--body-line-height, 29pt);
   margin: 0;
 }
 
@@ -256,17 +256,17 @@
  */
 .a4-signature {
   font-family: var(--body-font, 'FangSong_GB2312'), 'FangSong', 'STFangsong', serif;
-  font-size: var(--body-size, 16px);
+  font-size: var(--body-size, 16pt);
   text-indent: 0;
   text-align: right;
-  line-height: var(--body-line-height, 29px);
+  line-height: var(--body-line-height, 29pt);
   margin: 0;
 }
 
 /* 空行：用于发文机关署名前的段前间距 */
 .a4-empty-line {
-  line-height: var(--body-line-height, 29px);
-  height: var(--body-line-height, 29px);
+  line-height: var(--body-line-height, 29pt);
+  height: var(--body-line-height, 29pt);
   margin: 0;
 }
 
@@ -293,7 +293,7 @@
   left: var(--margin-left, 13.33%);
   right: var(--margin-right, 12.38%);
   font-family: 'Times New Roman', var(--page-number-font, '宋体'), serif;
-  font-size: 14px;
+  font-size: 14pt;
   color: #374151;
 }
 
@@ -317,7 +317,7 @@
 /* ---- 版头 ---- */
 .a4-header-section {
   /* 红线之下空二行再出标题 */
-  margin-bottom: calc(var(--body-line-height, 29px) * 2);
+  margin-bottom: calc(var(--body-line-height, 29pt) * 2);
 }
 
 .a4-header-org {
@@ -350,7 +350,7 @@
   justify-content: center;
   padding: 0 1em;
   /* 发文机关标志下空二行 */
-  margin-top: calc(var(--body-line-height, 29px) * 2);
+  margin-top: calc(var(--body-line-height, 29pt) * 2);
   font-family: var(--body-font);
   font-size: var(--body-size);
   line-height: var(--body-line-height);
@@ -378,8 +378,8 @@
   left: var(--margin-left, 13.33%);
   right: var(--margin-right, 12.38%);
   font-family: var(--body-font);
-  font-size: 14px;
-  line-height: 28px;
+  font-size: 14pt;
+  line-height: 28pt;
 }
 
 .a4-footer-note-line-top {
