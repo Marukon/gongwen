@@ -98,7 +98,7 @@ describe('A4Page: 有人名日期 gating (mirrors richText/docxBuilder)', () => 
   })
 })
 
-describe('正文首句加粗：支持「一是/二是/三是」枚举子项', () => {
+describe('「一是/二是/三是」识别为三级标题，加粗仅到第一个句号', () => {
   const config: DocumentConfig = {
     ...DEFAULT_CONFIG,
     specialOptions: { ...DEFAULT_CONFIG.specialOptions, boldFirstSentence: true },
@@ -110,17 +110,22 @@ describe('正文首句加粗：支持「一是/二是/三是」枚举子项', ()
     expect(html).toContain('<strong>这是第一句话。</strong>这是第二句话。')
   })
 
-  it('「一是/二是/三是」独立段落整体加粗', () => {
+  it('「一是/二是/三是」为三级标题，只加粗到第一个句号', () => {
     const ast = parseGongwen('标题\n一是强化政治引领，当好排头兵。后续内容。\n二是聚焦中心大局。')
     const html = astToStyledHtml(ast, config)
-    expect(html).toContain('<span class="a4-bold-first">一是强化政治引领，当好排头兵。后续内容。</span>')
-    expect(html).toContain('<span class="a4-bold-first">二是聚焦中心大局。</span>')
+    // 首句加粗
+    expect(html).toContain('a4-h3-inline--bold">一是强化政治引领，当好排头兵。</span>')
+    // 后续内容不加粗
+    expect(html).toContain('a4-paragraph-inline">后续内容。</span>')
+    // 不应整体加粗
+    expect(html).not.toContain('a4-h3-inline--bold">一是强化政治引领，当好排头兵。后续内容。</span>')
   })
 
-  it('「一是/二是/三是」段落在首句加粗关闭时仍整体加粗', () => {
+  it('「一是/二是/三是」在首句加粗关闭时仍为三级标题（只加粗首句）', () => {
     const ast = parseGongwen('标题\n一是强化政治引领，当好排头兵。后续内容。\n二是聚焦中心大局。')
     const html = astToStyledHtml(ast, DEFAULT_CONFIG)
-    expect(html).toContain('<span class="a4-bold-first">一是强化政治引领，当好排头兵。后续内容。</span>')
-    expect(html).toContain('<span class="a4-bold-first">二是聚焦中心大局。</span>')
+    // boldHeading3 默认为 true，仍加粗首句
+    expect(html).toContain('a4-h3-inline--bold">一是强化政治引领，当好排头兵。</span>')
+    expect(html).toContain('a4-paragraph-inline">后续内容。</span>')
   })
 })

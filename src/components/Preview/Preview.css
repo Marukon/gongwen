@@ -126,6 +126,7 @@
   flex: 0 0 794px;
   width: 794px;
   transform-origin: top center;
+  background: #fff;
 }
 
 .preview-toolbar {
@@ -191,6 +192,7 @@
   min-height: 0;
   overflow-y: auto;
   box-sizing: border-box;
+  background: #fff;
 }
 
 .preview-editor {

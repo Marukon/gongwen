@@ -163,31 +163,6 @@ function renderHeading4Html(content: string): string {
 }
 
 function renderBoldFirstSentence(text: string): string {
-  // 以「一是/二是/三是…」等枚举子项开头的段落，整体加粗
-  if (/^[一二三四五六七八九十]+是/.test(text)) {
-    return `<span class="a4-bold-first">${escapeHtml(text)}</span>`
-  }
-
-  const enumItemMatches = Array.from(text.matchAll(/([一二三四五六七八九十]+是[^。]*。)/g))
-
-  if (enumItemMatches.length >= 2) {
-    let result = ''
-    let lastIndex = 0
-    for (const match of enumItemMatches) {
-      const index = match.index ?? 0
-      const sentence = match[0]
-      if (index > lastIndex) {
-        result += escapeHtml(text.slice(lastIndex, index))
-      }
-      result += `<span class="a4-bold-first">${escapeHtml(sentence)}</span>`
-      lastIndex = index + sentence.length
-    }
-    if (lastIndex < text.length) {
-      result += escapeHtml(text.slice(lastIndex))
-    }
-    return result
-  }
-
   const idx = text.indexOf('。')
   if (idx === -1 || idx === text.length - 1) {
     return `<strong>${escapeHtml(text)}</strong>`
@@ -331,9 +306,8 @@ export function astToStyledHtml(ast: GongwenAST, config: DocumentConfig): string
       node.type === NodeType.PARAGRAPH &&
       index === firstBodyParagraphIndex
     )
-    const isEnumParagraph = node.type === NodeType.PARAGRAPH && /^[一二三四五六七八九十]+是/.test(node.content.trim())
     const shouldBoldFirstSentence = (
-      (config.specialOptions.boldFirstSentence || isEnumParagraph) &&
+      config.specialOptions.boldFirstSentence &&
       node.type === NodeType.PARAGRAPH
     )
     const boldHeading3 = config.specialOptions.boldHeading3

@@ -4,9 +4,6 @@ import type { DocumentNode, AttachmentNode, RichTextRun } from '../../types/ast'
 import type { HeaderConfig, FooterNoteConfig, SpecialOptionsConfig } from '../../types/documentConfig'
 import './A4Page.css'
 
-/** 枚举子项段落：以「一是/二是/三是…」开头，公文排版中整体加粗 */
-export const ENUM_PARAGRAPH_RE = /^[一二三四五六七八九十]+是/
-
 /** 节点类型 → CSS 类名映射 */
 export const NODE_CLASS_MAP: Record<NodeType, string> = {
   [NodeType.DOCUMENT_TITLE]: 'a4-title',
@@ -226,7 +223,7 @@ export function renderA4Content(opts: A4ContentRenderOptions): React.ReactNode {
             nodeClassName = 'a4-h4'
             nodeContent = renderHeading4(node.content)
           } else if (
-            (boldFirstSentence || (node.type === NodeType.PARAGRAPH && ENUM_PARAGRAPH_RE.test(node.content.trim()))) &&
+            boldFirstSentence &&
             node.type === NodeType.PARAGRAPH
           ) {
             nodeClassName = NODE_CLASS_MAP[node.type]
@@ -347,37 +344,9 @@ export function renderHeading4(content: string) {
 
 /**
  * 渲染正文首句加粗：
- * - 以「一是/二是/三是…」等枚举子项开头的段落，整体加粗。
- * - 普通段落：首句（到第一个"。"）加粗，其余正常。
- * - 枚举段落（含 ≥2 处「一是/二是/三是…」）：每个枚举子项的首句都加粗，
- *   剩余文本保持正常。
+ * - 普通段落：首句（到第一个“。”）加粗，其余正常。
  */
 export function renderBoldFirstSentence(content: string): React.ReactNode {
-  // 以枚举子项开头的独立段落，整体加粗
-  if (/^[一二三四五六七八九十]+是/.test(content)) {
-    return <span className="a4-bold-first">{content}</span>
-  }
-
-  const enumItemMatches = Array.from(content.matchAll(/([一二三四五六七八九十]+是[^。]*。)/g))
-
-  if (enumItemMatches.length >= 2) {
-    const result: React.ReactNode[] = []
-    let lastIndex = 0
-    enumItemMatches.forEach((match) => {
-      const index = match.index ?? 0
-      const text = match[0]
-      if (index > lastIndex) {
-        result.push(<span key={`rest-${lastIndex}`}>{content.slice(lastIndex, index)}</span>)
-      }
-      result.push(<span key={`bold-${index}`} className="a4-bold-first">{text}</span>)
-      lastIndex = index + text.length
-    })
-    if (lastIndex < content.length) {
-      result.push(<span key="rest-end">{content.slice(lastIndex)}</span>)
-    }
-    return <>{result}</>
-  }
-
   const idx = content.indexOf('。')
   if (idx === -1 || idx === content.length - 1) {
     return <span className="a4-bold-first">{content}</span>
