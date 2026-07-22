@@ -191,7 +191,6 @@
   min-height: 0;
   overflow-y: auto;
   box-sizing: border-box;
-  background: #fff;
 }
 
 /* 编辑模式：确保 a4-content 的页边距 padding 生效 */

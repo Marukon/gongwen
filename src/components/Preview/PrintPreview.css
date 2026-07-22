@@ -21,7 +21,6 @@
   flex: 0 0 794px;
   width: 794px;
   transform-origin: top center;
-  background: #fff;
 }
 
 /* 隐藏度量容器：渲染完整 A4 页（版头+正文+版记）用于高度测量。
