@@ -35,31 +35,17 @@ export type PageNumberStyle = 'mirrored' | 'center'
 
 export interface SpecialOptionsConfig {
   boldFirstSentence: boolean
-  firstParagraphNoIndent: boolean
+  boldHeading2: boolean
+  boldHeading3: boolean
   showPageNumber: boolean
   pageNumberFont: string
-  pageNumberLayout: 'center' | 'mirrored'
-  boldHeading3: boolean
+  pageNumberStyle: PageNumberStyle
   /**
    * 是否加盖印章
    * - true: 成文日期右空四字 (GB/T 9704 7.3.5.1 加盖印章的公文)
    * - false: 成文日期右空二字 (GB/T 9704 7.3.5.2 不加盖印章的公文)
    */
   hasStamp: boolean
-  /**
-   * 是否「标题下署名 + 日期」版式
-   * - true: 强制将正文第二行识别为姓名、第三行识别为日期，日期自动加全角括号，
-   *         姓名与日期均使用楷体、居中、三号字 (GB/T 9704 标题下署名版式)
-   * - false: 默认按正文处理（仅当第二、三行恰好匹配姓名/日期正则时才自动识别）
-   */
-  hasTitleNameDate: boolean
-}
-
-/** 文本修复选项 */
-export interface TextFixOptionsConfig {
-  convertEnglishPunctuation: boolean
-  removeRedundantSpaces: boolean
-  removeMeaninglessLineBreaks: boolean
 }
 
 /** 高级设置 — 单个元素配置 */
@@ -79,7 +65,6 @@ export interface AdvancedConfig {
 /** 版头配置 */
 export interface HeaderConfig {
   enabled: boolean
-  mode: 'formal' | 'note'
   /** 发文机关标志（红色大字居中） */
   orgName: string
   /** 发文字号，如"国办发〔2024〕1号" */
@@ -105,7 +90,6 @@ export interface DocumentConfig {
   title: TitleConfig
   body: BodyConfig
   specialOptions: SpecialOptionsConfig
-  textFixOptions: TextFixOptionsConfig
   advanced: AdvancedConfig
   header: HeaderConfig
   footerNote: FooterNoteConfig
@@ -120,8 +104,8 @@ export type DeepPartial<T> = {
 
 export const DEFAULT_CONFIG: DocumentConfig = {
   margins: {
-    top: 3.7,
-    bottom: 3.5,
+    top: 3.46,
+    bottom: 3.26,
     left: 2.8,
     right: 2.6,
   },
@@ -139,18 +123,12 @@ export const DEFAULT_CONFIG: DocumentConfig = {
   },
   specialOptions: {
     boldFirstSentence: false,
-    firstParagraphNoIndent: false,
+    boldHeading2: false,
+    boldHeading3: true,
     showPageNumber: true,
     pageNumberFont: '宋体',
-    pageNumberLayout: 'mirrored',
-    boldHeading3: true,
+    pageNumberStyle: 'mirrored',
     hasStamp: false,
-    hasTitleNameDate: false,
-  },
-  textFixOptions: {
-    convertEnglishPunctuation: true,
-    removeRedundantSpaces: true,
-    removeMeaninglessLineBreaks: true,
   },
   advanced: {
     h1: { fontFamily: '黑体', asciiFontFamily: 'Times New Roman', fontSize: 16 },
@@ -159,7 +137,6 @@ export const DEFAULT_CONFIG: DocumentConfig = {
   },
   header: {
     enabled: false,
-    mode: 'formal',
     orgName: '',
     docNumber: '',
     signer: '',
@@ -251,14 +228,9 @@ export const INDENT_OPTIONS: { label: string; value: number }[] = [
   { label: '3字符', value: 3 },
 ]
 
-export const PAGE_NUMBER_LAYOUT_OPTIONS: { label: string; value: 'center' | 'mirrored' }[] = [
-  { label: '居中', value: 'center' },
-  { label: '双面打印两侧', value: 'mirrored' },
-]
-
-export const HEADER_MODE_OPTIONS: { label: string; value: 'formal' | 'note' }[] = [
-  { label: '正式文', value: 'formal' },
-  { label: '便签', value: 'note' },
+export const PAGE_NUMBER_STYLE_OPTIONS: { label: string; value: PageNumberStyle }[] = [
+  { label: '单右双左（国标）', value: 'mirrored' },
+  { label: '全居中', value: 'center' },
 ]
 
 // ---- 版式常量 (GB/T 9704) ----
@@ -269,19 +241,8 @@ export const CHARS_PER_LINE = 28
 /** 每页行数 */
 export const LINES_PER_PAGE = 22
 
-/** A4 预览宽度：210mm @ 72dpi（旧版响应式上限，保留引用） */
+/** A4 预览宽度：210mm @ 72dpi */
 export const A4_PREVIEW_WIDTH_PX = 595.28
-
-/**
- * A4 真实渲染尺寸：210mm × 297mm @ 96dpi（与打印纸张 1:1）。
- * 预览时按此固定尺寸渲染每一页（"真跟 A4 纸一样大"），
- * 再通过 transform: scale 整体缩放适配预览区宽度（"整体缩放"）。
- */
-export const A4_RENDER_WIDTH_PX = 794
-export const A4_RENDER_HEIGHT_PX = 1123
-
-/** A4 多页之间的间距（px，与 .a4-page + .a4-page 的 margin-top 保持一致） */
-export const A4_PAGE_GAP_PX = 16
 
 // ---- 单位转换工具函数 ----
 

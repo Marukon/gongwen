@@ -71,6 +71,24 @@ describe('getRunStyle', () => {
     expect(style.italics).toBe(false)
   })
 
+  it('二级标题默认不加粗', () => {
+    const style = getRunStyle(NodeType.HEADING_2, DEFAULT_CONFIG)
+
+    expect(style.bold).toBe(false)
+  })
+
+  it('可开启二级标题加粗', () => {
+    const style = getRunStyle(NodeType.HEADING_2, {
+      ...DEFAULT_CONFIG,
+      specialOptions: {
+        ...DEFAULT_CONFIG.specialOptions,
+        boldHeading2: true,
+      },
+    })
+
+    expect(style.bold).toBe(true)
+  })
+
   it('三级标题默认加粗', () => {
     const style = getRunStyle(NodeType.HEADING_3, DEFAULT_CONFIG)
 

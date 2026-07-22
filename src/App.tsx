@@ -1,21 +1,17 @@
-import { useState, useCallback, useEffect, useRef } from 'react'
+import { useState, useCallback, useEffect, useRef, useMemo } from 'react'
 import { Editor } from './components/Editor/Editor'
 import { Preview } from './components/Preview/Preview'
 import { Toolbar } from './components/Toolbar/Toolbar'
 import { useDocumentParser } from './hooks/useDocumentParser'
 import { useDocumentConfig } from './contexts/useDocumentConfig'
-import { parseGongwen } from './parser'
-import { autoFixDocumentText, sanitizeText } from './utils/sanitize'
-import {
-  astToStyledHtml,
-} from './utils/richText'
+import { sanitizeText } from './utils/sanitize'
+import { isChunkLoadError, reloadOnceOnChunkError } from './utils/lazyImport'
 import './App.css'
 
-const STORAGE_KEY_TEXT = 'docx-editor-source-text'
-const STORAGE_KEY_FORMATTED = 'docx-editor-formatted-html'
+const STORAGE_KEY_TEXT = 'docx-editor-text'
 
 /** 从 localStorage 读取持久化的编辑区文本 */
-function loadSourceText(): string {
+function loadText(): string {
   try {
     return localStorage.getItem(STORAGE_KEY_TEXT) ?? ''
   } catch {
@@ -23,25 +19,20 @@ function loadSourceText(): string {
   }
 }
 
-function loadFormattedHtml(): string {
-  try {
-    return localStorage.getItem(STORAGE_KEY_FORMATTED) ?? ''
-  } catch {
-    return ''
-  }
-}
-
 function App() {
-  const [text, setText] = useState(loadSourceText)
-  const [formattedHtml, setFormattedHtml] = useState(loadFormattedHtml)
+  const [text, setText] = useState(loadText)
   const [importing, setImporting] = useState(false)
   const [exporting, setExporting] = useState(false)
-  const [fixFeedback, setFixFeedback] = useState('')
 
-  const { config, updateConfig } = useDocumentConfig()
+  // 自动净化：解析前预处理，编辑器保留原文不干扰输入
+  const sanitized = useMemo(() => sanitizeText(text).text, [text])
+  const ast = useDocumentParser(sanitized)
+  const { config } = useDocumentConfig()
   const configRef = useRef(config)
-  configRef.current = config
-  const ast = useDocumentParser(formattedHtml)
+
+  useEffect(() => {
+    configRef.current = config
+  }, [config])
 
   // Auto-Save: debounce 500ms 写入 localStorage
   const timerRef = useRef<ReturnType<typeof setTimeout>>(undefined)
@@ -57,27 +48,6 @@ function App() {
     return () => clearTimeout(timerRef.current)
   }, [text])
 
-  useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE_KEY_FORMATTED, formattedHtml)
-    } catch {
-      // 静默忽略
-    }
-  }, [formattedHtml])
-
-  useEffect(() => {
-    const sanitized = sanitizeText(text, config.textFixOptions).text
-    const nextAst = parseGongwen(sanitized, { preserveEmptyLines: true })
-    setFormattedHtml(astToStyledHtml(nextAst, config))
-  }, [config, text])
-
-  useEffect(() => {
-    if (!fixFeedback) return
-
-    const timer = setTimeout(() => setFixFeedback(''), 3000)
-    return () => clearTimeout(timer)
-  }, [fixFeedback])
-
   const handleExport = useCallback(async () => {
     setExporting(true)
 
@@ -87,10 +57,17 @@ function App() {
 
     try {
       const { downloadDocx } = await import('./exporter/download')
+      // 成功后清 flag
+      try { sessionStorage.removeItem('chunk-reload-export') } catch {}
       await downloadDocx(ast, configRef.current)
     } catch (err) {
+      if (reloadOnceOnChunkError(err, 'chunk-reload-export')) return
       console.error('导出失败:', err)
-      alert('导出失败，请检查控制台日志')
+      alert(
+        isChunkLoadError(err)
+          ? '导出模块加载失败，可能是网页版本已更新。请强制刷新页面（Ctrl+F5 / Cmd+Shift+R）后重试。'
+          : '导出失败，请检查控制台日志'
+      )
     } finally {
       setExporting(false)
     }
@@ -98,10 +75,8 @@ function App() {
 
   const handleClear = useCallback(() => {
     setText('')
-    setFormattedHtml('')
     try {
       localStorage.removeItem(STORAGE_KEY_TEXT)
-      localStorage.removeItem(STORAGE_KEY_FORMATTED)
     } catch {
       // 静默忽略
     }
@@ -114,40 +89,21 @@ function App() {
     setImporting(true)
     try {
       const { importFile } = await import('./utils/fileImporter')
+      // 成功后清 flag
+      try { sessionStorage.removeItem('chunk-reload-import') } catch {}
       const result = await importFile(file)
       setText(result.text)
     } catch (err) {
-      alert(err instanceof Error ? err.message : '文件导入失败')
+      if (reloadOnceOnChunkError(err, 'chunk-reload-import')) return
+      alert(
+        isChunkLoadError(err)
+          ? '导入模块加载失败，可能是网页版本已更新。请强制刷新页面（Ctrl+F5 / Cmd+Shift+R）后重试。'
+          : err instanceof Error ? err.message : '文件导入失败'
+      )
     } finally {
       setImporting(false)
     }
   }, [text])
-
-  const handleAutoFix = useCallback(() => {
-    const { textFixOptions } = config
-    if (
-      !textFixOptions.convertEnglishPunctuation &&
-      !textFixOptions.removeRedundantSpaces &&
-      !textFixOptions.removeMeaninglessLineBreaks
-    ) {
-      setFixFeedback('高级设置中已关闭全部文本修复选项')
-      return
-    }
-
-    const result = autoFixDocumentText(text, textFixOptions)
-    setText(result.text)
-
-    if (result.count === 0) {
-      setFixFeedback('未发现需要修复的文本问题')
-      return
-    }
-
-    const segments = []
-    if (result.punctuationCount > 0) segments.push(`标点 ${result.punctuationCount} 处`)
-    if (result.whitespaceCount > 0) segments.push(`空格 ${result.whitespaceCount} 处`)
-    if (result.lineBreakCount > 0) segments.push(`回车 ${result.lineBreakCount} 处`)
-    setFixFeedback(`已修复 ${result.count} 处：${segments.join('，')}`)
-  }, [config, text])
 
   return (
     <div className="app">
@@ -166,17 +122,10 @@ function App() {
             onChange={setText}
             onFileImport={handleImport}
             importing={importing}
-            canTextCleanup={text.trim().length > 0}
-            fixFeedback={fixFeedback}
-            onTextCleanup={handleAutoFix}
-            hasTitleNameDate={config.specialOptions.hasTitleNameDate}
-            onToggleHasTitleNameDate={(value) =>
-              updateConfig({ specialOptions: { hasTitleNameDate: value } })
-            }
           />
         </div>
         <div className="app-preview">
-          <Preview value={formattedHtml} onChange={setFormattedHtml} />
+          <Preview ast={ast} />
         </div>
       </div>
     </div>
