@@ -2,21 +2,34 @@ import { useEffect, useMemo, useRef, type CSSProperties } from 'react'
 import {
   A4Page,
   renderA4Content,
+  renderA4Header,
+  renderA4FooterNote,
 } from './A4Page'
 import { usePagination, type PaginationConfig } from '../../hooks/usePagination'
+import { useFitScale } from '../../hooks/useFitScale'
 import type { GongwenAST } from '../../types/ast'
 import type { DocumentConfig } from '../../types/documentConfig'
-import { CHARS_PER_LINE, cmToPagePercent } from '../../types/documentConfig'
+import {
+  CHARS_PER_LINE,
+  cmToPagePercent,
+  A4_RENDER_WIDTH_PX,
+  A4_RENDER_HEIGHT_PX,
+  A4_PAGE_GAP_PX,
+} from '../../types/documentConfig'
 import './A4Page.css'
 import './PrintPreview.css'
 
+/** 屏幕 DPI 下 1pt 对应的像素（96dpi ≈ 1pt = 4/3 px），用于估算真实字形宽度 */
+const PT_TO_PX = 96 / 72
+
 /** 由 config 推导 A4 页面所需的 CSS 变量（与预览编辑区保持一致的页边距/字体/字间距） */
 function buildA4CssVars(config: DocumentConfig): CSSProperties {
-  const pageWidthPx = 595
+  const pageWidthPx = A4_RENDER_WIDTH_PX
   const marginLeftPx = (config.margins.left / 21) * pageWidthPx
   const marginRightPx = (config.margins.right / 21) * pageWidthPx
   const availablePx = pageWidthPx - marginLeftPx - marginRightPx
-  const textWidth = config.body.fontSize * CHARS_PER_LINE
+  // 真实字形宽度：中文全角字 ≈ 1em，96dpi 下 1pt ≈ 4/3 px
+  const textWidth = config.body.fontSize * PT_TO_PX * CHARS_PER_LINE
   const letterSpacingUnits = CHARS_PER_LINE - 1
   const charSpacingPx = (availablePx - textWidth) / letterSpacingUnits
 
@@ -100,6 +113,13 @@ export function PrintPreview({ ast, config, onPageCountChange }: PrintPreviewPro
   const paginationConfig = useMemo(() => buildPaginationConfig(config), [config])
   const pages = usePagination(ast.title, ast.body, measurerRef, paginationConfig)
 
+  // 整体缩放：以真实 A4 尺寸（794px）渲染，再等比缩放到预览区可用宽度（上限 1，不放大）
+  const { frameRef, scale } = useFitScale(A4_RENDER_WIDTH_PX)
+  const scaledHeight =
+    pages.length > 0
+      ? (pages.length * A4_RENDER_HEIGHT_PX + (pages.length - 1) * A4_PAGE_GAP_PX) * scale
+      : 0
+
   useEffect(() => {
     onPageCountChange?.(pages.length)
   }, [pages.length, onPageCountChange])
@@ -115,33 +135,51 @@ export function PrintPreview({ ast, config, onPageCountChange }: PrintPreviewPro
 
   return (
     <div className="print-preview" style={cssVars}>
-      {/* 隐藏度量容器：渲染全部节点用于高度测量（与 A4Page 使用相同的渲染逻辑） */}
+      {/* 隐藏度量容器：渲染完整 A4 页（版头+正文+版记），保持"未缩放"真实尺寸，
+          usePagination 从中读取页面/页边距/版头/版记高度，保证分页与缩放后可见页一致。 */}
       <div className="a4-measurer" ref={measurerRef} aria-hidden="true">
-        <div className="a4-measurer-content">
-          {renderA4Content(contentOpts)}
+        <div className="a4-page">
+          <div className="a4-content">
+            {renderA4Header(config.header)}
+            <div className="a4-content-viewport" style={{ height: '100%' }}>
+              <div className="a4-measurer-content">
+                {renderA4Content(contentOpts)}
+              </div>
+            </div>
+          </div>
+          {renderA4FooterNote(config.footerNote)}
         </div>
       </div>
 
-      {pages.map((slice, i) => (
-        <A4Page
-          key={i}
-          title={ast.title}
-          body={ast.body}
-          pageNumber={i + 1}
-          offsetY={slice.offsetY}
-          clipHeight={slice.clipHeight}
-          showPageNumber={config.specialOptions.showPageNumber}
-          boldFirstSentence={config.specialOptions.boldFirstSentence}
-          boldHeading3={config.specialOptions.boldHeading3}
-          headerConfig={config.header}
-          footerNoteConfig={config.footerNote}
-          isFirstPage={i === 0}
-          isLastPage={i === pages.length - 1}
-          pageNumberLayout={config.specialOptions.pageNumberLayout}
-          hasStamp={config.specialOptions.hasStamp}
-          hasTitleNameDate={config.specialOptions.hasTitleNameDate}
-        />
-      ))}
+      {/* 可见页：固定真实 A4 尺寸渲染，整体缩放适配 */}
+      <div
+        className="preview-scale-frame"
+        ref={frameRef}
+        style={scaledHeight ? { height: `${scaledHeight}px` } : undefined}
+      >
+        <div className="preview-scale-content" style={{ transform: `scale(${scale})` }}>
+          {pages.map((slice, i) => (
+            <A4Page
+              key={i}
+              title={ast.title}
+              body={ast.body}
+              pageNumber={i + 1}
+              offsetY={slice.offsetY}
+              clipHeight={slice.clipHeight}
+              showPageNumber={config.specialOptions.showPageNumber}
+              boldFirstSentence={config.specialOptions.boldFirstSentence}
+              boldHeading3={config.specialOptions.boldHeading3}
+              headerConfig={config.header}
+              footerNoteConfig={config.footerNote}
+              isFirstPage={i === 0}
+              isLastPage={i === pages.length - 1}
+              pageNumberLayout={config.specialOptions.pageNumberLayout}
+              hasStamp={config.specialOptions.hasStamp}
+              hasTitleNameDate={config.specialOptions.hasTitleNameDate}
+            />
+          ))}
+        </div>
+      </div>
     </div>
   )
 }

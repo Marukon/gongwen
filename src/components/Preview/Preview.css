@@ -107,9 +107,25 @@
 
 .preview-scroll {
   flex: 1;
+  overflow-x: hidden;
   overflow-y: auto;
   padding: 24px 16px;
   position: relative;
+}
+
+/* 编辑模式整体缩放外层：固定真实 A4 尺寸渲染后统一缩放。
+   frame 高度由 JS 设定 = 1123 * scale，避免 transform 不影响布局导致多余空白。 */
+.preview-scale-frame {
+  display: flex;
+  justify-content: center;
+  width: 100%;
+  overflow: hidden;
+}
+
+.preview-scale-content {
+  flex: 0 0 794px;
+  width: 794px;
+  transform-origin: top center;
 }
 
 .preview-toolbar {
@@ -154,13 +170,13 @@
 
 .preview-page-shell {
   position: relative;
-  width: 100%;
-  max-width: 595px;
-  min-height: 842px;
+  width: 794px;
+  height: 1123px;
   margin: 0 auto;
   background: #fff;
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
   border-radius: 2px;
+  overflow: hidden;
 }
 
 .preview-page-shell .a4-footer {
@@ -171,7 +187,10 @@
 }
 
 .preview-page-content {
-  min-height: 842px;
+  height: 100%;
+  min-height: 0;
+  overflow-y: auto;
+  box-sizing: border-box;
 }
 
 .preview-editor {

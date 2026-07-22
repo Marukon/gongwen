@@ -4,6 +4,9 @@ import type { DocumentNode, AttachmentNode, RichTextRun } from '../../types/ast'
 import type { HeaderConfig, FooterNoteConfig, SpecialOptionsConfig } from '../../types/documentConfig'
 import './A4Page.css'
 
+/** 枚举子项段落：以「一是/二是/三是…」开头，公文排版中整体加粗 */
+export const ENUM_PARAGRAPH_RE = /^[一二三四五六七八九十]+是/
+
 /** 节点类型 → CSS 类名映射 */
 export const NODE_CLASS_MAP: Record<NodeType, string> = {
   [NodeType.DOCUMENT_TITLE]: 'a4-title',
@@ -222,7 +225,10 @@ export function renderA4Content(opts: A4ContentRenderOptions): React.ReactNode {
           } else if (node.type === NodeType.HEADING_4) {
             nodeClassName = 'a4-h4'
             nodeContent = renderHeading4(node.content)
-          } else if (boldFirstSentence && node.type === NodeType.PARAGRAPH) {
+          } else if (
+            (boldFirstSentence || (node.type === NodeType.PARAGRAPH && ENUM_PARAGRAPH_RE.test(node.content.trim()))) &&
+            node.type === NodeType.PARAGRAPH
+          ) {
             nodeClassName = NODE_CLASS_MAP[node.type]
             nodeContent = node.content ? renderBoldFirstSentence(node.content) : <br />
           } else {

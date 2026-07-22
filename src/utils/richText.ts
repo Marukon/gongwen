@@ -331,8 +331,9 @@ export function astToStyledHtml(ast: GongwenAST, config: DocumentConfig): string
       node.type === NodeType.PARAGRAPH &&
       index === firstBodyParagraphIndex
     )
+    const isEnumParagraph = node.type === NodeType.PARAGRAPH && /^[一二三四五六七八九十]+是/.test(node.content.trim())
     const shouldBoldFirstSentence = (
-      config.specialOptions.boldFirstSentence &&
+      (config.specialOptions.boldFirstSentence || isEnumParagraph) &&
       node.type === NodeType.PARAGRAPH
     )
     const boldHeading3 = config.specialOptions.boldHeading3

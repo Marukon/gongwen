@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useRef, useState, useCallback, type CSSProperties, type KeyboardEvent } from 'react'
 import { useDocumentConfig } from '../../contexts/useDocumentConfig'
-import { CHARS_PER_LINE, FONT_OPTIONS, FONT_SIZE_OPTIONS, cmToPagePercent } from '../../types/documentConfig'
+import { CHARS_PER_LINE, FONT_OPTIONS, FONT_SIZE_OPTIONS, cmToPagePercent, A4_RENDER_WIDTH_PX, A4_RENDER_HEIGHT_PX } from '../../types/documentConfig'
 import { normalizeEditorHtml } from '../../utils/richText'
 import { useDocumentParser } from '../../hooks/useDocumentParser'
+import { useFitScale } from '../../hooks/useFitScale'
 import { PrintPreview } from './PrintPreview'
 import './A4Page.css'
 import './Preview.css'
@@ -43,7 +44,7 @@ function applyFontSize(size: number) {
 
 function getHeaderOrgFontSize(orgName: string, leftMargin: number, rightMargin: number): number {
   const length = Math.max(1, Array.from(orgName.trim()).length)
-  const availablePx = 595 * (1 - (leftMargin * 10 / 210) - (rightMargin * 10 / 210))
+  const availablePx = A4_RENDER_WIDTH_PX * (1 - (leftMargin * 10 / 210) - (rightMargin * 10 / 210))
   return Math.max(18, Math.min(30, Math.floor(availablePx / length)))
 }
 
@@ -80,6 +81,8 @@ export function Preview({ value, onChange }: PreviewProps) {
   // 打印预览所需的实时 AST（与导出使用同一解析管线）
   const ast = useDocumentParser(value)
   const [pageCount, setPageCount] = useState(0)
+  // 编辑模式同样以真实 A4 尺寸渲染，再整体缩放适配
+  const { frameRef: editFrameRef, scale: editScale } = useFitScale(A4_RENDER_WIDTH_PX)
   const headerOrgFontSize = useMemo(
     () => getHeaderOrgFontSize(config.header.orgName, config.margins.left, config.margins.right),
     [config.header.orgName, config.margins.left, config.margins.right],
@@ -240,42 +243,50 @@ export function Preview({ value, onChange }: PreviewProps) {
         {showPrintPreview ? (
           <PrintPreview ast={ast} config={config} onPageCountChange={setPageCount} />
         ) : (
-        <div className="preview-page-shell">
-          <div className="preview-page-content a4-content">
-            {config.header.enabled && config.header.orgName && (
-              <div className={`preview-header-section ${config.header.mode === 'note' ? 'preview-header-section--note' : ''}`}>
-                <div className="a4-header-org" style={{ fontSize: `${headerOrgFontSize}pt` }}>
-                  {headerOrgChars.map((char, index) => (
-                    <span key={`${char}-${index}`} className="a4-header-org-char">
-                      {char === ' ' ? '\u00a0' : char}
-                    </span>
-                  ))}
-                </div>
-                {config.header.mode === 'formal' && (config.header.docNumber || config.header.signer) && (
-                  <div className={`a4-header-meta${config.header.signer ? ' a4-header-meta--with-signer' : ''}`}>
-                    <span>{config.header.docNumber}</span>
-                    {config.header.signer && (
-                      <span>
-                        <span className="a4-header-signer-label">签发人：</span>
-                        <span className="a4-header-signer-name">{config.header.signer}</span>
-                      </span>
+        <div
+          className="preview-scale-frame"
+          ref={editFrameRef}
+          style={{ height: `${A4_RENDER_HEIGHT_PX * editScale}px` }}
+        >
+          <div className="preview-scale-content" style={{ transform: `scale(${editScale})` }}>
+            <div className="preview-page-shell">
+              <div className="preview-page-content a4-content">
+                {config.header.enabled && config.header.orgName && (
+                  <div className={`preview-header-section ${config.header.mode === 'note' ? 'preview-header-section--note' : ''}`}>
+                    <div className="a4-header-org" style={{ fontSize: `${headerOrgFontSize}pt` }}>
+                      {headerOrgChars.map((char, index) => (
+                        <span key={`${char}-${index}`} className="a4-header-org-char">
+                          {char === ' ' ? '\u00a0' : char}
+                        </span>
+                      ))}
+                    </div>
+                    {config.header.mode === 'formal' && (config.header.docNumber || config.header.signer) && (
+                      <div className={`a4-header-meta${config.header.signer ? ' a4-header-meta--with-signer' : ''}`}>
+                        <span>{config.header.docNumber}</span>
+                        {config.header.signer && (
+                          <span>
+                            <span className="a4-header-signer-label">签发人：</span>
+                            <span className="a4-header-signer-name">{config.header.signer}</span>
+                          </span>
+                        )}
+                      </div>
                     )}
+                    <div className="a4-header-separator"></div>
                   </div>
                 )}
-                <div className="a4-header-separator"></div>
+                <div
+                  ref={editorRef}
+                  className="preview-editor"
+                  contentEditable
+                  suppressContentEditableWarning
+                  onInput={emitChange}
+                  onBlur={emitChange}
+                  onKeyDown={handleKeyDown}
+                />
               </div>
-            )}
-            <div
-              ref={editorRef}
-              className="preview-editor"
-              contentEditable
-              suppressContentEditableWarning
-              onInput={emitChange}
-              onBlur={emitChange}
-              onKeyDown={handleKeyDown}
-            />
+              <div className="a4-footer a4-footer-center">— 1 —</div>
+            </div>
           </div>
-          <div className="a4-footer a4-footer-center">— 1 —</div>
         </div>
         )}
       </div>

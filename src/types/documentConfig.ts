@@ -269,8 +269,19 @@ export const CHARS_PER_LINE = 28
 /** 每页行数 */
 export const LINES_PER_PAGE = 22
 
-/** A4 预览宽度：210mm @ 72dpi */
+/** A4 预览宽度：210mm @ 72dpi（旧版响应式上限，保留引用） */
 export const A4_PREVIEW_WIDTH_PX = 595.28
+
+/**
+ * A4 真实渲染尺寸：210mm × 297mm @ 96dpi（与打印纸张 1:1）。
+ * 预览时按此固定尺寸渲染每一页（"真跟 A4 纸一样大"），
+ * 再通过 transform: scale 整体缩放适配预览区宽度（"整体缩放"）。
+ */
+export const A4_RENDER_WIDTH_PX = 794
+export const A4_RENDER_HEIGHT_PX = 1123
+
+/** A4 多页之间的间距（px，与 .a4-page + .a4-page 的 margin-top 保持一致） */
+export const A4_PAGE_GAP_PX = 16
 
 // ---- 单位转换工具函数 ----
 

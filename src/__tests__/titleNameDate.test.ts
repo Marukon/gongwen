@@ -116,4 +116,11 @@ describe('正文首句加粗：支持「一是/二是/三是」枚举子项', ()
     expect(html).toContain('<span class="a4-bold-first">一是强化政治引领，当好排头兵。后续内容。</span>')
     expect(html).toContain('<span class="a4-bold-first">二是聚焦中心大局。</span>')
   })
+
+  it('「一是/二是/三是」段落在首句加粗关闭时仍整体加粗', () => {
+    const ast = parseGongwen('标题\n一是强化政治引领，当好排头兵。后续内容。\n二是聚焦中心大局。')
+    const html = astToStyledHtml(ast, DEFAULT_CONFIG)
+    expect(html).toContain('<span class="a4-bold-first">一是强化政治引领，当好排头兵。后续内容。</span>')
+    expect(html).toContain('<span class="a4-bold-first">二是聚焦中心大局。</span>')
+  })
 })
