@@ -16,7 +16,6 @@ interface DocumentFlowProps {
   title: GongwenAST['title']
   body: GongwenAST['body']
   boldFirstSentence: boolean
-  boldHeading2: boolean
   boldHeading3: boolean
   hasStamp: boolean
   showPlaceholder?: boolean
@@ -48,20 +47,15 @@ export const DocumentFlow = memo(function DocumentFlow({
   title,
   body,
   boldFirstSentence,
-  boldHeading2,
   boldHeading3,
   hasStamp,
   showPlaceholder = false,
 }: DocumentFlowProps) {
   return (
     <>
-      {title && title.content.split('\n').map((line, idx, arr) => (
-        <p
-          key={`title-${title.lineNumber}-${idx}`}
-          className={NODE_CLASS_MAP[title.type]}
-          style={idx < arr.length - 1 ? { marginBottom: 0 } : undefined}
-        >{line}</p>
-      ))}
+      {title && (
+        <p className={NODE_CLASS_MAP[title.type]}>{title.content}</p>
+      )}
       {body.flatMap((node, index) => {
         const elements: React.ReactNode[] = []
 
@@ -93,14 +87,14 @@ export const DocumentFlow = memo(function DocumentFlow({
               {node.type === NodeType.HEADING_1
                 ? renderHeading1(node.content)
                 : node.type === NodeType.HEADING_2
-                  ? renderHeading2(node.content, boldHeading2)
+                  ? renderHeading2(node.content)
                   : node.type === NodeType.HEADING_3
                     ? renderHeading3(node.content, boldHeading3)
                     : node.type === NodeType.HEADING_4
                       ? renderHeading4(node.content)
-                      : (boldFirstSentence && node.type === NodeType.PARAGRAPH)
+                      : (node.type === NodeType.PARAGRAPH && boldFirstSentence && node.content)
                         ? renderBoldFirstSentence(node.content)
-                        : node.content}
+                        : (node.content ? node.content : <br />)}
             </p>
           )
         }
