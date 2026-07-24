@@ -288,9 +288,6 @@ export function Preview({ value, onChange }: PreviewProps) {
                     onKeyDown={handleKeyDown}
                   />
                 </div>
-                <div className="a4-footer a4-footer-center">
-                  — 1 —
-                </div>
               </div>
             </div>
           </div>
