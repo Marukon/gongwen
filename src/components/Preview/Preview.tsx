@@ -74,6 +74,7 @@ function getSelectedBlocks(root: HTMLElement): HTMLElement[] {
 export function Preview({ value, onChange }: PreviewProps) {
   const { config } = useDocumentConfig()
   const editorRef = useRef<HTMLDivElement>(null)
+  const shellRef = useRef<HTMLDivElement>(null)
   const syncingRef = useRef(false)
   const [currentFont, setCurrentFont] = useState(FONT_FAMILY_OPTIONS[0])
   const [currentFontSize, setCurrentFontSize] = useState(FONT_SIZE_OPTIONS_CN[3]?.value ?? 16)
@@ -83,6 +84,22 @@ export function Preview({ value, onChange }: PreviewProps) {
   const [pageCount, setPageCount] = useState(0)
   // 编辑模式同样以真实 A4 尺寸渲染，再整体缩放适配
   const { frameRef: editFrameRef, scale: editScale } = useFitScale(A4_RENDER_WIDTH_PX)
+  // 编辑模式：动态跟踪页面实际高度（内容可能超过一页）
+  const [editShellHeight, setEditShellHeight] = useState(A4_RENDER_HEIGHT_PX)
+
+  useEffect(() => {
+    const shell = shellRef.current
+    if (!shell || showPrintPreview) return
+    const observer = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        const h = entry.contentRect.height
+        if (h > 0) setEditShellHeight(h)
+      }
+    })
+    observer.observe(shell)
+    return () => observer.disconnect()
+  }, [showPrintPreview])
+
   const headerOrgFontSize = useMemo(
     () => getHeaderOrgFontSize(config.header.orgName, config.margins.left, config.margins.right),
     [config.header.orgName, config.margins.left, config.margins.right],
@@ -246,10 +263,10 @@ export function Preview({ value, onChange }: PreviewProps) {
         <div
           className="preview-scale-frame"
           ref={editFrameRef}
-          style={{ height: `${A4_RENDER_HEIGHT_PX * editScale}px` }}
+          style={{ height: `${editShellHeight * editScale}px` }}
         >
           <div className="preview-scale-content" style={{ transform: `scale(${editScale})` }}>
-            <div className="preview-page-shell">
+            <div className="preview-page-shell" ref={shellRef}>
               <div className="preview-page-content a4-content">
                 {config.header.enabled && config.header.orgName && (
                   <div className={`preview-header-section ${config.header.mode === 'note' ? 'preview-header-section--note' : ''}`}>

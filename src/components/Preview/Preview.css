@@ -13,7 +13,7 @@
   gap: 0;
   padding: 10px 14px;
   border-bottom: 1px solid #e5e7eb;
-  background: white;
+  background: #f3f4f6;
   flex-shrink: 0;
 }
 
@@ -170,12 +170,11 @@
 .preview-page-shell {
   position: relative;
   width: 794px;
-  height: 1123px;
+  min-height: 1123px;
   margin: 0 auto;
   background: #fff;
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
   border-radius: 2px;
-  overflow: hidden;
 }
 
 .preview-page-shell .a4-footer {
@@ -186,15 +185,15 @@
 }
 
 .preview-page-content {
-  height: 100%;
-  min-height: 0;
-  overflow-y: auto;
+  min-height: 100%;
   box-sizing: border-box;
 }
 
-/* 编辑模式：确保 a4-content 的页边距 padding 生效 */
+/* 编辑模式：覆盖 .a4-content 的 overflow:hidden 和固定 height，让内容自然撑开 */
 .preview-page-content.a4-content {
-  overflow: hidden;
+  overflow: visible;
+  height: auto;
+  min-height: 100%;
 }
 
 .preview-editor {
