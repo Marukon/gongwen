@@ -103,6 +103,9 @@ export function Preview({ value, onChange }: PreviewProps) {
     return () => observer.disconnect()
   }, [showPrintPreview])
 
+  const marginTopPx = (config.margins.top / 21) * A4_RENDER_WIDTH_PX
+  const marginBottomPx = (config.margins.bottom / 21) * A4_RENDER_WIDTH_PX
+
   // 编辑模式分页计算：按实际内容区域（扣除页边距）计算，避免页面不足导致内容被截断
   const editContentAreaHeight = A4_RENDER_HEIGHT_PX - marginTopPx - marginBottomPx
   const editPageCount = Math.max(
@@ -122,9 +125,6 @@ export function Preview({ value, onChange }: PreviewProps) {
     () => config.header.orgName.trim().split(''),
     [config.header.orgName],
   )
-
-  const marginTopPx = (config.margins.top / 21) * A4_RENDER_WIDTH_PX
-  const marginBottomPx = (config.margins.bottom / 21) * A4_RENDER_WIDTH_PX
 
   const cssVars = useMemo((): CSSProperties => {
     const pageWidthPx = 595
