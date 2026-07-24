@@ -195,36 +195,17 @@
   z-index: 3;
 }
 
-/* 页边缘遮挡：覆盖页间隙处的文字 */
-.preview-edit-page-edge {
+/* 编辑模式裁剪蒙版：内容只显示每页版心区域，页边距和间隙露出背景 */
+.preview-edit-clip-svg {
   position: absolute;
-  left: 0;
-  width: 794px;
-  z-index: 2;
-  pointer-events: none;
+  width: 0;
+  height: 0;
+  overflow: hidden;
 }
 
 /* 编辑模式页码：文字阴影确保在内容上方可读 */
 .preview-page-shell .a4-footer {
   text-shadow: 0 0 4px #fff, 0 0 8px #fff, 0 0 12px #fff;
-}
-
-/* 编辑模式页边距硬遮挡：只覆盖真正的页边距区域，版心内正文保持完整可见 */
-.preview-edit-page-margin {
-  position: absolute;
-  left: 0;
-  width: 794px;
-  background: #fff;
-  z-index: 2;
-  pointer-events: none;
-}
-
-.preview-edit-page-margin--top {
-  height: var(--margin-top-px, 140px);
-}
-
-.preview-edit-page-margin--bottom {
-  height: var(--margin-bottom-px, 132px);
 }
 
 .preview-page-content {
