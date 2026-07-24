@@ -192,13 +192,28 @@
   position: absolute;
   left: var(--margin-left, 13.33%);
   right: var(--margin-right, 12.38%);
+  z-index: 3;
+}
+
+/* 编辑模式页码文字：白色背景防止被内容遮挡 */
+.preview-edit-page-number {
+  background: #fff;
+  padding: 2px 12px;
+  border-radius: 2px;
+}
+
+/* 页边缘遮挡：覆盖页边界处的文字，模拟上下页边距 */
+.preview-edit-page-edge {
+  position: absolute;
+  left: 0;
+  width: 794px;
   z-index: 2;
+  pointer-events: none;
 }
 
 .preview-page-content {
   position: relative;
   z-index: 1;
-  min-height: 100%;
   box-sizing: border-box;
 }
 
@@ -206,7 +221,6 @@
 .preview-page-content.a4-content {
   overflow: visible;
   height: auto;
-  min-height: 100%;
 }
 
 .preview-editor {

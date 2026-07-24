@@ -19,8 +19,8 @@ const FONT_SIZE_OPTIONS_CN = FONT_SIZE_OPTIONS.map((option) => ({
   value: option.value,
 }))
 const BLOCK_SELECTOR = 'p,div,h1,h2,h3,h4,h5,h6'
-/** 编辑模式页间隙（与预览模式 .a4-page + .a4-page 的 margin-top 保持一致） */
-const EDIT_PAGE_GAP = 16
+/** 编辑模式页间隙（容纳页码 + 模拟页边距空间） */
+const EDIT_PAGE_GAP = 24
 
 function exec(command: string, value?: string) {
   document.execCommand('styleWithCSS', false, 'true')
@@ -77,6 +77,7 @@ export function Preview({ value, onChange }: PreviewProps) {
   const { config } = useDocumentConfig()
   const editorRef = useRef<HTMLDivElement>(null)
   const shellRef = useRef<HTMLDivElement>(null)
+  const contentRef = useRef<HTMLDivElement>(null)
   const syncingRef = useRef(false)
   const [currentFont, setCurrentFont] = useState(FONT_FAMILY_OPTIONS[0])
   const [currentFontSize, setCurrentFontSize] = useState(FONT_SIZE_OPTIONS_CN[3]?.value ?? 16)
@@ -90,15 +91,15 @@ export function Preview({ value, onChange }: PreviewProps) {
   const [editShellHeight, setEditShellHeight] = useState(A4_RENDER_HEIGHT_PX)
 
   useEffect(() => {
-    const shell = shellRef.current
-    if (!shell || showPrintPreview) return
-    const observer = new ResizeObserver((entries) => {
-      for (const entry of entries) {
-        const h = entry.contentRect.height
-        if (h > 0) setEditShellHeight(h)
-      }
-    })
-    observer.observe(shell)
+    const content = contentRef.current
+    if (!content || showPrintPreview) return
+    const measure = () => {
+      const h = content.scrollHeight
+      if (h > 0) setEditShellHeight(h)
+    }
+    const observer = new ResizeObserver(measure)
+    observer.observe(content)
+    measure()
     return () => observer.disconnect()
   }, [showPrintPreview])
 
@@ -281,7 +282,7 @@ export function Preview({ value, onChange }: PreviewProps) {
                   style={{ top: `${i * (A4_RENDER_HEIGHT_PX + EDIT_PAGE_GAP)}px` }}
                 />
               ))}
-              <div className="preview-page-content a4-content">
+              <div className="preview-page-content a4-content" ref={contentRef}>
                 {config.header.enabled && config.header.orgName && (
                   <div className={`preview-header-section ${config.header.mode === 'note' ? 'preview-header-section--note' : ''}`}>
                     <div className="a4-header-org" style={{ fontSize: `${headerOrgFontSize}pt` }}>
@@ -315,6 +316,30 @@ export function Preview({ value, onChange }: PreviewProps) {
                   onKeyDown={handleKeyDown}
                 />
               </div>
+              {/* 页底部遮挡：模拟下页边距，覆盖页码区域文字 */}
+              {Array.from({ length: editPageCount }, (_, i) => (
+                <div
+                  key={`edge-b-${i}`}
+                  className="preview-edit-page-edge"
+                  style={{
+                    top: `${i * (A4_RENDER_HEIGHT_PX + EDIT_PAGE_GAP) + A4_RENDER_HEIGHT_PX - 100}px`,
+                    height: '100px',
+                    background: 'linear-gradient(to bottom, rgba(255,255,255,0) 0%, rgba(255,255,255,0.7) 40%, rgba(255,255,255,0.95) 100%)',
+                  }}
+                />
+              ))}
+              {/* 页顶部遮挡：模拟上页边距（第一页除外） */}
+              {Array.from({ length: editPageCount - 1 }, (_, i) => (
+                <div
+                  key={`edge-t-${i}`}
+                  className="preview-edit-page-edge"
+                  style={{
+                    top: `${(i + 1) * (A4_RENDER_HEIGHT_PX + EDIT_PAGE_GAP)}px`,
+                    height: '50px',
+                    background: 'linear-gradient(to bottom, rgba(255,255,255,0.95) 0%, rgba(255,255,255,0.7) 60%, rgba(255,255,255,0) 100%)',
+                  }}
+                />
+              ))}
               {/* 编辑模式页码：每页底部居中显示 */}
               {Array.from({ length: editPageCount }, (_, i) => (
                 <div
@@ -322,7 +347,7 @@ export function Preview({ value, onChange }: PreviewProps) {
                   className="a4-footer a4-footer-center"
                   style={{ top: `${i * (A4_RENDER_HEIGHT_PX + EDIT_PAGE_GAP) + A4_RENDER_HEIGHT_PX * (1 - 0.083)}px` }}
                 >
-                  — {i + 1} —
+                  <span className="preview-edit-page-number">— {i + 1} —</span>
                 </div>
               ))}
             </div>
