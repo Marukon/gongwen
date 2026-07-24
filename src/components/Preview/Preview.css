@@ -168,21 +168,23 @@
   border-color: #9ca3af;
 }
 
+/* 编辑模式外壳：灰色底色，内部渲染独立白色页面 */
 .preview-page-shell {
   position: relative;
   width: 794px;
-  min-height: 1123px;
   margin: 0 auto;
-  background-color: #fff;
-  background-image: repeating-linear-gradient(
-    to bottom,
-    transparent 0px,
-    transparent 1122px,
-    #d1d5db 1122px,
-    #d1d5db 1123px
-  );
+}
+
+/* 编辑模式每页白色背景（含阴影），绝对定位在对应页位置 */
+.preview-edit-page-bg {
+  position: absolute;
+  left: 0;
+  width: 794px;
+  height: 1123px;
+  background: #fff;
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
   border-radius: 2px;
+  z-index: 0;
 }
 
 /* 编辑模式页码：绝对定位到每页底部 */
@@ -190,9 +192,12 @@
   position: absolute;
   left: var(--margin-left, 13.33%);
   right: var(--margin-right, 12.38%);
+  z-index: 2;
 }
 
 .preview-page-content {
+  position: relative;
+  z-index: 1;
   min-height: 100%;
   box-sizing: border-box;
 }

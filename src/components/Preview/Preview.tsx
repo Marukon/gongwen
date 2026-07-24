@@ -19,6 +19,8 @@ const FONT_SIZE_OPTIONS_CN = FONT_SIZE_OPTIONS.map((option) => ({
   value: option.value,
 }))
 const BLOCK_SELECTOR = 'p,div,h1,h2,h3,h4,h5,h6'
+/** 编辑模式页间隙（与预览模式 .a4-page + .a4-page 的 margin-top 保持一致） */
+const EDIT_PAGE_GAP = 16
 
 function exec(command: string, value?: string) {
   document.execCommand('styleWithCSS', false, 'true')
@@ -99,6 +101,10 @@ export function Preview({ value, onChange }: PreviewProps) {
     observer.observe(shell)
     return () => observer.disconnect()
   }, [showPrintPreview])
+
+  // 编辑模式分页计算
+  const editPageCount = Math.max(1, Math.ceil(editShellHeight / A4_RENDER_HEIGHT_PX))
+  const editTotalVisualHeight = editPageCount * A4_RENDER_HEIGHT_PX + (editPageCount - 1) * EDIT_PAGE_GAP
 
   const headerOrgFontSize = useMemo(
     () => getHeaderOrgFontSize(config.header.orgName, config.margins.left, config.margins.right),
@@ -263,10 +269,18 @@ export function Preview({ value, onChange }: PreviewProps) {
         <div
           className="preview-scale-frame"
           ref={editFrameRef}
-          style={{ height: `${editShellHeight * editScale}px` }}
+          style={{ height: `${editTotalVisualHeight * editScale}px` }}
         >
           <div className="preview-scale-content" style={{ transform: `scale(${editScale})` }}>
-            <div className="preview-page-shell" ref={shellRef}>
+            <div className="preview-page-shell" ref={shellRef} style={{ minHeight: `${editTotalVisualHeight}px` }}>
+              {/* 每页白色背景（含阴影） */}
+              {Array.from({ length: editPageCount }, (_, i) => (
+                <div
+                  key={`bg-${i}`}
+                  className="preview-edit-page-bg"
+                  style={{ top: `${i * (A4_RENDER_HEIGHT_PX + EDIT_PAGE_GAP)}px` }}
+                />
+              ))}
               <div className="preview-page-content a4-content">
                 {config.header.enabled && config.header.orgName && (
                   <div className={`preview-header-section ${config.header.mode === 'note' ? 'preview-header-section--note' : ''}`}>
@@ -302,11 +316,11 @@ export function Preview({ value, onChange }: PreviewProps) {
                 />
               </div>
               {/* 编辑模式页码：每页底部居中显示 */}
-              {Array.from({ length: Math.max(1, Math.ceil(editShellHeight / A4_RENDER_HEIGHT_PX)) }, (_, i) => (
+              {Array.from({ length: editPageCount }, (_, i) => (
                 <div
-                  key={i}
+                  key={`pn-${i}`}
                   className="a4-footer a4-footer-center"
-                  style={{ top: `${(i + 1) * A4_RENDER_HEIGHT_PX - A4_RENDER_HEIGHT_PX * 0.083}px` }}
+                  style={{ top: `${i * (A4_RENDER_HEIGHT_PX + EDIT_PAGE_GAP) + A4_RENDER_HEIGHT_PX * (1 - 0.083)}px` }}
                 >
                   — {i + 1} —
                 </div>
