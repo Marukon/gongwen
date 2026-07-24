@@ -195,12 +195,14 @@
   z-index: 3;
 }
 
-/* 编辑模式裁剪蒙版：内容只显示每页版心区域，页边距和间隙露出背景 */
+/* 编辑模式裁剪蒙版：内容只显示每页版心区域，页边距和间隙露出背景。
+   使用 1×1 而非 0×0，避免某些浏览器中零尺寸 SVG 不渲染 defs 内的 clipPath。 */
 .preview-edit-clip-svg {
   position: absolute;
-  width: 0;
-  height: 0;
+  width: 1px;
+  height: 1px;
   overflow: hidden;
+  visibility: hidden;
 }
 
 /* 编辑模式页码：文字阴影确保在内容上方可读 */
