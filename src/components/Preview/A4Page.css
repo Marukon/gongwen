@@ -138,6 +138,7 @@
   font-family: var(--h3-font, 'FangSong_GB2312'), 'FangSong', 'STFangsong', serif;
   font-size: var(--h3-size, 16pt);
   font-weight: normal;
+  text-align: justify;
   text-indent: var(--body-indent, 2em);
   line-height: var(--body-line-height, 29pt);
   margin: 0;
@@ -148,6 +149,7 @@
   font-family: var(--body-font, 'FangSong_GB2312'), 'FangSong', 'STFangsong', serif;
   font-size: var(--body-size, 16pt);
   font-weight: normal;
+  text-align: justify;
   text-indent: var(--body-indent, 2em);
   line-height: var(--body-line-height, 29pt);
   margin: 0;
