@@ -322,9 +322,21 @@ export function Preview({ value, onChange }: PreviewProps) {
                   key={`edge-b-${i}`}
                   className="preview-edit-page-edge"
                   style={{
-                    top: `${i * (A4_RENDER_HEIGHT_PX + EDIT_PAGE_GAP) + A4_RENDER_HEIGHT_PX - 100}px`,
-                    height: '100px',
-                    background: 'linear-gradient(to bottom, rgba(255,255,255,0) 0%, rgba(255,255,255,0.7) 40%, rgba(255,255,255,0.95) 100%)',
+                    top: `${i * (A4_RENDER_HEIGHT_PX + EDIT_PAGE_GAP) + A4_RENDER_HEIGHT_PX - 120}px`,
+                    height: '120px',
+                    background: 'linear-gradient(to bottom, rgba(255,255,255,0) 0%, rgba(255,255,255,1) 50%, rgba(255,255,255,1) 100%)',
+                  }}
+                />
+              ))}
+              {/* 页间隙遮挡：灰色背景，覆盖间隙中的文字 */}
+              {Array.from({ length: editPageCount - 1 }, (_, i) => (
+                <div
+                  key={`gap-${i}`}
+                  className="preview-edit-page-edge"
+                  style={{
+                    top: `${(i + 1) * A4_RENDER_HEIGHT_PX + i * EDIT_PAGE_GAP}px`,
+                    height: `${EDIT_PAGE_GAP}px`,
+                    background: '#f3f4f6',
                   }}
                 />
               ))}
@@ -335,8 +347,8 @@ export function Preview({ value, onChange }: PreviewProps) {
                   className="preview-edit-page-edge"
                   style={{
                     top: `${(i + 1) * (A4_RENDER_HEIGHT_PX + EDIT_PAGE_GAP)}px`,
-                    height: '50px',
-                    background: 'linear-gradient(to bottom, rgba(255,255,255,0.95) 0%, rgba(255,255,255,0.7) 60%, rgba(255,255,255,0) 100%)',
+                    height: '80px',
+                    background: 'linear-gradient(to bottom, rgba(255,255,255,1) 0%, rgba(255,255,255,1) 50%, rgba(255,255,255,0) 100%)',
                   }}
                 />
               ))}
