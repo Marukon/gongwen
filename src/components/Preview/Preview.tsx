@@ -103,6 +103,7 @@ export function Preview({ value, onChange }: PreviewProps) {
     return () => observer.disconnect()
   }, [showPrintPreview])
 
+  const marginTopPx = (config.margins.top / 21) * A4_RENDER_WIDTH_PX
   const marginBottomPx = (config.margins.bottom / 21) * A4_RENDER_WIDTH_PX
 
   // 编辑模式分页：内容高度除以单页高度（含 CSS padding，与页面背景 1123px 一一对应）
@@ -133,6 +134,7 @@ export function Preview({ value, onChange }: PreviewProps) {
       '--margin-left': `${cmToPagePercent(config.margins.left, 'x')}%`,
       '--margin-right': `${cmToPagePercent(config.margins.right, 'x')}%`,
       '--margin-bottom-y': `${cmToPagePercent(config.margins.bottom, 'y')}%`,
+      '--margin-top-px': `${marginTopPx}px`,
       '--margin-bottom-px': `${marginBottomPx}px`,
       '--title-font': config.title.fontFamily,
       '--title-size': `${config.title.fontSize}pt`,
@@ -285,7 +287,15 @@ export function Preview({ value, onChange }: PreviewProps) {
                   style={{ top: `${i * (A4_RENDER_HEIGHT_PX + EDIT_PAGE_GAP)}px` }}
                 />
               ))}
-              {/* 每页底部页边距渐变遮挡，避免文字与页码生硬重叠 */}
+              {/* 每页顶部页边距硬遮挡：盖住流入上页边距的文字，保证每页顶部留白一致 */}
+              {Array.from({ length: editPageCount }, (_, i) => (
+                <div
+                  key={`mt-${i}`}
+                  className="preview-edit-page-margin preview-edit-page-margin--top"
+                  style={{ top: `${i * (A4_RENDER_HEIGHT_PX + EDIT_PAGE_GAP)}px` }}
+                />
+              ))}
+              {/* 每页底部页边距硬遮挡：盖住进入下页边距的文字，避免与页码重叠 */}
               {Array.from({ length: editPageCount }, (_, i) => (
                 <div
                   key={`mb-${i}`}
