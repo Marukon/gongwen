@@ -209,22 +209,18 @@
   text-shadow: 0 0 4px #fff, 0 0 8px #fff, 0 0 12px #fff;
 }
 
-/* 编辑模式页边距遮挡：覆盖进入上下页边距的文字，模拟真实页边距 */
+/* 编辑模式底部页边距渐变遮挡：渐隐进入下页边距的文字，避免与页码生硬重叠 */
 .preview-edit-page-margin {
   position: absolute;
   left: 0;
   width: 794px;
-  background: #fff;
   z-index: 2;
   pointer-events: none;
 }
 
-.preview-edit-page-margin--top {
-  height: var(--margin-top-px, 140px);
-}
-
 .preview-edit-page-margin--bottom {
   height: var(--margin-bottom-px, 132px);
+  background: linear-gradient(to bottom, rgba(255, 255, 255, 0), rgba(255, 255, 255, 1));
 }
 
 .preview-page-content {

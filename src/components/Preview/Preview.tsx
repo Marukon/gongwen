@@ -103,8 +103,15 @@ export function Preview({ value, onChange }: PreviewProps) {
     return () => observer.disconnect()
   }, [showPrintPreview])
 
-  // 编辑模式分页计算
-  const editPageCount = Math.max(1, Math.ceil(editShellHeight / A4_RENDER_HEIGHT_PX))
+  // 编辑模式分页计算：按实际内容区域（扣除页边距）计算，避免页面不足导致内容被截断
+  const editContentAreaHeight = A4_RENDER_HEIGHT_PX - marginTopPx - marginBottomPx
+  const editPageCount = Math.max(
+    1,
+    Math.ceil(
+      (editShellHeight - marginTopPx - marginBottomPx + EDIT_PAGE_GAP) /
+        (editContentAreaHeight + EDIT_PAGE_GAP)
+    )
+  )
   const editTotalVisualHeight = editPageCount * A4_RENDER_HEIGHT_PX + (editPageCount - 1) * EDIT_PAGE_GAP
 
   const headerOrgFontSize = useMemo(
@@ -134,7 +141,6 @@ export function Preview({ value, onChange }: PreviewProps) {
       '--margin-left': `${cmToPagePercent(config.margins.left, 'x')}%`,
       '--margin-right': `${cmToPagePercent(config.margins.right, 'x')}%`,
       '--margin-bottom-y': `${cmToPagePercent(config.margins.bottom, 'y')}%`,
-      '--margin-top-px': `${marginTopPx}px`,
       '--margin-bottom-px': `${marginBottomPx}px`,
       '--title-font': config.title.fontFamily,
       '--title-size': `${config.title.fontSize}pt`,
@@ -287,15 +293,7 @@ export function Preview({ value, onChange }: PreviewProps) {
                   style={{ top: `${i * (A4_RENDER_HEIGHT_PX + EDIT_PAGE_GAP)}px` }}
                 />
               ))}
-              {/* 每页顶部页边距遮挡，防止文字进入上页边距 */}
-              {Array.from({ length: editPageCount }, (_, i) => (
-                <div
-                  key={`mt-${i}`}
-                  className="preview-edit-page-margin preview-edit-page-margin--top"
-                  style={{ top: `${i * (A4_RENDER_HEIGHT_PX + EDIT_PAGE_GAP)}px` }}
-                />
-              ))}
-              {/* 每页底部页边距遮挡，防止文字与页码重叠 */}
+              {/* 每页底部页边距渐变遮挡，避免文字与页码生硬重叠 */}
               {Array.from({ length: editPageCount }, (_, i) => (
                 <div
                   key={`mb-${i}`}
