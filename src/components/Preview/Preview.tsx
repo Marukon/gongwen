@@ -295,17 +295,33 @@ export function Preview({ value, onChange }: PreviewProps) {
               {Array.from({ length: editPageCount }, (_, i) => (
                 <div
                   key={`mt-${i}`}
-                  className="preview-edit-page-margin preview-edit-page-margin--top"
-                  style={{ top: `${i * (A4_RENDER_HEIGHT_PX + EDIT_PAGE_GAP)}px` }}
+                  className="preview-edit-page-margin"
+                  style={{
+                    position: 'absolute',
+                    left: 0,
+                    width: `${A4_RENDER_WIDTH_PX}px`,
+                    height: `${marginTopPx}px`,
+                    top: `${i * (A4_RENDER_HEIGHT_PX + EDIT_PAGE_GAP)}px`,
+                    background: '#fff',
+                    zIndex: 2,
+                    pointerEvents: 'none',
+                  }}
                 />
               ))}
               {/* 每页底部页边距遮挡：盖住进入下页边距的文字，避免与页码重叠 */}
               {Array.from({ length: editPageCount }, (_, i) => (
                 <div
                   key={`mb-${i}`}
-                  className="preview-edit-page-margin preview-edit-page-margin--bottom"
+                  className="preview-edit-page-margin"
                   style={{
+                    position: 'absolute',
+                    left: 0,
+                    width: `${A4_RENDER_WIDTH_PX}px`,
+                    height: `${marginBottomPx}px`,
                     top: `${i * (A4_RENDER_HEIGHT_PX + EDIT_PAGE_GAP) + A4_RENDER_HEIGHT_PX - marginBottomPx}px`,
+                    background: '#fff',
+                    zIndex: 2,
+                    pointerEvents: 'none',
                   }}
                 />
               ))}
@@ -351,8 +367,14 @@ export function Preview({ value, onChange }: PreviewProps) {
                   key={`gap-${i}`}
                   className="preview-edit-page-edge"
                   style={{
+                    position: 'absolute',
+                    left: 0,
+                    width: `${A4_RENDER_WIDTH_PX}px`,
                     top: `${(i + 1) * A4_RENDER_HEIGHT_PX + i * EDIT_PAGE_GAP}px`,
                     height: `${EDIT_PAGE_GAP}px`,
+                    background: '#f3f4f6',
+                    zIndex: 2,
+                    pointerEvents: 'none',
                   }}
                 />
               ))}
