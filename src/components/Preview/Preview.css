@@ -229,10 +229,12 @@
   box-sizing: border-box;
 }
 
-/* 编辑模式：覆盖 .a4-content 的 overflow:hidden 和固定 height，让内容自然撑开 */
+/* 编辑模式：覆盖 .a4-content 的 overflow:hidden、固定 height 和 flex 布局，让内容自然撑开 */
 .preview-page-content.a4-content {
   overflow: visible;
   height: auto;
+  display: block;
+  flex-direction: unset;
 }
 
 .preview-editor {

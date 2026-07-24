@@ -103,18 +103,10 @@ export function Preview({ value, onChange }: PreviewProps) {
     return () => observer.disconnect()
   }, [showPrintPreview])
 
-  const marginTopPx = (config.margins.top / 21) * A4_RENDER_WIDTH_PX
   const marginBottomPx = (config.margins.bottom / 21) * A4_RENDER_WIDTH_PX
 
-  // 编辑模式分页计算：按实际内容区域（扣除页边距）计算，避免页面不足导致内容被截断
-  const editContentAreaHeight = A4_RENDER_HEIGHT_PX - marginTopPx - marginBottomPx
-  const editPageCount = Math.max(
-    1,
-    Math.ceil(
-      (editShellHeight - marginTopPx - marginBottomPx + EDIT_PAGE_GAP) /
-        (editContentAreaHeight + EDIT_PAGE_GAP)
-    )
-  )
+  // 编辑模式分页：内容高度除以单页高度（含 CSS padding，与页面背景 1123px 一一对应）
+  const editPageCount = Math.max(1, Math.ceil(editShellHeight / A4_RENDER_HEIGHT_PX))
   const editTotalVisualHeight = editPageCount * A4_RENDER_HEIGHT_PX + (editPageCount - 1) * EDIT_PAGE_GAP
 
   const headerOrgFontSize = useMemo(
