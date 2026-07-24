@@ -5,7 +5,7 @@ import {
   TableAnchorType, RelativeHorizontalPosition, RelativeVerticalPosition, OverlapType,
 } from 'docx'
 import type { IRunOptions, IBorderOptions, IParagraphOptions } from 'docx'
-import type { GongwenAST, DocumentNode, AttachmentNode } from '../types/ast'
+import type { GongwenAST, DocumentNode, AttachmentNode, RichTextRun } from '../types/ast'
 import { NodeType } from '../types/ast'
 import type { DocumentConfig, PageNumberStyle } from '../types/documentConfig'
 import { cmToTwip, ptToTwip } from '../types/documentConfig'
@@ -221,6 +221,32 @@ function splitBoldFirstSentence(content: string, runStyle: Partial<IRunOptions>)
   ]
 }
 
+/** 将 AST 节点中的 runs 转换为 docx TextRun 数组，合并基础样式和 run 自身样式 */
+function runsToTextRuns(
+  runs: RichTextRun[],
+  baseRunStyle: Partial<IRunOptions>,
+): TextRun[] {
+  return runs
+    .filter((run) => run.text.length > 0)
+    .map((run) => {
+      const style: any = { ...baseRunStyle, text: run.text }
+      if (run.bold) style.bold = true
+      if (run.italic) style.italic = true
+      if (run.underline) style.underline = {}
+      if (run.fontFamily) {
+        style.font = {
+          ascii: run.fontFamily,
+          eastAsia: run.fontFamily,
+          hAnsi: run.fontFamily,
+        }
+      }
+      if (run.fontSize !== undefined) {
+        style.size = ptToTwip(run.fontSize) / 10
+      }
+      return new TextRun(style)
+    })
+}
+
 /**
  * 将附件说明节点转换为 DOCX 段落
  *
@@ -370,6 +396,11 @@ function nodeToParagraph(
   // 正文首句加粗
   if (node.type === NodeType.PARAGRAPH && config.specialOptions.boldFirstSentence) {
     return createParagraph(splitBoldFirstSentence(node.content, runStyle))
+  }
+
+  // 编辑器中手动加粗/斜体/下划线等：使用 runs 中的样式信息
+  if (node.runs && node.runs.length > 0 && node.runs.some((r) => r.bold || r.italic || r.underline || r.fontFamily || r.fontSize)) {
+    return createParagraph(runsToTextRuns(node.runs, runStyle))
   }
 
   return createParagraph([
