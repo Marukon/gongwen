@@ -301,7 +301,16 @@ export function Preview({ value, onChange }: PreviewProps) {
                   onKeyDown={handleKeyDown}
                 />
               </div>
-              <div className="a4-footer a4-footer-center">— 1 —</div>
+              {/* 编辑模式页码：每页底部居中显示 */}
+              {Array.from({ length: Math.max(1, Math.ceil(editShellHeight / A4_RENDER_HEIGHT_PX)) }, (_, i) => (
+                <div
+                  key={i}
+                  className="a4-footer a4-footer-center"
+                  style={{ top: `${(i + 1) * A4_RENDER_HEIGHT_PX - A4_RENDER_HEIGHT_PX * 0.083}px` }}
+                >
+                  — {i + 1} —
+                </div>
+              ))}
             </div>
           </div>
         </div>
