@@ -134,6 +134,8 @@ export function Preview({ value, onChange }: PreviewProps) {
       '--margin-left': `${cmToPagePercent(config.margins.left, 'x')}%`,
       '--margin-right': `${cmToPagePercent(config.margins.right, 'x')}%`,
       '--margin-bottom-y': `${cmToPagePercent(config.margins.bottom, 'y')}%`,
+      '--margin-top-px': `${marginTopPx}px`,
+      '--margin-bottom-px': `${marginBottomPx}px`,
       '--title-font': config.title.fontFamily,
       '--title-size': `${config.title.fontSize}pt`,
       '--title-line-height': `${config.title.lineSpacing}pt`,
@@ -277,32 +279,6 @@ export function Preview({ value, onChange }: PreviewProps) {
         >
           <div className="preview-scale-content" style={{ transform: `scale(${editScale})` }}>
             <div className="preview-page-shell" ref={shellRef} style={{ minHeight: `${editTotalVisualHeight}px` }}>
-              {/* 裁剪蒙版：让编辑内容只显示每页的版心区域 */}
-              <svg
-                width="0"
-                height="0"
-                viewBox={`0 0 ${A4_RENDER_WIDTH_PX} ${editTotalVisualHeight}`}
-                aria-hidden="true"
-                className="preview-edit-clip-svg"
-              >
-                <defs>
-                  <clipPath id="preview-edit-page-clip">
-                    {Array.from({ length: editPageCount }, (_, i) => {
-                      const pageTop = i * (A4_RENDER_HEIGHT_PX + EDIT_PAGE_GAP)
-                      const x1 = 0
-                      const y1 = pageTop + marginTopPx
-                      const x2 = A4_RENDER_WIDTH_PX
-                      const y2 = pageTop + A4_RENDER_HEIGHT_PX - marginBottomPx
-                      return (
-                        <polygon
-                          key={i}
-                          points={`${x1},${y1} ${x2},${y1} ${x2},${y2} ${x1},${y2}`}
-                        />
-                      )
-                    })}
-                  </clipPath>
-                </defs>
-              </svg>
               {/* 每页白色背景（含阴影） */}
               {Array.from({ length: editPageCount }, (_, i) => (
                 <div
@@ -311,10 +287,27 @@ export function Preview({ value, onChange }: PreviewProps) {
                   style={{ top: `${i * (A4_RENDER_HEIGHT_PX + EDIT_PAGE_GAP)}px` }}
                 />
               ))}
+              {/* 每页顶部页边距遮挡：盖住流入上页边距的文字 */}
+              {Array.from({ length: editPageCount }, (_, i) => (
+                <div
+                  key={`mt-${i}`}
+                  className="preview-edit-page-margin preview-edit-page-margin--top"
+                  style={{ top: `${i * (A4_RENDER_HEIGHT_PX + EDIT_PAGE_GAP)}px` }}
+                />
+              ))}
+              {/* 每页底部页边距遮挡：盖住进入下页边距的文字，避免与页码重叠 */}
+              {Array.from({ length: editPageCount }, (_, i) => (
+                <div
+                  key={`mb-${i}`}
+                  className="preview-edit-page-margin preview-edit-page-margin--bottom"
+                  style={{
+                    top: `${i * (A4_RENDER_HEIGHT_PX + EDIT_PAGE_GAP) + A4_RENDER_HEIGHT_PX - marginBottomPx}px`,
+                  }}
+                />
+              ))}
               <div
                 className="preview-page-content a4-content"
-                ref={contentRef}
-                style={{ clipPath: 'url(#preview-edit-page-clip)' }}>
+                ref={contentRef}>
                 {config.header.enabled && config.header.orgName && (
                   <div className={`preview-header-section ${config.header.mode === 'note' ? 'preview-header-section--note' : ''}`}>
                     <div className="a4-header-org" style={{ fontSize: `${headerOrgFontSize}pt` }}>
@@ -348,6 +341,17 @@ export function Preview({ value, onChange }: PreviewProps) {
                   onKeyDown={handleKeyDown}
                 />
               </div>
+              {/* 页间隙遮挡：灰色背景，覆盖间隙中的文字 */}
+              {Array.from({ length: editPageCount - 1 }, (_, i) => (
+                <div
+                  key={`gap-${i}`}
+                  className="preview-edit-page-edge"
+                  style={{
+                    top: `${(i + 1) * A4_RENDER_HEIGHT_PX + i * EDIT_PAGE_GAP}px`,
+                    height: `${EDIT_PAGE_GAP}px`,
+                  }}
+                />
+              ))}
               {/* 编辑模式页码：每页底部居中显示 */}
               {Array.from({ length: editPageCount }, (_, i) => (
                 <div
