@@ -278,9 +278,15 @@ export function Preview({ value, onChange }: PreviewProps) {
           <div className="preview-scale-content" style={{ transform: `scale(${editScale})` }}>
             <div className="preview-page-shell" ref={shellRef} style={{ minHeight: `${editTotalVisualHeight}px` }}>
               {/* 裁剪蒙版：让编辑内容只显示每页的版心区域 */}
-              <svg width="0" height="0" aria-hidden="true" className="preview-edit-clip-svg">
+              <svg
+                width="0"
+                height="0"
+                viewBox={`0 0 ${A4_RENDER_WIDTH_PX} ${editTotalVisualHeight}`}
+                aria-hidden="true"
+                className="preview-edit-clip-svg"
+              >
                 <defs>
-                  <clipPath id="preview-edit-page-clip" clipPathUnits="userSpaceOnUse">
+                  <clipPath id="preview-edit-page-clip">
                     {Array.from({ length: editPageCount }, (_, i) => {
                       const pageTop = i * (A4_RENDER_HEIGHT_PX + EDIT_PAGE_GAP)
                       const x1 = 0
