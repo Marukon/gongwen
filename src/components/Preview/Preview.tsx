@@ -19,8 +19,6 @@ const FONT_SIZE_OPTIONS_CN = FONT_SIZE_OPTIONS.map((option) => ({
   value: option.value,
 }))
 const BLOCK_SELECTOR = 'p,div,h1,h2,h3,h4,h5,h6'
-/** 编辑模式页间隙（与预览模式 .a4-page + .a4-page 的 margin-top 保持一致） */
-const EDIT_PAGE_GAP = 16
 
 function exec(command: string, value?: string) {
   document.execCommand('styleWithCSS', false, 'true')
@@ -77,7 +75,6 @@ export function Preview({ value, onChange }: PreviewProps) {
   const { config } = useDocumentConfig()
   const editorRef = useRef<HTMLDivElement>(null)
   const shellRef = useRef<HTMLDivElement>(null)
-  const contentRef = useRef<HTMLDivElement>(null)
   const syncingRef = useRef(false)
   const [currentFont, setCurrentFont] = useState(FONT_FAMILY_OPTIONS[0])
   const [currentFontSize, setCurrentFontSize] = useState(FONT_SIZE_OPTIONS_CN[3]?.value ?? 16)
@@ -87,32 +84,6 @@ export function Preview({ value, onChange }: PreviewProps) {
   const [pageCount, setPageCount] = useState(0)
   // 编辑模式同样以真实 A4 尺寸渲染，再整体缩放适配
   const { frameRef: editFrameRef, scale: editScale } = useFitScale(A4_RENDER_WIDTH_PX)
-  // 编辑模式：动态跟踪页面实际高度（内容可能超过一页）
-  const [editShellHeight, setEditShellHeight] = useState(A4_RENDER_HEIGHT_PX)
-
-  useEffect(() => {
-    const content = contentRef.current
-    if (!content || showPrintPreview) return
-    const measure = () => {
-      const h = content.scrollHeight
-      if (h > 0) setEditShellHeight(h)
-    }
-    const observer = new ResizeObserver(measure)
-    observer.observe(content)
-    measure()
-    return () => observer.disconnect()
-  }, [showPrintPreview])
-
-  const marginTopPx = (config.margins.top / 21) * A4_RENDER_WIDTH_PX
-  const marginBottomPx = (config.margins.bottom / 21) * A4_RENDER_WIDTH_PX
-
-  // 编辑模式分页：按版心净高度计算，避免把页边距 padding 也当成内容高度
-  const contentAreaHeight = A4_RENDER_HEIGHT_PX - marginTopPx - marginBottomPx
-  const editPageCount = Math.max(
-    1,
-    Math.ceil((editShellHeight - marginTopPx - marginBottomPx) / contentAreaHeight),
-  )
-  const editTotalVisualHeight = editPageCount * A4_RENDER_HEIGHT_PX + (editPageCount - 1) * EDIT_PAGE_GAP
 
   const headerOrgFontSize = useMemo(
     () => getHeaderOrgFontSize(config.header.orgName, config.margins.left, config.margins.right),
@@ -138,8 +109,6 @@ export function Preview({ value, onChange }: PreviewProps) {
       '--margin-left': `${cmToPagePercent(config.margins.left, 'x')}%`,
       '--margin-right': `${cmToPagePercent(config.margins.right, 'x')}%`,
       '--margin-bottom-y': `${cmToPagePercent(config.margins.bottom, 'y')}%`,
-      '--margin-top-px': `${marginTopPx}px`,
-      '--margin-bottom-px': `${marginBottomPx}px`,
       '--title-font': config.title.fontFamily,
       '--title-size': `${config.title.fontSize}pt`,
       '--title-line-height': `${config.title.lineSpacing}pt`,
@@ -279,115 +248,50 @@ export function Preview({ value, onChange }: PreviewProps) {
         <div
           className="preview-scale-frame"
           ref={editFrameRef}
-          style={{ height: `${editTotalVisualHeight * editScale}px` }}
+          style={{ height: `${A4_RENDER_HEIGHT_PX * editScale}px` }}
         >
           <div className="preview-scale-content" style={{ transform: `scale(${editScale})` }}>
-            <div className="preview-page-shell" ref={shellRef} style={{ minHeight: `${editTotalVisualHeight}px` }}>
-              {/* 每页白色背景（含阴影） */}
-              {Array.from({ length: editPageCount }, (_, i) => (
+            <div className="preview-page-shell" ref={shellRef}>
+              <div className="preview-page-paper">
                 <div
-                  key={`bg-${i}`}
-                  className="preview-edit-page-bg"
-                  style={{ top: `${i * (A4_RENDER_HEIGHT_PX + EDIT_PAGE_GAP)}px` }}
-                />
-              ))}
-              {/* 每页顶部页边距遮挡：盖住流入上页边距的文字 */}
-              {Array.from({ length: editPageCount }, (_, i) => (
-                <div
-                  key={`mt-${i}`}
-                  className="preview-edit-page-margin"
-                  style={{
-                    position: 'absolute',
-                    left: 0,
-                    width: `${A4_RENDER_WIDTH_PX}px`,
-                    height: `${marginTopPx}px`,
-                    top: `${i * (A4_RENDER_HEIGHT_PX + EDIT_PAGE_GAP)}px`,
-                    background: '#fff',
-                    zIndex: 2,
-                    pointerEvents: 'none',
-                  }}
-                />
-              ))}
-              {/* 每页底部页边距遮挡：盖住进入下页边距的文字，避免与页码重叠 */}
-              {Array.from({ length: editPageCount }, (_, i) => (
-                <div
-                  key={`mb-${i}`}
-                  className="preview-edit-page-margin"
-                  style={{
-                    position: 'absolute',
-                    left: 0,
-                    width: `${A4_RENDER_WIDTH_PX}px`,
-                    height: `${marginBottomPx}px`,
-                    top: `${i * (A4_RENDER_HEIGHT_PX + EDIT_PAGE_GAP) + A4_RENDER_HEIGHT_PX - marginBottomPx}px`,
-                    background: '#fff',
-                    zIndex: 2,
-                    pointerEvents: 'none',
-                  }}
-                />
-              ))}
-              <div
-                className="preview-page-content a4-content"
-                ref={contentRef}>
-                {config.header.enabled && config.header.orgName && (
-                  <div className={`preview-header-section ${config.header.mode === 'note' ? 'preview-header-section--note' : ''}`}>
-                    <div className="a4-header-org" style={{ fontSize: `${headerOrgFontSize}pt` }}>
-                      {headerOrgChars.map((char, index) => (
-                        <span key={`${char}-${index}`} className="a4-header-org-char">
-                          {char === ' ' ? '\u00a0' : char}
-                        </span>
-                      ))}
-                    </div>
-                    {config.header.mode === 'formal' && (config.header.docNumber || config.header.signer) && (
-                      <div className={`a4-header-meta${config.header.signer ? ' a4-header-meta--with-signer' : ''}`}>
-                        <span>{config.header.docNumber}</span>
-                        {config.header.signer && (
-                          <span>
-                            <span className="a4-header-signer-label">签发人：</span>
-                            <span className="a4-header-signer-name">{config.header.signer}</span>
+                  className="preview-page-content a4-content">
+                  {config.header.enabled && config.header.orgName && (
+                    <div className={`preview-header-section ${config.header.mode === 'note' ? 'preview-header-section--note' : ''}`}>
+                      <div className="a4-header-org" style={{ fontSize: `${headerOrgFontSize}pt` }}>
+                        {headerOrgChars.map((char, index) => (
+                          <span key={`${char}-${index}`} className="a4-header-org-char">
+                            {char === ' ' ? '\u00a0' : char}
                           </span>
-                        )}
+                        ))}
                       </div>
-                    )}
-                    <div className="a4-header-separator"></div>
-                  </div>
-                )}
-                <div
-                  ref={editorRef}
-                  className="preview-editor"
-                  contentEditable
-                  suppressContentEditableWarning
-                  onInput={emitChange}
-                  onBlur={emitChange}
-                  onKeyDown={handleKeyDown}
-                />
-              </div>
-              {/* 页间隙遮挡：灰色背景，覆盖间隙中的文字 */}
-              {Array.from({ length: editPageCount - 1 }, (_, i) => (
-                <div
-                  key={`gap-${i}`}
-                  className="preview-edit-page-edge"
-                  style={{
-                    position: 'absolute',
-                    left: 0,
-                    width: `${A4_RENDER_WIDTH_PX}px`,
-                    top: `${(i + 1) * A4_RENDER_HEIGHT_PX + i * EDIT_PAGE_GAP}px`,
-                    height: `${EDIT_PAGE_GAP}px`,
-                    background: '#f3f4f6',
-                    zIndex: 2,
-                    pointerEvents: 'none',
-                  }}
-                />
-              ))}
-              {/* 编辑模式页码：每页底部居中显示 */}
-              {Array.from({ length: editPageCount }, (_, i) => (
-                <div
-                  key={`pn-${i}`}
-                  className="a4-footer a4-footer-center"
-                  style={{ top: `${i * (A4_RENDER_HEIGHT_PX + EDIT_PAGE_GAP) + A4_RENDER_HEIGHT_PX * (1 - 0.083)}px` }}
-                >
-                  — {i + 1} —
+                      {config.header.mode === 'formal' && (config.header.docNumber || config.header.signer) && (
+                        <div className={`a4-header-meta${config.header.signer ? ' a4-header-meta--with-signer' : ''}`}>
+                          <span>{config.header.docNumber}</span>
+                          {config.header.signer && (
+                            <span>
+                              <span className="a4-header-signer-label">签发人：</span>
+                              <span className="a4-header-signer-name">{config.header.signer}</span>
+                            </span>
+                          )}
+                        </div>
+                      )}
+                      <div className="a4-header-separator"></div>
+                    </div>
+                  )}
+                  <div
+                    ref={editorRef}
+                    className="preview-editor"
+                    contentEditable
+                    suppressContentEditableWarning
+                    onInput={emitChange}
+                    onBlur={emitChange}
+                    onKeyDown={handleKeyDown}
+                  />
                 </div>
-              ))}
+                <div className="a4-footer a4-footer-center">
+                  — 1 —
+                </div>
+              </div>
             </div>
           </div>
         </div>

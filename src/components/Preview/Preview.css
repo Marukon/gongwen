@@ -175,57 +175,24 @@
   margin: 0 auto;
 }
 
-/* 编辑模式每页白色背景（含阴影），绝对定位在对应页位置 */
-.preview-edit-page-bg {
-  position: absolute;
-  left: 0;
+/* 单页 A4 纸张容器：固定真实尺寸，带阴影和圆角，提供清晰纸张边界 */
+.preview-page-paper {
+  position: relative;
   width: 794px;
-  height: 1123px;
+  min-height: 1123px;
   background: #fff;
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
   border-radius: 2px;
-  z-index: 0;
+  overflow: hidden;
 }
 
-/* 编辑模式页码：绝对定位到每页底部 */
-.preview-page-shell .a4-footer {
+/* 编辑模式页码：绝对定位到纸张底部 */
+.preview-page-paper .a4-footer {
   position: absolute;
   left: var(--margin-left, 13.33%);
   right: var(--margin-right, 12.38%);
   z-index: 3;
-}
-
-/* 编辑模式页码：文字阴影确保在内容上方可读 */
-.preview-page-shell .a4-footer {
   text-shadow: 0 0 4px #fff, 0 0 8px #fff, 0 0 12px #fff;
-}
-
-/* 编辑模式页边距硬遮挡：只覆盖真正的页边距区域，版心内正文保持完整可见 */
-.preview-edit-page-margin {
-  position: absolute;
-  left: 0;
-  width: 794px;
-  background: #fff;
-  z-index: 2;
-  pointer-events: none;
-}
-
-.preview-edit-page-margin--top {
-  height: var(--margin-top-px, 140px);
-}
-
-.preview-edit-page-margin--bottom {
-  height: var(--margin-bottom-px, 132px);
-}
-
-/* 页边缘遮挡：覆盖页间隙处的文字 */
-.preview-edit-page-edge {
-  position: absolute;
-  left: 0;
-  width: 794px;
-  background: #f3f4f6;
-  z-index: 2;
-  pointer-events: none;
 }
 
 .preview-page-content {
