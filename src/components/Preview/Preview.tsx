@@ -116,6 +116,9 @@ export function Preview({ value, onChange }: PreviewProps) {
     [config.header.orgName],
   )
 
+  const marginTopPx = (config.margins.top / 21) * A4_RENDER_WIDTH_PX
+  const marginBottomPx = (config.margins.bottom / 21) * A4_RENDER_WIDTH_PX
+
   const cssVars = useMemo((): CSSProperties => {
     const pageWidthPx = 595
     const marginLeftPx = (config.margins.left / 21) * pageWidthPx
@@ -131,6 +134,8 @@ export function Preview({ value, onChange }: PreviewProps) {
       '--margin-left': `${cmToPagePercent(config.margins.left, 'x')}%`,
       '--margin-right': `${cmToPagePercent(config.margins.right, 'x')}%`,
       '--margin-bottom-y': `${cmToPagePercent(config.margins.bottom, 'y')}%`,
+      '--margin-top-px': `${marginTopPx}px`,
+      '--margin-bottom-px': `${marginBottomPx}px`,
       '--title-font': config.title.fontFamily,
       '--title-size': `${config.title.fontSize}pt`,
       '--title-line-height': `${config.title.lineSpacing}pt`,
@@ -280,6 +285,24 @@ export function Preview({ value, onChange }: PreviewProps) {
                   key={`bg-${i}`}
                   className="preview-edit-page-bg"
                   style={{ top: `${i * (A4_RENDER_HEIGHT_PX + EDIT_PAGE_GAP)}px` }}
+                />
+              ))}
+              {/* 每页顶部页边距遮挡，防止文字进入上页边距 */}
+              {Array.from({ length: editPageCount }, (_, i) => (
+                <div
+                  key={`mt-${i}`}
+                  className="preview-edit-page-margin preview-edit-page-margin--top"
+                  style={{ top: `${i * (A4_RENDER_HEIGHT_PX + EDIT_PAGE_GAP)}px` }}
+                />
+              ))}
+              {/* 每页底部页边距遮挡，防止文字与页码重叠 */}
+              {Array.from({ length: editPageCount }, (_, i) => (
+                <div
+                  key={`mb-${i}`}
+                  className="preview-edit-page-margin preview-edit-page-margin--bottom"
+                  style={{
+                    top: `${i * (A4_RENDER_HEIGHT_PX + EDIT_PAGE_GAP) + A4_RENDER_HEIGHT_PX - marginBottomPx}px`,
+                  }}
                 />
               ))}
               <div className="preview-page-content a4-content" ref={contentRef}>

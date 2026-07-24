@@ -209,6 +209,24 @@
   text-shadow: 0 0 4px #fff, 0 0 8px #fff, 0 0 12px #fff;
 }
 
+/* 编辑模式页边距遮挡：覆盖进入上下页边距的文字，模拟真实页边距 */
+.preview-edit-page-margin {
+  position: absolute;
+  left: 0;
+  width: 794px;
+  background: #fff;
+  z-index: 2;
+  pointer-events: none;
+}
+
+.preview-edit-page-margin--top {
+  height: var(--margin-top-px, 140px);
+}
+
+.preview-edit-page-margin--bottom {
+  height: var(--margin-bottom-px, 132px);
+}
+
 .preview-page-content {
   position: relative;
   z-index: 1;
