@@ -138,6 +138,8 @@ export function PrintPreview({ ast, config, onPageCountChange }: PrintPreviewPro
     boldFirstSentence: config.specialOptions.boldFirstSentence,
     boldHeading3: config.specialOptions.boldHeading3,
     hasStamp: config.specialOptions.hasStamp,
+    signatureName: config.specialOptions.signatureName,
+    signatureDate: config.specialOptions.signatureDate,
   }
 
   return (
@@ -185,42 +187,10 @@ export function PrintPreview({ ast, config, onPageCountChange }: PrintPreviewPro
               hasStamp={config.specialOptions.hasStamp}
               hasTitleNameDate={config.specialOptions.hasTitleNameDate}
               headerOrgFontSize={headerOrgFontSize}
+              signatureName={config.specialOptions.signatureName}
+              signatureDate={config.specialOptions.signatureDate}
             />
           ))}
-          {/* 落款：紧跟在最后一页之后 */}
-          {(config.specialOptions.signatureName || config.specialOptions.signatureDate) && (() => {
-              const cv = cssVars as Record<string, string>
-              const pad = [cv['--margin-top'], cv['--margin-right'], cv['--margin-bottom'], cv['--margin-left']].join(' ')
-              return (
-            <div className="print-preview-signature" style={{ width: `${A4_RENDER_WIDTH_PX}px`, margin: '0 auto', padding: pad, boxSizing: 'border-box', background: '#fff', boxShadow: '0 2px 12px rgba(0,0,0,0.1)', borderRadius: '2px' }}>
-              {(() => {
-                // 计算三个空行高度
-                const bodyLinePx = config.body.lineSpacing * (96 / 72) // pt → px
-                return <div style={{ marginTop: `${bodyLinePx * 3}px` }} />
-              })()}
-{(() => {
-                const dateS = (config.specialOptions.signatureDate || '').trim()
-                const nameS = config.specialOptions.signatureName || ''
-                const dateLen = [...dateS].filter(c => !/[\u4e00-\u9fff]/.test(c)).length * 0.5
-                  + [...dateS].filter(c => /[\u4e00-\u9fff]/.test(c)).length
-                const nameLen = nameS.length
-                const baseRightEm = (dateLen > nameLen + 2) ? 5 : 4
-              return <>
-                  {nameS && (
-                    <p style={{ fontFamily: config.body.fontFamily, fontSize: `${config.body.fontSize}pt`, textAlign: 'right', paddingRight: `${baseRightEm}em`, lineHeight: `${config.body.lineSpacing}pt`, margin: 0 }}>
-                      {nameS}
-                    </p>
-                  )}
-                  {dateS && (
-                    <p style={{ fontFamily: config.body.fontFamily, fontSize: `${config.body.fontSize}pt`, textAlign: 'right', paddingRight: `${baseRightEm}em`, lineHeight: `${config.body.lineSpacing}pt`, margin: 0 }}>
-                      {dateS}
-                    </p>
-                  )}
-                </>
-            })()}
-            </div>
-            )
-            })()}
         </div>
       </div>
     </div>

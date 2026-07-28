@@ -93,9 +93,16 @@ export function renderA4Header(headerConfig: HeaderConfig, fontSizePt?: number):
   const isFormal = headerConfig.mode === 'formal'
   const hasMeta = isFormal && !!(headerConfig.docNumber || headerConfig.signer)
   const displayName = isFormal ? `${headerConfig.orgName}文件` : headerConfig.orgName
+  const chars = Array.from(displayName)
   return (
     <div className={`a4-header-section${!isFormal ? ' a4-header-section--note' : ''}`}>
-      <div className="a4-header-org" style={fontSizePt ? { fontSize: `${fontSizePt}pt` } : undefined}>{displayName}</div>
+      <div className="a4-header-org" style={fontSizePt ? { fontSize: `${fontSizePt}pt` } : undefined}>
+        {chars.map((char, index) => (
+          <span key={`${char}-${index}`} className="a4-header-org-char">
+            {char === ' ' ? '\u00a0' : char}
+          </span>
+        ))}
+      </div>
       {hasMeta && (
         <div className={`a4-header-meta${headerConfig.signer ? ' a4-header-meta--with-signer' : ''}`}>
           <span>{headerConfig.docNumber}</span>
@@ -169,11 +176,33 @@ export interface A4ContentRenderOptions {
   boldFirstSentence: boolean
   boldHeading3: boolean
   hasStamp: boolean
+  /** 落款人（发文机关署名），有值则在正文末尾渲染落款 */
+  signatureName?: string
+  /** 落款日期 */
+  signatureDate?: string
+}
+
+/** 估算文本宽度（em）：中文 1，其他 0.5 */
+function estimateTextEm(text: string): number {
+  let w = 0
+  for (const c of text) {
+    w += /[\u4e00-\u9fff\uff01-\uff5e\u3000-\u303f]/.test(c) ? 1 : 0.5
+  }
+  return w
+}
+
+/** 计算落款右空（em）：署名右空 4 字，日期长于署名 2 字以上则右空 5 字；日期居中于署名 */
+export function getSignatureIndents(nameText: string, dateText: string): { nameIndentEm: number; dateIndentEm: number } {
+  const nameW = nameText ? estimateTextEm(nameText) : 0
+  const dateW = dateText ? estimateTextEm(dateText) : 0
+  const dateIndentEm = dateW > nameW + 2 ? 5 : 4
+  const nameIndentEm = Math.max(0, dateIndentEm + (dateW - nameW) / 2)
+  return { nameIndentEm, dateIndentEm }
 }
 
 /** 渲染标题 + 正文流（不含版头/版记外壳） */
 export function renderA4Content(opts: A4ContentRenderOptions): React.ReactNode {
-  const { title, body, hasTitleNameDate, boldFirstSentence, boldHeading3, hasStamp } = opts
+  const { title, body, hasTitleNameDate, boldFirstSentence, boldHeading3, hasStamp, signatureName, signatureDate } = opts
   return (
     <>
       {title && (
@@ -184,9 +213,9 @@ export function renderA4Content(opts: A4ContentRenderOptions): React.ReactNode {
       {body.flatMap((node, index) => {
         const elements: React.ReactNode[] = []
 
-        // 发文机关署名前插入 2 个空行
+        // 发文机关署名前插入 3 个空行
         if (node.type === NodeType.SIGNATURE) {
-          for (let j = 0; j < 2; j++) {
+          for (let j = 0; j < 3; j++) {
             elements.push(
               <p key={`empty-${node.lineNumber}-${j}`} className="a4-empty-line">{'\u200B'}</p>
             )
@@ -253,6 +282,27 @@ export function renderA4Content(opts: A4ContentRenderOptions): React.ReactNode {
 
         return elements
       })}
+      {/* 落款（发文机关署名 + 成文日期）：空三行，署名右空 4-5 字，日期居中于署名 */}
+      {(signatureName || signatureDate) && (() => {
+        const { nameIndentEm, dateIndentEm } = getSignatureIndents(signatureName ?? '', signatureDate ?? '')
+        return (
+          <>
+            {[0, 1, 2].map((j) => (
+              <p key={`sig-empty-${j}`} className="a4-empty-line">{'\u200B'}</p>
+            ))}
+            {signatureName && (
+              <p className="a4-paragraph" style={{ textAlign: 'right', paddingRight: `${nameIndentEm}em` }}>
+                {signatureName}
+              </p>
+            )}
+            {signatureDate && (
+              <p className="a4-paragraph" style={{ textAlign: 'right', paddingRight: `${dateIndentEm}em` }}>
+                {signatureDate}
+              </p>
+            )}
+          </>
+        )
+      })()}
       {!title && body.length === 0 && (
         <p className="a4-placeholder">预览区域</p>
       )}
@@ -447,6 +497,10 @@ interface A4PageProps {
   hasTitleNameDate: boolean
   /** 版头中发文机关标志的字体大小(pt)，未传则使用 CSS 默认 */
   headerOrgFontSize?: number
+  /** 落款人（发文机关署名），有值则在正文末尾渲染落款 */
+  signatureName?: string
+  /** 落款日期 */
+  signatureDate?: string
 }
 
 function ensureChinesePeriod(text: string): string {
@@ -473,6 +527,8 @@ export const A4Page = memo(function A4Page({
   hasStamp,
   hasTitleNameDate,
   headerOrgFontSize,
+  signatureName,
+  signatureDate,
 }: A4PageProps) {
   /**
    * 计算节点的动态样式
@@ -486,7 +542,7 @@ export const A4Page = memo(function A4Page({
         {isFirstPage && renderA4Header(headerConfig, headerOrgFontSize)}
         <div className="a4-content-viewport" style={{ height: `${clipHeight}px` }}>
           <div style={{ transform: `translateY(-${offsetY}px)` }}>
-            {renderA4Content({ title, body, hasTitleNameDate, boldFirstSentence, boldHeading3, hasStamp })}
+            {renderA4Content({ title, body, hasTitleNameDate, boldFirstSentence, boldHeading3, hasStamp, signatureName, signatureDate })}
           </div>
         </div>
       </div>

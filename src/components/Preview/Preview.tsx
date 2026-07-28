@@ -5,7 +5,7 @@ import { normalizeEditorHtml } from '../../utils/richText'
 import { useDocumentParser } from '../../hooks/useDocumentParser'
 import { useFitScale } from '../../hooks/useFitScale'
 import { PrintPreview } from './PrintPreview'
-import { renderA4FooterNote } from './A4Page'
+import { renderA4FooterNote, getSignatureIndents } from './A4Page'
 import './A4Page.css'
 import './Preview.css'
 
@@ -297,27 +297,29 @@ export function Preview({ value, onChange }: PreviewProps) {
                   />
                 </div>
                 {renderA4FooterNote(config.footerNote)}
-                {/* 落款：GB/T 9704 标准，发文机关署名与成文日期均右空四字成一行对齐 */}
+                {/* 落款：空三行，署名右空 4-5 字，日期居中于署名 */}
                 {(config.specialOptions.signatureName || config.specialOptions.signatureDate) && (() => {
-                  const bodyLinePx = config.body.lineSpacing * (96 / 72)
                   const dateS = (config.specialOptions.signatureDate || '').trim()
-                  const nameS = config.specialOptions.signatureName || ''
-                  // 计算日期成文预计宽度（中文 1em, 数字 0.5em），
-                  // 当日期长度 > 落款人 2 字时采用 5 字右空，否则 4 字
-                  const dateLen = [...dateS].filter(c => !/[\u4e00-\u9fff]/.test(c)).length * 0.5
-                    + [...dateS].filter(c => /[\u4e00-\u9fff]/.test(c)).length
-                  const nameLen = nameS.length
-                  const baseRightEm = (dateLen > nameLen + 2) ? 5 : 4
+                  const nameS = (config.specialOptions.signatureName || '').trim()
+                  const { nameIndentEm, dateIndentEm } = getSignatureIndents(nameS, dateS)
+                  const lineStyle: CSSProperties = {
+                    fontFamily: config.body.fontFamily,
+                    fontSize: `${config.body.fontSize}pt`,
+                    lineHeight: `${config.body.lineSpacing}pt`,
+                    margin: 0,
+                  }
                   return (
                     <div className="a4-signature-area">
-                      <div style={{ height: `${bodyLinePx * 3}px` }} />
+                      {[0, 1, 2].map((j) => (
+                        <p key={`sig-empty-${j}`} style={{ ...lineStyle, height: `${config.body.lineSpacing}pt` }}>{'\u00A0'}</p>
+                      ))}
                       {nameS && (
-                        <p style={{ fontFamily: config.body.fontFamily, fontSize: `${config.body.fontSize}pt`, textAlign: 'right', paddingRight: `${baseRightEm}em`, lineHeight: `${config.body.lineSpacing}pt`, margin: 0 }}>
+                        <p style={{ ...lineStyle, textAlign: 'right', paddingRight: `${nameIndentEm}em` }}>
                           {nameS}
                         </p>
                       )}
                       {dateS && (
-                        <p style={{ fontFamily: config.body.fontFamily, fontSize: `${config.body.fontSize}pt`, textAlign: 'right', paddingRight: `${baseRightEm}em`, lineHeight: `${config.body.lineSpacing}pt`, margin: 0 }}>
+                        <p style={{ ...lineStyle, textAlign: 'right', paddingRight: `${dateIndentEm}em` }}>
                           {dateS}
                         </p>
                       )}

@@ -430,13 +430,17 @@ export function buildDocument(ast: GongwenAST, config: DocumentConfig): Document
     const oneCharIndent = ptToTwip(config.body.fontSize)
     const orgDisplayName = isFormal ? `${config.header.orgName}文件` : config.header.orgName
 
-    // 1. 发文机关标志：红色居中大字
+    // 1. 发文机关标志：红色大字，分散对齐撑满版心，字号按名称长度计算（GB/T 9704 7.2.4）
+    const orgChars = Array.from(orgDisplayName).length
+    const availableMm = 210 - config.margins.left * 10 - config.margins.right * 10
+    const headerOrgSizePt = Math.max(18, Math.min(30, Math.floor((availableMm * 72 / 25.4) / orgChars)))
     children.push(new Paragraph({
-      alignment: AlignmentType.CENTER,
+      alignment: AlignmentType.DISTRIBUTE,
+      spacing: { line: ptToTwip(headerOrgSizePt * 1.2), lineRule: LineRuleType.EXACT },
       children: [new TextRun({
         text: orgDisplayName,
         font: { ascii: 'Times New Roman', eastAsia: '方正小标宋_GBK', hAnsi: 'Times New Roman', cs: 'Times New Roman' },
-        size: 60, // 30pt
+        size: headerOrgSizePt * 2,
         color: 'E00000',
       })],
     }))
@@ -648,18 +652,21 @@ export function buildDocument(ast: GongwenAST, config: DocumentConfig): Document
       }))
     }
 
-    // 计算右空量：
-    // 默认右空 4 字；如果日期太长（预估长度 > 署名宽度 + 2 字），改为右空 5 字
-    const dateLen = dateText ? [...dateText].filter(c => !/[\u4e00-\u9fff]/.test(c)).length * 0.5
-      + [...dateText].filter(c => /[\u4e00-\u9fff]/.test(c)).length : 0
-    const nameLen = nameText ? nameText.length : 0
-    const rightIndentChars = (dateLen > nameLen + 2) ? 5 : 4
-    const rightIndent = oneCharWidth * rightIndentChars
+    // 署名右空 4 字（日期长于署名 2 字以上则 5 字），日期居中于署名（中线对齐）
+    const estimateEm = (t: string) => {
+      let w = 0
+      for (const c of t) w += /[\u4e00-\u9fff\uff01-\uff5e\u3000-\u303f]/.test(c) ? 1 : 0.5
+      return w
+    }
+    const dateW = dateText ? estimateEm(dateText) : 0
+    const nameW = nameText ? estimateEm(nameText) : 0
+    const dateIndentChars = dateW > nameW + 2 ? 5 : 4
+    const nameIndentChars = Math.max(0, dateIndentChars + (dateW - nameW) / 2)
 
     // 发文机关署名
     children.push(new Paragraph({
       alignment: AlignmentType.RIGHT,
-      indent: { right: rightIndent },
+      indent: { right: Math.round(oneCharWidth * nameIndentChars) },
       spacing: { line: bodyLineSpacing, lineRule: LineRuleType.EXACT, before: 0, after: 0 },
       children: nameText ? [
         new TextRun({ ...sigRunOptions, text: nameText }),
@@ -669,7 +676,7 @@ export function buildDocument(ast: GongwenAST, config: DocumentConfig): Document
     // 成文日期（不添加括号）
     children.push(new Paragraph({
       alignment: AlignmentType.RIGHT,
-      indent: { right: rightIndent },
+      indent: { right: Math.round(oneCharWidth * dateIndentChars) },
       spacing: { line: bodyLineSpacing, lineRule: LineRuleType.EXACT, before: 0, after: 0 },
       children: dateText ? [
         new TextRun({ ...dateRunOptions, text: dateText }),
@@ -859,6 +866,8 @@ export function buildDocument(ast: GongwenAST, config: DocumentConfig): Document
     sections: [
       {
         properties: {
+          // 首页无页码：启用首页独立页脚（first footer 为空）
+          titlePage: config.specialOptions.showPageNumber && config.specialOptions.firstPageNoNumber,
           page: {
             size: {
               width: 11906, // A4: 210mm
