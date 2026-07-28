@@ -181,8 +181,11 @@ export function PrintPreview({ ast, config, onPageCountChange }: PrintPreviewPro
             />
           ))}
           {/* 落款：紧跟在最后一页之后 */}
-          {(config.specialOptions.signatureName || config.specialOptions.signatureDate) && (
-            <div className="print-preview-signature" style={{ width: `${A4_RENDER_WIDTH_PX}px`, margin: '0 auto', padding: `${cssVars['--margin-top']} ${cssVars['--margin-right']} ${cssVars['--margin-bottom']} ${cssVars['--margin-left']}`, boxSizing: 'border-box', background: '#fff', boxShadow: '0 2px 12px rgba(0,0,0,0.1)', borderRadius: '2px' }}>
+          {(config.specialOptions.signatureName || config.specialOptions.signatureDate) && (() => {
+              const cv = cssVars as Record<string, string>
+              const pad = [cv['--margin-top'], cv['--margin-right'], cv['--margin-bottom'], cv['--margin-left']].join(' ')
+              return (
+            <div className="print-preview-signature" style={{ width: `${A4_RENDER_WIDTH_PX}px`, margin: '0 auto', padding: pad, boxSizing: 'border-box', background: '#fff', boxShadow: '0 2px 12px rgba(0,0,0,0.1)', borderRadius: '2px' }}>
               {(() => {
                 // 计算三个空行高度
                 const bodyLinePx = config.body.lineSpacing * (96 / 72) // pt → px
@@ -199,7 +202,8 @@ export function PrintPreview({ ast, config, onPageCountChange }: PrintPreviewPro
                 </p>
               )}
             </div>
-          )}
+            )
+            })()}
         </div>
       </div>
     </div>
