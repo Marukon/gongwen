@@ -1,6 +1,6 @@
 import {
   Document, Paragraph, TextRun, Footer, Header, PageNumber,
-  AlignmentType, BorderStyle, HeadingLevel, LineRuleType,
+  AlignmentType, BorderStyle, LineRuleType,
   Table, TableRow, TableCell, WidthType,
   TableAnchorType, RelativeHorizontalPosition, RelativeVerticalPosition, OverlapType,
 } from 'docx'
@@ -315,22 +315,25 @@ function attachmentToParagraphs(
   return paragraphs
 }
 
-function getWordHeadingOptions(nodeType: NodeType): Pick<IParagraphOptions, 'heading' | 'outlineLevel'> | undefined {
+// 仅保留大纲级别（导航窗格可用），不套用 Word 内置 Heading 样式，
+// 避免其默认的「与下段同页 / 段中不分页」属性把长标题段整段推到下一页，
+// 在页底留下大片空白。标题的字体字号行距均由直接格式显式控制。
+function getWordHeadingOptions(nodeType: NodeType): Pick<IParagraphOptions, 'outlineLevel'> | undefined {
   switch (nodeType) {
     case NodeType.HEADING_1:
-      return { heading: HeadingLevel.HEADING_1, outlineLevel: 0 }
+      return { outlineLevel: 0 }
     case NodeType.HEADING_2:
-      return { heading: HeadingLevel.HEADING_2, outlineLevel: 1 }
+      return { outlineLevel: 1 }
     case NodeType.HEADING_3:
-      return { heading: HeadingLevel.HEADING_3, outlineLevel: 2 }
+      return { outlineLevel: 2 }
     case NodeType.HEADING_4:
-      return { heading: HeadingLevel.HEADING_4, outlineLevel: 3 }
+      return { outlineLevel: 3 }
     default:
       return undefined
   }
 }
 
-export function getWordHeadingMeta(nodeType: NodeType): Pick<IParagraphOptions, 'heading' | 'outlineLevel'> | undefined {
+export function getWordHeadingMeta(nodeType: NodeType): Pick<IParagraphOptions, 'outlineLevel'> | undefined {
   return getWordHeadingOptions(nodeType)
 }
 

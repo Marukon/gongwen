@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { AlignmentType, HeadingLevel, Packer } from 'docx'
+import { AlignmentType, Packer } from 'docx'
 import JSZip from 'jszip'
 import { NodeType, type GongwenAST } from '../../types/ast'
 import { DEFAULT_CONFIG } from '../../types/documentConfig'
@@ -36,27 +36,17 @@ describe('getPageNumberParagraphOptions', () => {
 })
 
 describe('getWordHeadingMeta', () => {
-  it('一级到四级标题映射到 Word 标题层级', () => {
-    expect(getWordHeadingMeta(NodeType.HEADING_1)).toEqual({
-      heading: HeadingLevel.HEADING_1,
-      outlineLevel: 0,
-    })
-    expect(getWordHeadingMeta(NodeType.HEADING_2)).toEqual({
-      heading: HeadingLevel.HEADING_2,
-      outlineLevel: 1,
-    })
-    expect(getWordHeadingMeta(NodeType.HEADING_3)).toEqual({
-      heading: HeadingLevel.HEADING_3,
-      outlineLevel: 2,
-    })
-    expect(getWordHeadingMeta(NodeType.HEADING_4)).toEqual({
-      heading: HeadingLevel.HEADING_4,
-      outlineLevel: 3,
-    })
+  it('一级到四级标题仅映射大纲级别，不套用 Word 内置标题样式', () => {
+    // 不映射 Heading 样式是为了避免其默认的 keepNext/keepLines
+    // 导致长标题段整段跳到下一页、页底留出大片空白
+    expect(getWordHeadingMeta(NodeType.HEADING_1)).toEqual({ outlineLevel: 0 })
+    expect(getWordHeadingMeta(NodeType.HEADING_2)).toEqual({ outlineLevel: 1 })
+    expect(getWordHeadingMeta(NodeType.HEADING_3)).toEqual({ outlineLevel: 2 })
+    expect(getWordHeadingMeta(NodeType.HEADING_4)).toEqual({ outlineLevel: 3 })
     expect(getWordHeadingMeta(NodeType.PARAGRAPH)).toBeUndefined()
   })
 
-  it('导出的标题段落带有 Word 标题样式', async () => {
+  it('导出的标题段落带大纲级别、不带内置标题样式', async () => {
     const ast: GongwenAST = {
       title: null,
       body: [
@@ -72,9 +62,9 @@ describe('getWordHeadingMeta', () => {
     const xml = await zip.file('word/document.xml')?.async('string')
 
     expect(xml).toBeDefined()
-    expect(xml).toContain('w:pStyle w:val="Heading1"')
-    expect(xml).toContain('w:pStyle w:val="Heading2"')
-    expect(xml).toContain('w:pStyle w:val="Heading4"')
+    expect(xml).not.toContain('w:pStyle w:val="Heading1"')
+    expect(xml).not.toContain('w:pStyle w:val="Heading2"')
+    expect(xml).not.toContain('w:pStyle w:val="Heading4"')
     expect(xml).toContain('w:outlineLvl w:val="0"')
     expect(xml).toContain('w:outlineLvl w:val="1"')
     expect(xml).toContain('w:i w:val="false"')
