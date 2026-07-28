@@ -1,5 +1,5 @@
 import {
-  Document, Paragraph, TextRun, Footer, PageNumber,
+  Document, Paragraph, TextRun, Footer, Header, PageNumber,
   AlignmentType, BorderStyle, HeadingLevel, LineRuleType,
   Table, TableRow, TableCell, WidthType,
   TableAnchorType, RelativeHorizontalPosition, RelativeVerticalPosition, OverlapType,
