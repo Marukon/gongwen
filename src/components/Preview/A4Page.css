@@ -327,6 +327,15 @@
   margin-bottom: var(--body-line-height, 29pt);
 }
 
+/* 便签模式：版头在页眉区（距页顶 30mm），字体方正大标宋（GB/T 9704 10.1 信函格式） */
+.a4-header-org--note {
+  position: absolute;
+  top: 113px; /* 30mm @ 96dpi ≈ 113.4px */
+  left: var(--margin-left, 13.33%);
+  right: var(--margin-right, 12.38%);
+  font-family: '方正大标宋', '方正小标宋_GBK', 'STSong', serif;
+}
+
 .a4-header-org {
   font-family: '方正小标宋_GBK', 'STSong', serif;
   display: flex;

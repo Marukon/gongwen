@@ -265,7 +265,7 @@ export function Preview({ value, onChange }: PreviewProps) {
                   className="preview-page-content a4-content">
                   {config.header.enabled && config.header.orgName && (
                     <div className={`preview-header-section ${config.header.mode === 'note' ? 'preview-header-section--note' : ''}`}>
-                      <div className="a4-header-org" style={{ fontSize: `${headerOrgFontSize}pt` }}>
+                      <div className={`a4-header-org${isFormalHeader ? '' : ' a4-header-org--note'}`} style={{ fontSize: `${headerOrgFontSize}pt` }}>
                         {headerOrgChars.map((char, index) => (
                           <span key={`${char}-${index}`} className="a4-header-org-char">
                             {char === ' ' ? '\u00a0' : char}

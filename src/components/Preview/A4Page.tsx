@@ -94,9 +94,13 @@ export function renderA4Header(headerConfig: HeaderConfig, fontSizePt?: number):
   const hasMeta = isFormal && !!(headerConfig.docNumber || headerConfig.signer)
   const displayName = isFormal ? `${headerConfig.orgName}文件` : headerConfig.orgName
   const chars = Array.from(displayName)
+  // 便签：版头在页眉区（距页顶 30mm），字体方正大标宋（GB/T 9704 10.1 信函格式）
   return (
     <div className={`a4-header-section${!isFormal ? ' a4-header-section--note' : ''}`}>
-      <div className="a4-header-org" style={fontSizePt ? { fontSize: `${fontSizePt}pt` } : undefined}>
+      <div
+        className={`a4-header-org${!isFormal ? ' a4-header-org--note' : ''}`}
+        style={fontSizePt ? { fontSize: `${fontSizePt}pt` } : undefined}
+      >
         {chars.map((char, index) => (
           <span key={`${char}-${index}`} className="a4-header-org-char">
             {char === ' ' ? '\u00a0' : char}

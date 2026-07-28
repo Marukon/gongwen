@@ -417,6 +417,8 @@ export function buildDocument(ast: GongwenAST, config: DocumentConfig): Document
   const cache = createBuildStyleCache(config)
 
   // ---- 版头段落 ----
+  // 便签模式：版头放页眉（距页顶 30mm），字体方正大标宋；正文直接从红线开始
+  let noteHeaderParagraph: Paragraph | null = null
   if (config.header.enabled && config.header.orgName) {
     const isFormal = config.header.mode === 'formal'
     const headerFont = {
@@ -434,16 +436,35 @@ export function buildDocument(ast: GongwenAST, config: DocumentConfig): Document
     const orgChars = Array.from(orgDisplayName).length
     const availableMm = 210 - config.margins.left * 10 - config.margins.right * 10
     const headerOrgSizePt = Math.max(18, Math.min(30, Math.floor((availableMm * 72 / 25.4) / orgChars)))
-    children.push(new Paragraph({
-      alignment: AlignmentType.DISTRIBUTE,
-      spacing: { line: ptToTwip(headerOrgSizePt * 1.2), lineRule: LineRuleType.EXACT },
-      children: [new TextRun({
-        text: orgDisplayName,
-        font: { ascii: 'Times New Roman', eastAsia: '方正小标宋_GBK', hAnsi: 'Times New Roman', cs: 'Times New Roman' },
-        size: headerOrgSizePt * 2,
-        color: 'E00000',
-      })],
-    }))
+    const noteHeaderFont = {
+      ascii: 'Times New Roman',
+      eastAsia: '方正大标宋',
+      hAnsi: 'Times New Roman',
+      cs: 'Times New Roman',
+    }
+    if (isFormal) {
+      children.push(new Paragraph({
+        alignment: AlignmentType.DISTRIBUTE,
+        spacing: { line: ptToTwip(headerOrgSizePt * 1.2), lineRule: LineRuleType.EXACT },
+        children: [new TextRun({
+          text: orgDisplayName,
+          font: { ascii: 'Times New Roman', eastAsia: '方正小标宋_GBK', hAnsi: 'Times New Roman', cs: 'Times New Roman' },
+          size: headerOrgSizePt * 2,
+          color: 'E00000',
+        })],
+      }))
+    } else {
+      // 便签：版头放页眉，不占用正文流
+      noteHeaderParagraph = new Paragraph({
+        alignment: AlignmentType.CENTER,
+        children: [new TextRun({
+          text: orgDisplayName,
+          font: noteHeaderFont,
+          size: headerOrgSizePt * 2,
+          color: 'E00000',
+        })],
+      })
+    }
 
     // 发文机关标志下空二行（仅正式文件；便签直接接红线）
     const bodyLineSpacing = ptToTwip(config.body.lineSpacing)
@@ -673,10 +694,11 @@ export function buildDocument(ast: GongwenAST, config: DocumentConfig): Document
       ] : [],
     }))
 
-    // 成文日期（不添加括号）
+    // 成文日期（不添加括号）：在署名右空基础上向左微调 0.5 字，
+    // 补偿仿宋中阿拉伯数字实际宽度大于 0.5em 估算造成的视觉左偏
     children.push(new Paragraph({
       alignment: AlignmentType.RIGHT,
-      indent: { right: Math.round(oneCharWidth * dateIndentChars) },
+      indent: { right: Math.max(0, Math.round(oneCharWidth * (dateIndentChars - 0.5))) },
       spacing: { line: bodyLineSpacing, lineRule: LineRuleType.EXACT, before: 0, after: 0 },
       children: dateText ? [
         new TextRun({ ...dateRunOptions, text: dateText }),
@@ -878,9 +900,15 @@ export function buildDocument(ast: GongwenAST, config: DocumentConfig): Document
               bottom: cmToTwip(config.margins.bottom),
               left: cmToTwip(config.margins.left),
               right: cmToTwip(config.margins.right),
+              // 便签模式：页眉距页顶 30mm（GB/T 9704 10.1 信函格式）
+              ...(noteHeaderParagraph ? { header: cmToTwip(3.0) } : {}),
             },
           },
         },
+        // 便签模式：版头放页眉
+        ...(noteHeaderParagraph
+          ? { headers: { default: new Header({ children: [noteHeaderParagraph] }) } }
+          : {}),
         footers: Object.keys(footers).length > 0 ? footers : undefined,
         children,
       },
