@@ -295,12 +295,12 @@ export function renderA4Content(opts: A4ContentRenderOptions): React.ReactNode {
               <p key={`sig-empty-${j}`} className="a4-empty-line">{'\u200B'}</p>
             ))}
             {signatureName && (
-              <p className="a4-paragraph" style={{ textAlign: 'right', paddingRight: `${nameIndentEm}em` }}>
+              <p data-signature="true" className="a4-paragraph" style={{ textAlign: 'right', paddingRight: `${nameIndentEm}em` }}>
                 {signatureName}
               </p>
             )}
             {signatureDate && (
-              <p className="a4-paragraph" style={{ textAlign: 'right', paddingRight: `${dateIndentEm}em` }}>
+              <p data-signature="true" className="a4-paragraph" style={{ textAlign: 'right', paddingRight: `${dateIndentEm}em` }}>
                 {signatureDate}
               </p>
             )}

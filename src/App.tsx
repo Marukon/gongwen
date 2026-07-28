@@ -90,7 +90,13 @@ function App() {
       await downloadDocx(ast, configRef.current)
     } catch (err) {
       console.error('导出失败:', err)
-      alert('导出失败，请检查控制台日志')
+      // 动态导入 chunk 404 通常是部署更新后浏览器缓存了旧 index.html
+      const msg = err instanceof Error ? err.message : String(err)
+      if (msg.includes('dynamically imported module') || msg.includes('Failed to fetch')) {
+        alert('页面资源已更新，请强制刷新（Ctrl+F5）后再导出')
+      } else {
+        alert('导出失败，请检查控制台日志')
+      }
     } finally {
       setExporting(false)
     }

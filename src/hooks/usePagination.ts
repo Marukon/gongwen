@@ -183,6 +183,7 @@ export function usePagination(
       // ⑥ 收集所有行的 top/bottom 位置
       interface LinePos { top: number; bottom: number }
       const lines: LinePos[] = []
+      const lineIsSignature: boolean[] = [] // 与 lines 平行：该行是否属于落款（署名/日期）
       const contentRect = contentEl.getBoundingClientRect()
 
       for (const p of paragraphs) {
@@ -191,10 +192,12 @@ export function usePagination(
         const pHeight = pRect.height
         const computedStyle = getComputedStyle(p)
         const lineHeight = parseFloat(computedStyle.lineHeight)
+        const isSig = (p as HTMLElement).dataset?.signature === 'true'
 
         if (isNaN(lineHeight) || lineHeight <= 0 || pHeight <= lineHeight * 1.5) {
           // 单行段落（标题等）：整段作为一行
           lines.push({ top: pTop, bottom: pTop + pHeight })
+          lineIsSignature.push(isSig)
         } else {
           const lineCount = Math.max(1, Math.round(pHeight / lineHeight))
           // 使用 CSS line-height 定位行边界（而非 pHeight/lineCount），
@@ -206,11 +209,14 @@ export function usePagination(
               top: pTop + i * lineHeight,
               bottom: i < lineCount - 1 ? pTop + (i + 1) * lineHeight : pTop + pHeight,
             })
+            lineIsSignature.push(isSig)
           }
         }
       }
 
       const totalContentHeight = lines.length > 0 ? lines[lines.length - 1].bottom : 0
+      // 落款块首行行号（署名/日期保持整体，不被拆开）
+      const sigFirstIdx = lineIsSignature.findIndex(Boolean)
 
       // ⑦ Phase 1: 按行边界分页
       //    首页使用 firstPageAvailable（扣除版头），后续页使用 fullAvailable。
@@ -218,12 +224,18 @@ export function usePagination(
       let pageStart = 0
       let currentAvailable = firstPageAvailable
 
-      for (const line of lines) {
+      for (let li = 0; li < lines.length; li++) {
+        const line = lines[li]
         // 当前行底部超出当前页可用高度 → 推入下一页
         // line.top - pageStart > 0.5 防止页首行触发分页（死循环保护）
         if (line.bottom - pageStart > currentAvailable && line.top - pageStart > 0.5) {
-          pageStart = line.top
-          breakOffsets.push(pageStart)
+          let breakTop = line.top
+          // 断点落在落款块内部时，前移到块首，保证署名+日期整体换页
+          if (sigFirstIdx >= 0 && li > sigFirstIdx && lines[sigFirstIdx].top > pageStart + 0.5) {
+            breakTop = lines[sigFirstIdx].top
+          }
+          pageStart = breakTop
+          breakOffsets.push(breakTop)
           currentAvailable = fullAvailable // 后续页恢复全量高度
         }
       }
