@@ -88,20 +88,25 @@ export function getTitleRole(
 /* ------------------------------------------------------------------ */
 
 /** 版头（发文机关标识 / 文号 / 签发人） */
-export function renderA4Header(headerConfig: HeaderConfig): React.ReactNode {
+export function renderA4Header(headerConfig: HeaderConfig, fontSizePt?: number): React.ReactNode {
   if (!headerConfig.enabled || !headerConfig.orgName) return null
+  const isFormal = headerConfig.mode === 'formal'
+  const hasMeta = isFormal && !!(headerConfig.docNumber || headerConfig.signer)
+  const displayName = isFormal ? `${headerConfig.orgName}文件` : headerConfig.orgName
   return (
-    <div className="a4-header-section">
-      <div className="a4-header-org">{headerConfig.orgName}</div>
-      <div className={`a4-header-meta${headerConfig.signer ? ' a4-header-meta--with-signer' : ''}`}>
-        <span>{headerConfig.docNumber}</span>
-        {headerConfig.signer && (
-          <span>
-            <span className="a4-header-signer-label">签发人：</span>
-            <span className="a4-header-signer-name">{headerConfig.signer}</span>
-          </span>
-        )}
-      </div>
+    <div className={`a4-header-section${!isFormal ? ' a4-header-section--note' : ''}`}>
+      <div className="a4-header-org" style={fontSizePt ? { fontSize: `${fontSizePt}pt` } : undefined}>{displayName}</div>
+      {hasMeta && (
+        <div className={`a4-header-meta${headerConfig.signer ? ' a4-header-meta--with-signer' : ''}`}>
+          <span>{headerConfig.docNumber}</span>
+          {headerConfig.signer && (
+            <span>
+              <span className="a4-header-signer-label">签发人：</span>
+              <span className="a4-header-signer-name">{headerConfig.signer}</span>
+            </span>
+          )}
+        </div>
+      )}
       <div className="a4-header-separator"></div>
     </div>
   )
@@ -422,7 +427,7 @@ interface A4PageProps {
   headerConfig: HeaderConfig
   /** 版记配置 */
   footerNoteConfig: FooterNoteConfig
-  /** 是否为第一页 */
+    /** 是否为第一页 */
   isFirstPage: boolean
   /** 是否为最后一页 */
   isLastPage: boolean
@@ -440,6 +445,8 @@ interface A4PageProps {
    * - false: 第二行起按正文处理
    */
   hasTitleNameDate: boolean
+  /** 版头中发文机关标志的字体大小(pt)，未传则使用 CSS 默认 */
+  headerOrgFontSize?: number
 }
 
 function ensureChinesePeriod(text: string): string {
@@ -465,6 +472,7 @@ export const A4Page = memo(function A4Page({
   pageNumberLayout,
   hasStamp,
   hasTitleNameDate,
+  headerOrgFontSize,
 }: A4PageProps) {
   /**
    * 计算节点的动态样式
@@ -475,7 +483,7 @@ export const A4Page = memo(function A4Page({
     <div className="a4-page">
       <div className="a4-content">
         {/* 版头：仅在第一页且启用时渲染 */}
-        {isFirstPage && renderA4Header(headerConfig)}
+        {isFirstPage && renderA4Header(headerConfig, headerOrgFontSize)}
         <div className="a4-content-viewport" style={{ height: `${clipHeight}px` }}>
           <div style={{ transform: `translateY(-${offsetY}px)` }}>
             {renderA4Content({ title, body, hasTitleNameDate, boldFirstSentence, boldHeading3, hasStamp })}

@@ -5,6 +5,7 @@ import {
   renderA4Header,
   renderA4FooterNote,
 } from './A4Page'
+import { getHeaderOrgFontSize } from './Preview'
 import { usePagination, type PaginationConfig } from '../../hooks/usePagination'
 import { useFitScale } from '../../hooks/useFitScale'
 import type { GongwenAST } from '../../types/ast'
@@ -52,6 +53,7 @@ function buildA4CssVars(config: DocumentConfig): CSSProperties {
     '--h2-font': config.advanced.h2.fontFamily,
     '--h2-size': `${config.advanced.h2.fontSize}pt`,
     '--h3-font': config.advanced.h3.fontFamily,
+    '--h3-size': `${config.advanced.h3.fontSize}pt`,
     '--page-number-font': config.specialOptions.pageNumberFont,
   } as CSSProperties
 }
@@ -113,6 +115,10 @@ export function PrintPreview({ ast, config, onPageCountChange }: PrintPreviewPro
   const cssVars = useMemo(() => buildA4CssVars(config), [config])
   const paginationConfig = useMemo(() => buildPaginationConfig(config), [config])
   const pages = usePagination(ast.title, ast.body, measurerRef, paginationConfig)
+  const headerOrgFontSize = useMemo(
+    () => getHeaderOrgFontSize(config.header.orgName, config.margins.left, config.margins.right, config.header.mode === 'formal'),
+    [config.header.orgName, config.margins.left, config.margins.right, config.header.mode],
+  )
 
   // 整体缩放：以真实 A4 尺寸（794px）渲染，再等比缩放到预览区可用宽度（上限 1，不放大）
   const { frameRef, scale } = useFitScale(A4_RENDER_WIDTH_PX)
@@ -178,6 +184,7 @@ export function PrintPreview({ ast, config, onPageCountChange }: PrintPreviewPro
               pageNumberLayout={config.specialOptions.pageNumberStyle}
               hasStamp={config.specialOptions.hasStamp}
               hasTitleNameDate={config.specialOptions.hasTitleNameDate}
+              headerOrgFontSize={headerOrgFontSize}
             />
           ))}
           {/* 落款：紧跟在最后一页之后 */}
@@ -191,16 +198,28 @@ export function PrintPreview({ ast, config, onPageCountChange }: PrintPreviewPro
                 const bodyLinePx = config.body.lineSpacing * (96 / 72) // pt → px
                 return <div style={{ marginTop: `${bodyLinePx * 3}px` }} />
               })()}
-              {config.specialOptions.signatureName && (
-                <p style={{ fontFamily: config.body.fontFamily, fontSize: `${config.body.fontSize}pt`, textAlign: 'right', paddingRight: config.specialOptions.hasStamp ? '4em' : '2em', lineHeight: `${config.body.lineSpacing}pt`, margin: 0 }}>
-                  {config.specialOptions.signatureName}
-                </p>
-              )}
-              {config.specialOptions.signatureDate && (
-                <p style={{ fontFamily: config.body.fontFamily, fontSize: `${config.body.fontSize}pt`, textAlign: 'right', paddingRight: config.specialOptions.hasStamp ? '4em' : '2em', lineHeight: `${config.body.lineSpacing}pt`, margin: 0 }}>
-                  {/^\d{4}年\d{1,2}月\d{1,2}日$/.test(config.specialOptions.signatureDate.trim()) ? `（${config.specialOptions.signatureDate.trim()}）` : config.specialOptions.signatureDate}
-                </p>
-              )}
+{(() => {
+                const dateS = (config.specialOptions.signatureDate || '').trim()
+                const nameS = config.specialOptions.signatureName || ''
+                const dateLen = [...dateS].filter(c => !/[\u4e00-\u9fff]/.test(c)).length * 0.5
+                  + [...dateS].filter(c => /[\u4e00-\u9fff]/.test(c)).length
+                const nameLen = nameS.length
+                const baseDateEm = (dateLen > nameLen + 2) ? 5 : 4
+                const nameExtraEm = Math.max(0, (dateLen - nameLen) / 2)
+                const namePadEm = baseDateEm + nameExtraEm
+                return <>
+                  {nameS && (
+                    <p style={{ fontFamily: config.body.fontFamily, fontSize: `${config.body.fontSize}pt`, textAlign: 'right', paddingRight: `${namePadEm}em`, lineHeight: `${config.body.lineSpacing}pt`, margin: 0 }}>
+                      {nameS}
+                    </p>
+                  )}
+                  {dateS && (
+                    <p style={{ fontFamily: config.body.fontFamily, fontSize: `${config.body.fontSize}pt`, textAlign: 'right', paddingRight: `${baseDateEm}em`, lineHeight: `${config.body.lineSpacing}pt`, margin: 0 }}>
+                      {dateS}
+                    </p>
+                  )}
+                </>
+              })()}
             </div>
             )
             })()}

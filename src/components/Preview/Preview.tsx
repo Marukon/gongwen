@@ -5,6 +5,7 @@ import { normalizeEditorHtml } from '../../utils/richText'
 import { useDocumentParser } from '../../hooks/useDocumentParser'
 import { useFitScale } from '../../hooks/useFitScale'
 import { PrintPreview } from './PrintPreview'
+import { renderA4FooterNote } from './A4Page'
 import './A4Page.css'
 import './Preview.css'
 
@@ -42,8 +43,9 @@ function applyFontSize(size: number) {
   selection.removeAllRanges()
 }
 
-function getHeaderOrgFontSize(orgName: string, leftMargin: number, rightMargin: number): number {
-  const length = Math.max(1, Array.from(orgName.trim()).length)
+export function getHeaderOrgFontSize(orgName: string, leftMargin: number, rightMargin: number, isFormal: boolean): number {
+  const baseLen = Math.max(1, Array.from(orgName.trim()).length)
+  const length = isFormal ? baseLen + 2 : baseLen // 正式文件加"文件"两字
   const availablePx = A4_RENDER_WIDTH_PX * (1 - (leftMargin * 10 / 210) - (rightMargin * 10 / 210))
   return Math.max(18, Math.min(30, Math.floor(availablePx / length)))
 }
@@ -85,13 +87,18 @@ export function Preview({ value, onChange }: PreviewProps) {
   // 编辑模式同样以真实 A4 尺寸渲染，再整体缩放适配
   const { frameRef: editFrameRef, scale: editScale } = useFitScale(A4_RENDER_WIDTH_PX)
 
+  const isFormalHeader = config.header.mode === 'formal'
   const headerOrgFontSize = useMemo(
-    () => getHeaderOrgFontSize(config.header.orgName, config.margins.left, config.margins.right),
-    [config.header.orgName, config.margins.left, config.margins.right],
+    () => getHeaderOrgFontSize(config.header.orgName, config.margins.left, config.margins.right, isFormalHeader),
+    [config.header.orgName, config.margins.left, config.margins.right, isFormalHeader],
   )
   const headerOrgChars = useMemo(
-    () => config.header.orgName.trim().split(''),
-    [config.header.orgName],
+    () => {
+      const chars = config.header.orgName.trim().split('')
+      if (isFormalHeader) chars.push('文', '件')
+      return chars
+    },
+    [config.header.orgName, isFormalHeader],
   )
 
   const cssVars = useMemo((): CSSProperties => {
@@ -99,7 +106,8 @@ export function Preview({ value, onChange }: PreviewProps) {
     const marginLeftPx = (config.margins.left / 21) * pageWidthPx
     const marginRightPx = (config.margins.right / 21) * pageWidthPx
     const availablePx = pageWidthPx - marginLeftPx - marginRightPx
-    const textWidth = config.body.fontSize * CHARS_PER_LINE
+    const PT_TO_PX = 96 / 72
+    const textWidth = config.body.fontSize * PT_TO_PX * CHARS_PER_LINE
     const letterSpacingUnits = CHARS_PER_LINE - 1
     const charSpacingPx = (availablePx - textWidth) / letterSpacingUnits
 
@@ -122,6 +130,7 @@ export function Preview({ value, onChange }: PreviewProps) {
       '--h2-font': config.advanced.h2.fontFamily,
       '--h2-size': `${config.advanced.h2.fontSize}pt`,
       '--h3-font': config.advanced.h3.fontFamily,
+      '--h3-size': `${config.advanced.h3.fontSize}pt`,
       '--page-number-font': config.specialOptions.pageNumberFont,
     } as CSSProperties
   }, [config])
@@ -288,6 +297,34 @@ export function Preview({ value, onChange }: PreviewProps) {
                     onKeyDown={handleKeyDown}
                   />
                 </div>
+                {renderA4FooterNote(config.footerNote)}
+                {/* 落款 */}
+                {(config.specialOptions.signatureName || config.specialOptions.signatureDate) && (() => {
+                  const bodyLinePx = config.body.lineSpacing * (96 / 72)
+                  const dateS = (config.specialOptions.signatureDate || '').trim()
+                  const nameS = config.specialOptions.signatureName || ''
+                  const dateLen = [...dateS].filter(c => !/[\u4e00-\u9fff]/.test(c)).length * 0.5
+                    + [...dateS].filter(c => /[\u4e00-\u9fff]/.test(c)).length
+                  const nameLen = nameS.length
+                  const baseDateEm = (dateLen > nameLen + 2) ? 5 : 4
+                  const nameExtraEm = Math.max(0, (dateLen - nameLen) / 2)
+                  const namePadEm = baseDateEm + nameExtraEm
+                  return (
+                    <div className="a4-signature-area">
+                      <div style={{ height: `${bodyLinePx * 3}px` }} />
+                      {nameS && (
+                        <p style={{ fontFamily: config.body.fontFamily, fontSize: `${config.body.fontSize}pt`, textAlign: 'right', paddingRight: `${namePadEm}em`, lineHeight: `${config.body.lineSpacing}pt`, margin: 0 }}>
+                          {nameS}
+                        </p>
+                      )}
+                      {dateS && (
+                        <p style={{ fontFamily: config.body.fontFamily, fontSize: `${config.body.fontSize}pt`, textAlign: 'right', paddingRight: `${baseDateEm}em`, lineHeight: `${config.body.lineSpacing}pt`, margin: 0 }}>
+                          {dateS}
+                        </p>
+                      )}
+                    </div>
+                  )
+                })()}
               </div>
             </div>
           </div>

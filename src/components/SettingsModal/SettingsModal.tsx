@@ -370,24 +370,39 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                   />
                   {config.header.enabled && (
                     <div className="settings-panel-fields">
+                      <div className="settings-field">
+                        <span className="settings-field-label">版式</span>
+                        <select
+                          className="settings-select"
+                          value={config.header.mode}
+                          onChange={(e) => patch({ header: { mode: e.target.value as 'formal' | 'note' } })}
+                        >
+                          <option value="formal">正式文件</option>
+                          <option value="note">便签</option>
+                        </select>
+                      </div>
                       <TextField
                         label="发文机关标志"
                         value={config.header.orgName}
                         placeholder="如：国务院办公厅"
                         onChange={(v) => patch({ header: { orgName: v } })}
                       />
-                      <TextField
-                        label="发文字号"
-                        value={config.header.docNumber}
-                        placeholder="如：国办发〔2024〕1号"
-                        onChange={(v) => patch({ header: { docNumber: v } })}
-                      />
-                      <TextField
-                        label="签发人"
-                        value={config.header.signer}
-                        placeholder="选填，上行文使用"
-                        onChange={(v) => patch({ header: { signer: v } })}
-                      />
+                      {config.header.mode === 'formal' && (
+                        <>
+                          <TextField
+                            label="发文字号"
+                            value={config.header.docNumber}
+                            placeholder="如：国办发〔2024〕1号"
+                            onChange={(v) => patch({ header: { docNumber: v } })}
+                          />
+                          <TextField
+                            label="签发人"
+                            value={config.header.signer}
+                            placeholder="选填，上行文使用"
+                            onChange={(v) => patch({ header: { signer: v } })}
+                          />
+                        </>
+                      )}
                     </div>
                   )}
                 </div>

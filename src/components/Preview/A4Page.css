@@ -322,6 +322,11 @@
   margin-bottom: calc(var(--body-line-height, 29pt) * 2);
 }
 
+/* 便签模式：红线之下空一行 */
+.a4-header-section--note {
+  margin-bottom: var(--body-line-height, 29pt);
+}
+
 .a4-header-org {
   font-family: '方正小标宋_GBK', 'STSong', serif;
   display: flex;

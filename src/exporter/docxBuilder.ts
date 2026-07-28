@@ -418,6 +418,7 @@ export function buildDocument(ast: GongwenAST, config: DocumentConfig): Document
 
   // ---- 版头段落 ----
   if (config.header.enabled && config.header.orgName) {
+    const isFormal = config.header.mode === 'formal'
     const headerFont = {
       ascii: 'Times New Roman',
       eastAsia: config.body.fontFamily,
@@ -427,28 +428,32 @@ export function buildDocument(ast: GongwenAST, config: DocumentConfig): Document
     const headerFontSize = config.body.fontSize * 2
     // "空一字"缩进量 = 1 个字号宽度（使用数字 twips，在表格单元格内最可靠）
     const oneCharIndent = ptToTwip(config.body.fontSize)
+    const orgDisplayName = isFormal ? `${config.header.orgName}文件` : config.header.orgName
 
     // 1. 发文机关标志：红色居中大字
     children.push(new Paragraph({
       alignment: AlignmentType.CENTER,
       children: [new TextRun({
-        text: config.header.orgName,
+        text: orgDisplayName,
         font: { ascii: 'Times New Roman', eastAsia: '方正小标宋_GBK', hAnsi: 'Times New Roman', cs: 'Times New Roman' },
         size: 60, // 30pt
         color: 'E00000',
       })],
     }))
 
-    // 发文机关标志下空二行（三号字行高，确保行距精确）
+    // 发文机关标志下空二行（仅正式文件；便签直接接红线）
     const bodyLineSpacing = ptToTwip(config.body.lineSpacing)
-    for (let i = 0; i < 2; i++) {
-      children.push(new Paragraph({
-        spacing: { line: bodyLineSpacing, lineRule: LineRuleType.EXACT, before: 0, after: 0 },
-        children: [new TextRun({ font: headerFont, size: headerFontSize, text: '' })],
-      }))
+    if (isFormal) {
+      for (let i = 0; i < 2; i++) {
+        children.push(new Paragraph({
+          spacing: { line: bodyLineSpacing, lineRule: LineRuleType.EXACT, before: 0, after: 0 },
+          children: [new TextRun({ font: headerFont, size: headerFontSize, text: '' })],
+        }))
+      }
     }
 
-    // 2. 发文字号 / 签发人（位于红线之上）
+    // 2. 发文字号 / 签发人（仅正式文件；位于红线之上）
+    if (isFormal) {
     if (config.header.signer) {
       // 有签发人：无边框表格 — 字号居左空一字，签发人居右空一字
       children.push(new Table({
@@ -507,6 +512,7 @@ export function buildDocument(ast: GongwenAST, config: DocumentConfig): Document
         })],
       }))
     }
+    } // end isFormal
 
     // 3. 红色分隔线：单条红线（发文字号之下）
     children.push(new Paragraph({
@@ -628,13 +634,11 @@ export function buildDocument(ast: GongwenAST, config: DocumentConfig): Document
       cs: 'Times New Roman',
     }
     const bodyFontSize = config.body.fontSize * 2
-    const stampIndent = ptToTwip(config.body.fontSize) * (config.specialOptions.hasStamp ? 4 : 2)
+    const oneCharWidth = ptToTwip(config.body.fontSize)
     const nameText = config.specialOptions.signatureName || ''
-    let dateText = config.specialOptions.signatureDate || ''
-    // 日期四周加上全角括号（国标格式）
-    if (dateText && /^\d{4}年\d{1,2}月\d{1,2}日$/.test(dateText.trim())) {
-      dateText = `（${dateText.trim()}）`
-    }
+    const dateText = (config.specialOptions.signatureDate || '').trim()
+    const sigRunOptions: any = { font: bodyFont, size: bodyFontSize }
+    const dateRunOptions: any = { font: bodyFont, size: bodyFontSize }
 
     // 落款前空三行（距最后一行公文正文）
     for (let j = 0; j < 3; j++) {
@@ -644,47 +648,36 @@ export function buildDocument(ast: GongwenAST, config: DocumentConfig): Document
       }))
     }
 
-    // 发文机关署名：以成文日期为基准居中（即右缩进 = 日期右空量 + (日期宽度 - 署名宽度) / 2）
-    const sigRunOptions: any = { font: bodyFont, size: bodyFontSize }
-    const dateRunOptions: any = { font: bodyFont, size: bodyFontSize }
+    // 计算署名居中对齐日期的右空量：
+    // 日期默认右空 4 字；如果日期太长（预估长度 > 署名宽度 + 2 字），改为右空 5 字
+    const dateLen = dateText ? [...dateText].filter(c => !/[\u4e00-\u9fff]/.test(c)).length * 0.5
+      + [...dateText].filter(c => /[\u4e00-\u9fff]/.test(c)).length : 0
+    const nameLen = nameText ? nameText.length : 0
+    const baseDateIndent = (dateLen > nameLen + 2) ? 5 : 4
+    const dateRightIndent = oneCharWidth * baseDateIndent
+    // 署名居中于日期：署名右空 = 日期右空 + (日期宽度 - 署名宽度) / 2
+    const nameOffset = Math.max(0, Math.round((dateLen - nameLen) / 2 * oneCharWidth))
+    const nameRightIndent = dateRightIndent + nameOffset
 
-    if (config.specialOptions.hasStamp) {
-      // 盖章版式：右空四字
-      children.push(new Paragraph({
-        alignment: AlignmentType.RIGHT,
-        indent: { right: stampIndent },
-        spacing: { line: bodyLineSpacing, lineRule: LineRuleType.EXACT, before: 0, after: 0 },
-        children: nameText ? [
-          new TextRun({ ...sigRunOptions, text: nameText }),
-        ] : [],
-      }))
-      children.push(new Paragraph({
-        alignment: AlignmentType.RIGHT,
-        indent: { right: stampIndent },
-        spacing: { line: bodyLineSpacing, lineRule: LineRuleType.EXACT, before: 0, after: 0 },
-        children: dateText ? [
-          new TextRun({ ...dateRunOptions, text: dateText }),
-        ] : [],
-      }))
-    } else {
-      // 不盖章版式：右空二字
-      children.push(new Paragraph({
-        alignment: AlignmentType.RIGHT,
-        indent: { right: stampIndent },
-        spacing: { line: bodyLineSpacing, lineRule: LineRuleType.EXACT, before: 0, after: 0 },
-        children: nameText ? [
-          new TextRun({ ...sigRunOptions, text: nameText }),
-        ] : [],
-      }))
-      children.push(new Paragraph({
-        alignment: AlignmentType.RIGHT,
-        indent: { right: stampIndent },
-        spacing: { line: bodyLineSpacing, lineRule: LineRuleType.EXACT, before: 0, after: 0 },
-        children: dateText ? [
-          new TextRun({ ...dateRunOptions, text: dateText }),
-        ] : [],
-      }))
-    }
+    // 发文机关署名
+    children.push(new Paragraph({
+      alignment: AlignmentType.RIGHT,
+      indent: { right: nameRightIndent },
+      spacing: { line: bodyLineSpacing, lineRule: LineRuleType.EXACT, before: 0, after: 0 },
+      children: nameText ? [
+        new TextRun({ ...sigRunOptions, text: nameText }),
+      ] : [],
+    }))
+
+    // 成文日期（不添加括号）
+    children.push(new Paragraph({
+      alignment: AlignmentType.RIGHT,
+      indent: { right: dateRightIndent },
+      spacing: { line: bodyLineSpacing, lineRule: LineRuleType.EXACT, before: 0, after: 0 },
+      children: dateText ? [
+        new TextRun({ ...dateRunOptions, text: dateText }),
+      ] : [],
+    }))
   }
 
   // ---- 版记浮动表格（锚定页面底部版心下边缘） ----
@@ -731,7 +724,7 @@ export function buildDocument(ast: GongwenAST, config: DocumentConfig): Document
                 hanging: fnOneCharIndent * 3,
                 right: fnOneCharIndent,
               },
-              spacing: { before: 0, after: 0 },
+              spacing: { line: bodyLineSpacing, lineRule: LineRuleType.EXACT, before: 0, after: 0 },
               children: [new TextRun({
                 text: `抄送：${ensureChinesePeriod(config.footerNote.cc)}`,
                 font: bodyFont,
@@ -757,7 +750,7 @@ export function buildDocument(ast: GongwenAST, config: DocumentConfig): Document
             children: [new Paragraph({
               alignment: AlignmentType.LEFT,
               indent: { left: fnOneCharIndent },
-              spacing: { before: 0, after: 0 },
+              spacing: { line: bodyLineSpacing, lineRule: LineRuleType.EXACT, before: 0, after: 0 },
               children: printerText
                 ? [new TextRun({ text: printerText, font: bodyFont, size: footerNoteSize })]
                 : [],
@@ -769,7 +762,7 @@ export function buildDocument(ast: GongwenAST, config: DocumentConfig): Document
             children: [new Paragraph({
               alignment: AlignmentType.RIGHT,
               indent: { right: fnOneCharIndent },
-              spacing: { before: 0, after: 0 },
+              spacing: { line: bodyLineSpacing, lineRule: LineRuleType.EXACT, before: 0, after: 0 },
               children: dateText
                 ? [new TextRun({ text: dateText, font: bodyFont, size: footerNoteSize })]
                 : [],
