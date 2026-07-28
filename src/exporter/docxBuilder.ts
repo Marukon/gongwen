@@ -648,21 +648,18 @@ export function buildDocument(ast: GongwenAST, config: DocumentConfig): Document
       }))
     }
 
-    // 计算署名居中对齐日期的右空量：
-    // 日期默认右空 4 字；如果日期太长（预估长度 > 署名宽度 + 2 字），改为右空 5 字
+    // 计算右空量：
+    // 默认右空 4 字；如果日期太长（预估长度 > 署名宽度 + 2 字），改为右空 5 字
     const dateLen = dateText ? [...dateText].filter(c => !/[\u4e00-\u9fff]/.test(c)).length * 0.5
       + [...dateText].filter(c => /[\u4e00-\u9fff]/.test(c)).length : 0
     const nameLen = nameText ? nameText.length : 0
-    const baseDateIndent = (dateLen > nameLen + 2) ? 5 : 4
-    const dateRightIndent = oneCharWidth * baseDateIndent
-    // 署名居中于日期：署名右空 = 日期右空 + (日期宽度 - 署名宽度) / 2
-    const nameOffset = Math.max(0, Math.round((dateLen - nameLen) / 2 * oneCharWidth))
-    const nameRightIndent = dateRightIndent + nameOffset
+    const rightIndentChars = (dateLen > nameLen + 2) ? 5 : 4
+    const rightIndent = oneCharWidth * rightIndentChars
 
     // 发文机关署名
     children.push(new Paragraph({
       alignment: AlignmentType.RIGHT,
-      indent: { right: nameRightIndent },
+      indent: { right: rightIndent },
       spacing: { line: bodyLineSpacing, lineRule: LineRuleType.EXACT, before: 0, after: 0 },
       children: nameText ? [
         new TextRun({ ...sigRunOptions, text: nameText }),
@@ -672,7 +669,7 @@ export function buildDocument(ast: GongwenAST, config: DocumentConfig): Document
     // 成文日期（不添加括号）
     children.push(new Paragraph({
       alignment: AlignmentType.RIGHT,
-      indent: { right: dateRightIndent },
+      indent: { right: rightIndent },
       spacing: { line: bodyLineSpacing, lineRule: LineRuleType.EXACT, before: 0, after: 0 },
       children: dateText ? [
         new TextRun({ ...dateRunOptions, text: dateText }),

@@ -106,8 +106,7 @@ export function Preview({ value, onChange }: PreviewProps) {
     const marginLeftPx = (config.margins.left / 21) * pageWidthPx
     const marginRightPx = (config.margins.right / 21) * pageWidthPx
     const availablePx = pageWidthPx - marginLeftPx - marginRightPx
-    const PT_TO_PX = 96 / 72
-    const textWidth = config.body.fontSize * PT_TO_PX * CHARS_PER_LINE
+    const textWidth = config.body.fontSize * CHARS_PER_LINE
     const letterSpacingUnits = CHARS_PER_LINE - 1
     const charSpacingPx = (availablePx - textWidth) / letterSpacingUnits
 
@@ -298,27 +297,27 @@ export function Preview({ value, onChange }: PreviewProps) {
                   />
                 </div>
                 {renderA4FooterNote(config.footerNote)}
-                {/* 落款 */}
+                {/* 落款：GB/T 9704 标准，发文机关署名与成文日期均右空四字成一行对齐 */}
                 {(config.specialOptions.signatureName || config.specialOptions.signatureDate) && (() => {
                   const bodyLinePx = config.body.lineSpacing * (96 / 72)
                   const dateS = (config.specialOptions.signatureDate || '').trim()
                   const nameS = config.specialOptions.signatureName || ''
+                  // 计算日期成文预计宽度（中文 1em, 数字 0.5em），
+                  // 当日期长度 > 落款人 2 字时采用 5 字右空，否则 4 字
                   const dateLen = [...dateS].filter(c => !/[\u4e00-\u9fff]/.test(c)).length * 0.5
                     + [...dateS].filter(c => /[\u4e00-\u9fff]/.test(c)).length
                   const nameLen = nameS.length
-                  const baseDateEm = (dateLen > nameLen + 2) ? 5 : 4
-                  const nameExtraEm = Math.max(0, (dateLen - nameLen) / 2)
-                  const namePadEm = baseDateEm + nameExtraEm
+                  const baseRightEm = (dateLen > nameLen + 2) ? 5 : 4
                   return (
                     <div className="a4-signature-area">
                       <div style={{ height: `${bodyLinePx * 3}px` }} />
                       {nameS && (
-                        <p style={{ fontFamily: config.body.fontFamily, fontSize: `${config.body.fontSize}pt`, textAlign: 'right', paddingRight: `${namePadEm}em`, lineHeight: `${config.body.lineSpacing}pt`, margin: 0 }}>
+                        <p style={{ fontFamily: config.body.fontFamily, fontSize: `${config.body.fontSize}pt`, textAlign: 'right', paddingRight: `${baseRightEm}em`, lineHeight: `${config.body.lineSpacing}pt`, margin: 0 }}>
                           {nameS}
                         </p>
                       )}
                       {dateS && (
-                        <p style={{ fontFamily: config.body.fontFamily, fontSize: `${config.body.fontSize}pt`, textAlign: 'right', paddingRight: `${baseDateEm}em`, lineHeight: `${config.body.lineSpacing}pt`, margin: 0 }}>
+                        <p style={{ fontFamily: config.body.fontFamily, fontSize: `${config.body.fontSize}pt`, textAlign: 'right', paddingRight: `${baseRightEm}em`, lineHeight: `${config.body.lineSpacing}pt`, margin: 0 }}>
                           {dateS}
                         </p>
                       )}

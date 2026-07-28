@@ -204,22 +204,20 @@ export function PrintPreview({ ast, config, onPageCountChange }: PrintPreviewPro
                 const dateLen = [...dateS].filter(c => !/[\u4e00-\u9fff]/.test(c)).length * 0.5
                   + [...dateS].filter(c => /[\u4e00-\u9fff]/.test(c)).length
                 const nameLen = nameS.length
-                const baseDateEm = (dateLen > nameLen + 2) ? 5 : 4
-                const nameExtraEm = Math.max(0, (dateLen - nameLen) / 2)
-                const namePadEm = baseDateEm + nameExtraEm
-                return <>
+                const baseRightEm = (dateLen > nameLen + 2) ? 5 : 4
+              return <>
                   {nameS && (
-                    <p style={{ fontFamily: config.body.fontFamily, fontSize: `${config.body.fontSize}pt`, textAlign: 'right', paddingRight: `${namePadEm}em`, lineHeight: `${config.body.lineSpacing}pt`, margin: 0 }}>
+                    <p style={{ fontFamily: config.body.fontFamily, fontSize: `${config.body.fontSize}pt`, textAlign: 'right', paddingRight: `${baseRightEm}em`, lineHeight: `${config.body.lineSpacing}pt`, margin: 0 }}>
                       {nameS}
                     </p>
                   )}
                   {dateS && (
-                    <p style={{ fontFamily: config.body.fontFamily, fontSize: `${config.body.fontSize}pt`, textAlign: 'right', paddingRight: `${baseDateEm}em`, lineHeight: `${config.body.lineSpacing}pt`, margin: 0 }}>
+                    <p style={{ fontFamily: config.body.fontFamily, fontSize: `${config.body.fontSize}pt`, textAlign: 'right', paddingRight: `${baseRightEm}em`, lineHeight: `${config.body.lineSpacing}pt`, margin: 0 }}>
                       {dateS}
                     </p>
                   )}
                 </>
-              })()}
+            })()}
             </div>
             )
             })()}
