@@ -168,6 +168,7 @@ export function PrintPreview({ ast, config, onPageCountChange }: PrintPreviewPro
               offsetY={slice.offsetY}
               clipHeight={slice.clipHeight}
               showPageNumber={config.specialOptions.showPageNumber}
+              firstPageNoNumber={config.specialOptions.firstPageNoNumber}
               boldFirstSentence={config.specialOptions.boldFirstSentence}
               boldHeading3={config.specialOptions.boldHeading3}
               headerConfig={config.header}
@@ -179,6 +180,26 @@ export function PrintPreview({ ast, config, onPageCountChange }: PrintPreviewPro
               hasTitleNameDate={config.specialOptions.hasTitleNameDate}
             />
           ))}
+          {/* 落款：紧跟在最后一页之后 */}
+          {(config.specialOptions.signatureName || config.specialOptions.signatureDate) && (
+            <div className="print-preview-signature" style={{ width: `${A4_RENDER_WIDTH_PX}px`, margin: '0 auto', padding: `${cssVars['--margin-top']} ${cssVars['--margin-right']} ${cssVars['--margin-bottom']} ${cssVars['--margin-left']}`, boxSizing: 'border-box', background: '#fff', boxShadow: '0 2px 12px rgba(0,0,0,0.1)', borderRadius: '2px' }}>
+              {(() => {
+                // 计算三个空行高度
+                const bodyLinePx = config.body.lineSpacing * (96 / 72) // pt → px
+                return <div style={{ marginTop: `${bodyLinePx * 3}px` }} />
+              })()}
+              {config.specialOptions.signatureName && (
+                <p style={{ fontFamily: config.body.fontFamily, fontSize: `${config.body.fontSize}pt`, textAlign: 'right', paddingRight: config.specialOptions.hasStamp ? '4em' : '2em', lineHeight: `${config.body.lineSpacing}pt`, margin: 0 }}>
+                  {config.specialOptions.signatureName}
+                </p>
+              )}
+              {config.specialOptions.signatureDate && (
+                <p style={{ fontFamily: config.body.fontFamily, fontSize: `${config.body.fontSize}pt`, textAlign: 'right', paddingRight: config.specialOptions.hasStamp ? '4em' : '2em', lineHeight: `${config.body.lineSpacing}pt`, margin: 0 }}>
+                  {/^\d{4}年\d{1,2}月\d{1,2}日$/.test(config.specialOptions.signatureDate.trim()) ? `（${config.specialOptions.signatureDate.trim()}）` : config.specialOptions.signatureDate}
+                </p>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </div>

@@ -618,6 +618,75 @@ export function buildDocument(ast: GongwenAST, config: DocumentConfig): Document
     }
   }
 
+  // ---- 落款（发文机关署名 + 成文日期） ----
+  const hasSignature = config.specialOptions.signatureName || config.specialOptions.signatureDate
+  if (hasSignature) {
+    const bodyFont = {
+      ascii: 'Times New Roman',
+      eastAsia: config.body.fontFamily,
+      hAnsi: config.body.fontFamily,
+      cs: 'Times New Roman',
+    }
+    const bodyFontSize = config.body.fontSize * 2
+    const stampIndent = ptToTwip(config.body.fontSize) * (config.specialOptions.hasStamp ? 4 : 2)
+    const nameText = config.specialOptions.signatureName || ''
+    let dateText = config.specialOptions.signatureDate || ''
+    // 日期四周加上全角括号（国标格式）
+    if (dateText && /^\d{4}年\d{1,2}月\d{1,2}日$/.test(dateText.trim())) {
+      dateText = `（${dateText.trim()}）`
+    }
+
+    // 落款前空三行（距最后一行公文正文）
+    for (let j = 0; j < 3; j++) {
+      children.push(new Paragraph({
+        spacing: { line: bodyLineSpacing, lineRule: LineRuleType.EXACT, before: 0, after: 0 },
+        children: [new TextRun({ font: bodyFont, size: bodyFontSize, text: '' })],
+      }))
+    }
+
+    // 发文机关署名：以成文日期为基准居中（即右缩进 = 日期右空量 + (日期宽度 - 署名宽度) / 2）
+    const sigRunOptions: any = { font: bodyFont, size: bodyFontSize }
+    const dateRunOptions: any = { font: bodyFont, size: bodyFontSize }
+
+    if (config.specialOptions.hasStamp) {
+      // 盖章版式：右空四字
+      children.push(new Paragraph({
+        alignment: AlignmentType.RIGHT,
+        indent: { right: stampIndent },
+        spacing: { line: bodyLineSpacing, lineRule: LineRuleType.EXACT, before: 0, after: 0 },
+        children: nameText ? [
+          new TextRun({ ...sigRunOptions, text: nameText }),
+        ] : [],
+      }))
+      children.push(new Paragraph({
+        alignment: AlignmentType.RIGHT,
+        indent: { right: stampIndent },
+        spacing: { line: bodyLineSpacing, lineRule: LineRuleType.EXACT, before: 0, after: 0 },
+        children: dateText ? [
+          new TextRun({ ...dateRunOptions, text: dateText }),
+        ] : [],
+      }))
+    } else {
+      // 不盖章版式：右空二字
+      children.push(new Paragraph({
+        alignment: AlignmentType.RIGHT,
+        indent: { right: stampIndent },
+        spacing: { line: bodyLineSpacing, lineRule: LineRuleType.EXACT, before: 0, after: 0 },
+        children: nameText ? [
+          new TextRun({ ...sigRunOptions, text: nameText }),
+        ] : [],
+      }))
+      children.push(new Paragraph({
+        alignment: AlignmentType.RIGHT,
+        indent: { right: stampIndent },
+        spacing: { line: bodyLineSpacing, lineRule: LineRuleType.EXACT, before: 0, after: 0 },
+        children: dateText ? [
+          new TextRun({ ...dateRunOptions, text: dateText }),
+        ] : [],
+      }))
+    }
+  }
+
   // ---- 版记浮动表格（锚定页面底部版心下边缘） ----
   // 使用 Table Float 将版记吸附到最后一页底部，
   // 无需计算空行填充，Word 引擎自动处理文本避让。
@@ -756,39 +825,47 @@ export function buildDocument(ast: GongwenAST, config: DocumentConfig): Document
   const pageNumIndent = ptToTwip(14)
   const pageNumberOptions = getPageNumberParagraphOptions(config.specialOptions.pageNumberStyle, pageNumIndent)
 
-  // 页脚配置：默认国标单右双左，也支持全居中
-  const footers = config.specialOptions.showPageNumber
-    ? {
-        default: new Footer({
-          children: [
-            pageNumberParagraph(
-              pageNumberOptions.defaultOptions.alignment,
-              pageNumberOptions.defaultOptions.indent,
-              pageNumFont,
-              pageNumSize,
-            ),
-          ],
-        }),
-        ...(pageNumberOptions.evenOptions
-          ? {
-              even: new Footer({
-                children: [
-                  pageNumberParagraph(
-                    pageNumberOptions.evenOptions.alignment,
-                    pageNumberOptions.evenOptions.indent,
-                    pageNumFont,
-                    pageNumSize,
-                  ),
-                ],
-              }),
-            }
-          : {}),
-      }
-    : undefined
+  // 页脚配置：默认国标单右双左，也支持全居中；支持首页无页码
+  const footers: any = {}
+  let evenAndOddHeaderAndFooters = false
+
+  if (config.specialOptions.showPageNumber) {
+    evenAndOddHeaderAndFooters = pageNumberOptions.evenAndOddHeaderAndFooters
+
+    footers.default = new Footer({
+      children: [
+        pageNumberParagraph(
+          pageNumberOptions.defaultOptions.alignment,
+          pageNumberOptions.defaultOptions.indent,
+          pageNumFont,
+          pageNumSize,
+        ),
+      ],
+    })
+
+    if (pageNumberOptions.evenOptions) {
+      footers.even = new Footer({
+        children: [
+          pageNumberParagraph(
+            pageNumberOptions.evenOptions.alignment,
+            pageNumberOptions.evenOptions.indent,
+            pageNumFont,
+            pageNumSize,
+          ),
+        ],
+      })
+    }
+
+    if (config.specialOptions.firstPageNoNumber) {
+      footers.first = new Footer({
+        children: [],
+      })
+    }
+  }
 
   return new Document({
     // 国标样式启用奇偶页不同页脚；全居中时关闭
-    evenAndOddHeaderAndFooters: config.specialOptions.showPageNumber && pageNumberOptions.evenAndOddHeaderAndFooters,
+    evenAndOddHeaderAndFooters,
     sections: [
       {
         properties: {
@@ -805,7 +882,7 @@ export function buildDocument(ast: GongwenAST, config: DocumentConfig): Document
             },
           },
         },
-        footers,
+        footers: Object.keys(footers).length > 0 ? footers : undefined,
         children,
       },
     ],

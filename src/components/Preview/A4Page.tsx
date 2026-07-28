@@ -412,6 +412,8 @@ interface A4PageProps {
   clipHeight: number
   /** 是否显示页码 */
   showPageNumber: boolean
+  /** 首页不显示页码（第一页不显示页码，从第二页开始） */
+  firstPageNoNumber?: boolean
   /** 是否对正文首句加粗 */
   boldFirstSentence: boolean
   /** 是否对三级标题加粗 */
@@ -453,6 +455,7 @@ export const A4Page = memo(function A4Page({
   offsetY,
   clipHeight,
   showPageNumber,
+  firstPageNoNumber,
   boldFirstSentence,
   boldHeading3,
   headerConfig,
@@ -481,7 +484,7 @@ export const A4Page = memo(function A4Page({
       </div>
       {/* 版记：绝对定位到最后一页底部，末条线与版心下边缘重合 */}
       {isLastPage && renderA4FooterNote(footerNoteConfig)}
-      {showPageNumber && (
+      {showPageNumber && !(firstPageNoNumber && isFirstPage) && (
         <div
           className={
             `a4-footer ${

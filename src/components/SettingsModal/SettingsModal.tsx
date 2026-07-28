@@ -565,6 +565,26 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                 />
               </div>
 
+              {/* 落款 */}
+              <div className="settings-special-card">
+                <h4 className="settings-special-card-title">落款</h4>
+                <div className="settings-special-card-body">
+                  <TextField
+                    label="落款人"
+                    value={config.specialOptions.signatureName}
+                    placeholder="如：XX市人民政府"
+                    onChange={(v) => patch({ specialOptions: { signatureName: v } })}
+                  />
+                  <TextField
+                    label="落款日期"
+                    value={config.specialOptions.signatureDate}
+                    placeholder="如：2024年1月1日"
+                    onChange={(v) => patch({ specialOptions: { signatureDate: v } })}
+                  />
+                  <p className="settings-hint">落款距离最后一行公文正文空三行，以成文日期为基准居中排版</p>
+                </div>
+              </div>
+
               <div className="settings-special-card">
                 <CheckboxField
                   label={(
@@ -591,6 +611,11 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                 />
                 {config.specialOptions.showPageNumber && (
                   <div className="settings-special-card-body">
+                    <CheckboxField
+                      label="首页无页码"
+                      checked={config.specialOptions.firstPageNoNumber}
+                      onChange={(v) => patch({ specialOptions: { firstPageNoNumber: v } })}
+                    />
                     <FontSelectField
                       label="页码字体"
                       value={config.specialOptions.pageNumberFont}
@@ -672,14 +697,9 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
         {/* 底部操作栏 */}
         <div className="settings-footer">
           <div className="settings-footer-left">
-            <a
-              className="settings-btn settings-btn--download"
-              href="https://github.com/hehecat/gongwen/releases/latest/download/gongwen.html"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              下载离线版
-            </a>
+            <button className="settings-btn settings-btn--reset" onClick={resetConfig}>
+              恢复默认
+            </button>
             <button
               className="settings-btn settings-btn--info"
               onClick={() => setShowProjectInfo((prev) => !prev)}
@@ -747,8 +767,8 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
             )}
           </div>
           <div className="settings-footer-spacer" />
-          <button className="settings-btn settings-btn--reset" onClick={resetConfig}>
-            恢复默认
+          <button className="settings-btn settings-btn--save" onClick={onClose}>
+            保存
           </button>
           <button className="settings-btn settings-btn--close" onClick={onClose}>
             关闭

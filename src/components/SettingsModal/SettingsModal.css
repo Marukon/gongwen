@@ -285,6 +285,13 @@
   grid-column: 1 / -1;
 }
 
+.settings-special-card-title {
+  margin: 0 0 12px 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: #374151;
+}
+
 .settings-special-card-body {
   margin-top: 8px;
   padding-top: 8px;

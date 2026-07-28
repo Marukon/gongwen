@@ -39,6 +39,8 @@ export interface SpecialOptionsConfig {
   boldHeading3: boolean
   firstParagraphNoIndent: boolean
   showPageNumber: boolean
+  /** 首页不显示页码（勾选后第一页无页码，第二页起从 2 开始） */
+  firstPageNoNumber: boolean
   pageNumberFont: string
   pageNumberStyle: PageNumberStyle
   /**
@@ -47,6 +49,14 @@ export interface SpecialOptionsConfig {
    * - false: 成文日期右空二字 (GB/T 9704 7.3.5.2 不加盖印章的公文)
    */
   hasStamp: boolean
+  /**
+   * 落款人（发文机关署名），为空则不渲染
+   */
+  signatureName: string
+  /**
+   * 落款日期，默认当天日期
+   */
+  signatureDate: string
   /**
    * 是否「标题下署名 + 日期」版式
    * - true: 强制将正文第二行识别为姓名、第三行识别为日期，日期自动加全角括号，
@@ -143,10 +153,19 @@ export const DEFAULT_CONFIG: DocumentConfig = {
     boldHeading2: false,
     firstParagraphNoIndent: false,
     showPageNumber: true,
+    firstPageNoNumber: true,
     pageNumberFont: '宋体',
     pageNumberStyle: 'mirrored',
     boldHeading3: true,
     hasStamp: false,
+    signatureName: '',
+    signatureDate: (() => {
+      const d = new Date()
+      const y = d.getFullYear()
+      const m = String(d.getMonth() + 1).padStart(2, '0')
+      const day = String(d.getDate()).padStart(2, '0')
+      return `${y}年${m}月${day}日`
+    })(),
     hasTitleNameDate: false,
   },
   textFixOptions: {
