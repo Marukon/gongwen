@@ -209,11 +209,15 @@ export function renderA4Content(opts: A4ContentRenderOptions): React.ReactNode {
   const { title, body, hasTitleNameDate, boldFirstSentence, boldHeading3, hasStamp, signatureName, signatureDate } = opts
   return (
     <>
-      {title && (
-        <p className={NODE_CLASS_MAP[title.type]}>
-          {hasRichStyleOverrides(title.runs) ? renderRichRuns(title.runs ?? []) : title.content}
+      {title && title.content.split('\n').filter(Boolean).map((line, idx, arr) => (
+        <p
+          key={`title-${title.lineNumber}-${idx}`}
+          className={NODE_CLASS_MAP[title.type]}
+          style={idx < arr.length - 1 ? { marginBottom: 0 } : undefined}
+        >
+          {hasRichStyleOverrides(title.runs) ? renderRichRuns(title.runs ?? []) : line}
         </p>
-      )}
+      ))}
       {body.flatMap((node, index) => {
         const elements: React.ReactNode[] = []
 

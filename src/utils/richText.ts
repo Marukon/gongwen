@@ -258,7 +258,10 @@ export function astToStyledHtml(ast: GongwenAST, config: DocumentConfig): string
   const firstBodyParagraphIndex = findFirstBodyParagraphIndex(ast, hasTitleNameDate)
 
   if (ast.title) {
-    html.push(paragraphHtml(ast.title, 'a4-title'))
+    const titleLines = ast.title.content.split('\n').filter(Boolean)
+    titleLines.forEach((line) => {
+      html.push(paragraphHtml({ ...ast.title!, content: line }, 'a4-title'))
+    })
     if (ast.body.length > 0) {
       if (!isTitleNameNode(ast, 0, hasTitleNameDate) && !isTitleDateNode(ast, 0, hasTitleNameDate)) {
         html.push('<p><br></p>')

@@ -98,17 +98,31 @@ describe('removeMeaninglessLineBreaks', () => {
 
   it('不合并姓名、日期与主送机关', () => {
     const text = `在“上传下达”中淬炼坚强党性
-张旭虎
+张三
 （2026年7月24日）
 尊敬的各位领导、同志们：
 大家下午好！`
     const result = removeMeaninglessLineBreaks(text)
     const lines = result.text.split('\n')
-    expect(lines).toContain('张旭虎')
+    expect(lines).toContain('张三')
     expect(lines).toContain('（2026年7月24日）')
     expect(lines).toContain('尊敬的各位领导、同志们：')
     // 日期与主送机关不应被合并
     expect(lines.some((l) => l.includes('（2026年7月24日）尊敬的'))).toBe(false)
+  })
+
+  it('不合并副标题、姓名与裸日期（破折号副标题独立成行）', () => {
+    const text = `在“上传下达”中走好新时代群众路线
+——学习关于基层工作方法重要论述体会
+张三
+2026年8月28日`
+    const result = removeMeaninglessLineBreaks(text)
+    const lines = result.text.split('\n')
+    expect(lines).toHaveLength(4)
+    expect(lines[0]).toBe('在“上传下达”中走好新时代群众路线')
+    expect(lines[1]).toBe('——学习关于基层工作方法重要论述体会')
+    expect(lines[2]).toBe('张三')
+    expect(lines[3]).toBe('2026年8月28日')
   })
 
   it('完整段落结束后保留换行，不把结束语和致谢语合并', () => {

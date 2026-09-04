@@ -298,6 +298,16 @@
   border-top: 1px solid #eceff3;
 }
 
+.settings-checkbox-group {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.settings-stamp-wrap {
+  margin-top: 10px;
+}
+
 .settings-dual-panels {
   display: grid;
   grid-template-columns: 1fr 1fr;

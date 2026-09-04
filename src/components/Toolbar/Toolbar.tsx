@@ -13,6 +13,8 @@ interface ToolbarProps {
   importing?: boolean
   /** 是否正在导出中 */
   exporting?: boolean
+  /** 动态版本号（含日期与编辑递增序号） */
+  version?: string
 }
 
 export const Toolbar = memo(function Toolbar({
@@ -22,11 +24,13 @@ export const Toolbar = memo(function Toolbar({
   onImport,
   importing,
   exporting,
+  version,
 }: ToolbarProps) {
   const hasContent = ast.title !== null || ast.body.length > 0
   const nodeCount = (ast.title ? 1 : 0) + ast.body.length
   const [showSettings, setShowSettings] = useState(false)
-  const displayVersion = __APP_VERSION__.split('-')[0]
+  const defaultVersion = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__.split('-')[0] : 'v2026.09.04'
+  const displayVersion = version || (defaultVersion.includes('-') ? defaultVersion : `${defaultVersion}-1`)
 
   // 隐藏的 file input 引用
   const fileInputRef = useRef<HTMLInputElement>(null)

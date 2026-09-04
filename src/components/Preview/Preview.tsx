@@ -73,14 +73,124 @@ function getSelectedBlocks(root: HTMLElement): HTMLElement[] {
   return fallback && root.contains(fallback) ? [fallback] : []
 }
 
+interface CapturedFormat {
+  fontFamily?: string
+  fontSize?: string
+  fontWeight?: string
+  fontStyle?: string
+  textDecoration?: string
+  color?: string
+  textAlign?: string
+}
+
+function getFormatAtSelection(editor: HTMLElement): CapturedFormat | null {
+  const sel = window.getSelection()
+  let targetElement: HTMLElement | null = null
+
+  if (sel && sel.rangeCount > 0) {
+    const range = sel.getRangeAt(0)
+    let node: Node | null = range.startContainer
+    if (node.nodeType === Node.TEXT_NODE) {
+      node = node.parentElement
+    }
+    if (node && editor.contains(node)) {
+      targetElement = node as HTMLElement
+    }
+  }
+
+  if (!targetElement) {
+    targetElement = editor.querySelector<HTMLElement>(BLOCK_SELECTOR) || editor
+  }
+
+  const computed = window.getComputedStyle(targetElement)
+  const block = targetElement.closest<HTMLElement>(BLOCK_SELECTOR) || targetElement
+  const blockComputed = window.getComputedStyle(block)
+
+  return {
+    fontFamily: targetElement.style.fontFamily || computed.fontFamily,
+    fontSize: targetElement.style.fontSize || computed.fontSize,
+    fontWeight: targetElement.style.fontWeight || computed.fontWeight,
+    fontStyle: targetElement.style.fontStyle || computed.fontStyle,
+    textDecoration: targetElement.style.textDecoration || computed.textDecoration,
+    color: targetElement.style.color || computed.color,
+    textAlign: block.style.textAlign || blockComputed.textAlign,
+  }
+}
+
+function applyFormatToSelection(editor: HTMLElement, format: CapturedFormat) {
+  const sel = window.getSelection()
+  if (!sel || sel.rangeCount === 0 || sel.isCollapsed) return
+  const range = sel.getRangeAt(0)
+  if (!editor.contains(range.commonAncestorContainer)) return
+
+  const span = document.createElement('span')
+  if (format.fontFamily) span.style.fontFamily = format.fontFamily
+  if (format.fontSize) span.style.fontSize = format.fontSize
+  if (format.fontWeight) span.style.fontWeight = format.fontWeight
+  if (format.fontStyle) span.style.fontStyle = format.fontStyle
+  if (format.textDecoration) span.style.textDecoration = format.textDecoration
+  if (format.color) span.style.color = format.color
+
+  try {
+    range.surroundContents(span)
+  } catch {
+    const fragment = range.extractContents()
+    span.appendChild(fragment)
+    range.insertNode(span)
+  }
+
+  const blocks = getSelectedBlocks(editor)
+  if (format.textAlign && blocks.length > 0) {
+    for (const b of blocks) {
+      b.style.textAlign = format.textAlign
+      if (format.textAlign === 'justify') {
+        delete b.dataset.alignNoIndent
+        delete b.dataset.noIndent
+      } else {
+        b.dataset.noIndent = 'true'
+        b.dataset.alignNoIndent = 'true'
+      }
+    }
+  }
+}
+
+function applyFormatToBlock(block: HTMLElement, format: CapturedFormat) {
+  if (format.textAlign) {
+    block.style.textAlign = format.textAlign
+    if (format.textAlign === 'justify') {
+      delete block.dataset.alignNoIndent
+      delete block.dataset.noIndent
+    } else {
+      block.dataset.noIndent = 'true'
+      block.dataset.alignNoIndent = 'true'
+    }
+  }
+  if (format.fontFamily) block.style.fontFamily = format.fontFamily
+  if (format.fontSize) block.style.fontSize = format.fontSize
+  if (format.fontWeight) block.style.fontWeight = format.fontWeight
+  if (format.fontStyle) block.style.fontStyle = format.fontStyle
+  if (format.textDecoration) block.style.textDecoration = format.textDecoration
+  if (format.color) block.style.color = format.color
+}
+
 export function Preview({ value, onChange }: PreviewProps) {
   const { config } = useDocumentConfig()
   const editorRef = useRef<HTMLDivElement>(null)
   const shellRef = useRef<HTMLDivElement>(null)
   const syncingRef = useRef(false)
+  const painterClickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [currentFont, setCurrentFont] = useState(FONT_FAMILY_OPTIONS[0])
   const [currentFontSize, setCurrentFontSize] = useState(FONT_SIZE_OPTIONS_CN[3]?.value ?? 16)
   const [showPrintPreview, setShowPrintPreview] = useState(true)
+  const [painterState, setPainterState] = useState<{
+    active: boolean
+    persistent: boolean
+    format: CapturedFormat | null
+  }>({
+    active: false,
+    persistent: false,
+    format: null,
+  })
   // 打印预览所需的实时 AST（与导出使用同一解析管线）
   const ast = useDocumentParser(value)
   const [pageCount, setPageCount] = useState(0)
@@ -185,6 +295,77 @@ export function Preview({ value, onChange }: PreviewProps) {
     emitChange()
   }, [emitChange])
 
+  useEffect(() => {
+    if (showPrintPreview) {
+      setPainterState({ active: false, persistent: false, format: null })
+    }
+  }, [showPrintPreview])
+
+  useEffect(() => {
+    if (!painterState.active) return
+    const handleGlobalKeyDown = (e: globalThis.KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setPainterState({ active: false, persistent: false, format: null })
+      }
+    }
+    window.addEventListener('keydown', handleGlobalKeyDown)
+    return () => window.removeEventListener('keydown', handleGlobalKeyDown)
+  }, [painterState.active])
+
+  const handlePainterClick = useCallback((e: React.MouseEvent) => {
+    e.preventDefault()
+    const editor = editorRef.current
+    if (!editor) return
+
+    if (painterState.active) {
+      if (painterClickTimerRef.current) {
+        clearTimeout(painterClickTimerRef.current)
+        painterClickTimerRef.current = null
+      }
+      setPainterState({ active: false, persistent: false, format: null })
+      return
+    }
+
+    const format = getFormatAtSelection(editor)
+    if (!format) return
+
+    if (e.detail === 1) {
+      painterClickTimerRef.current = setTimeout(() => {
+        setPainterState({ active: true, persistent: false, format })
+      }, 220)
+    } else if (e.detail === 2) {
+      if (painterClickTimerRef.current) {
+        clearTimeout(painterClickTimerRef.current)
+        painterClickTimerRef.current = null
+      }
+      setPainterState({ active: true, persistent: true, format })
+    }
+  }, [painterState.active])
+
+  const handleEditorMouseUp = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    if (!painterState.active || !painterState.format) return
+
+    const editor = editorRef.current
+    if (!editor) return
+
+    const sel = window.getSelection()
+    if (sel && sel.rangeCount > 0 && !sel.isCollapsed) {
+      applyFormatToSelection(editor, painterState.format)
+    } else {
+      const target = e.target as HTMLElement
+      const block = target.closest<HTMLElement>(BLOCK_SELECTOR)
+      if (block && editor.contains(block)) {
+        applyFormatToBlock(block, painterState.format)
+      }
+    }
+
+    emitChange()
+
+    if (!painterState.persistent) {
+      setPainterState({ active: false, persistent: false, format: null })
+    }
+  }, [painterState, emitChange])
+
   const handleKeyDown = useCallback((e: KeyboardEvent<HTMLDivElement>) => {
     if (e.key !== 'Backspace') return
 
@@ -242,10 +423,35 @@ export function Preview({ value, onChange }: PreviewProps) {
           <button type="button" className="preview-tool-btn" onClick={() => { exec('bold'); emitChange() }}><strong>B</strong></button>
           <button type="button" className="preview-tool-btn" onClick={() => { exec('italic'); emitChange() }}><em>I</em></button>
           <button type="button" className="preview-tool-btn" onClick={() => { exec('underline'); emitChange() }}><u>U</u></button>
+          <button
+            type="button"
+            className={`preview-tool-btn preview-tool-btn--painter${
+              painterState.active ? ' preview-tool-btn--active' : ''
+            }${painterState.persistent ? ' preview-tool-btn--persistent' : ''}`}
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={handlePainterClick}
+            title={
+              painterState.active
+                ? painterState.persistent
+                  ? '格式刷已激活（连续模式，Esc 或再次点击退出）'
+                  : '格式刷已激活（单次模式，Esc 或再次点击退出）'
+                : '格式刷（单击单次使用，双击连续使用，Esc 退出）'
+            }
+          >
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" style={{ verticalAlign: '-2px', marginRight: '3px' }}>
+              <path d="M12.854.146a.5.5 0 0 0-.707 0L10.5 1.793 14.207 5.5l1.647-1.646a.5.5 0 0 0 0-.708zm.646 6.061L9.793 2.5 3.293 9H3.5a.5.5 0 0 1 .5.5v.5h.5a.5.5 0 0 1 .5.5v.5h.5a.5.5 0 0 1 .5.5v.5h.5a.5.5 0 0 1 .5.5v.207zm-7.468 7.468A.5.5 0 0 1 6 13.5V13h-.5a.5.5 0 0 1-.5-.5V12h-.5a.5.5 0 0 1-.5-.5V11h-.5a.5.5 0 0 1-.5-.5V10h-.5a.5.5 0 0 1-.175-.032l-.179.178a.5.5 0 0 0-.11.168l-2 5a.5.5 0 0 0 .65.65l5-2a.5.5 0 0 0 .168-.11z" />
+            </svg>
+            格式刷
+          </button>
           <button type="button" className="preview-tool-btn" onClick={() => handleAlignmentChange('left')}>左</button>
           <button type="button" className="preview-tool-btn" onClick={() => handleAlignmentChange('center')}>中</button>
           <button type="button" className="preview-tool-btn" onClick={() => handleAlignmentChange('right')}>右</button>
           <button type="button" className="preview-tool-btn" onClick={() => handleAlignmentChange('justify')}>两端</button>
+          {painterState.active && (
+            <span className="preview-painter-badge">
+              {painterState.persistent ? '连续刷格式中 (Esc退出)' : '刷格式中 (Esc退出)'}
+            </span>
+          )}
         </div>
         )}
       </div>
@@ -288,12 +494,13 @@ export function Preview({ value, onChange }: PreviewProps) {
                   )}
                   <div
                     ref={editorRef}
-                    className="preview-editor"
+                    className={`preview-editor${painterState.active ? ' preview-editor--painter' : ''}`}
                     contentEditable
                     suppressContentEditableWarning
                     onInput={emitChange}
                     onBlur={emitChange}
                     onKeyDown={handleKeyDown}
+                    onMouseUp={handleEditorMouseUp}
                   />
                 </div>
                 {renderA4FooterNote(config.footerNote)}

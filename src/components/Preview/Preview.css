@@ -168,6 +168,35 @@
   border-color: #9ca3af;
 }
 
+.preview-tool-btn--painter {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  padding: 0 8px;
+}
+
+.preview-tool-btn--painter.preview-tool-btn--active {
+  background: #2563eb;
+  border-color: #2563eb;
+  color: #ffffff;
+}
+
+.preview-tool-btn--persistent {
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.45);
+}
+
+.preview-painter-badge {
+  font-size: 12px;
+  color: #2563eb;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  border-radius: 4px;
+  padding: 3px 8px;
+  line-height: 1.2;
+  margin-left: 4px;
+}
+
 /* 编辑模式外壳：灰色底色，内部渲染独立白色页面 */
 .preview-page-shell {
   position: relative;
@@ -216,6 +245,11 @@
   outline: none;
   background: transparent;
   text-align: justify;
+}
+
+.preview-editor--painter,
+.preview-editor--painter * {
+  cursor: copy !important;
 }
 
 .preview-editor > * {

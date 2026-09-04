@@ -556,33 +556,31 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
           <section className="settings-section">
             <h3 className="settings-section-title">特殊选项</h3>
             <div className="settings-special-grid">
+              {/* 加粗选项 */}
               <div className="settings-special-card">
-                <CheckboxField
-                  label="正文段落首句加粗"
-                  checked={config.specialOptions.boldFirstSentence}
-                  onChange={(v) => patch({ specialOptions: { boldFirstSentence: v } })}
-                />
+                <h4 className="settings-special-card-title">加粗选项</h4>
+                <div className="settings-special-card-body settings-checkbox-group">
+                  <CheckboxField
+                    label="正文段落首句加粗"
+                    checked={config.specialOptions.boldFirstSentence}
+                    onChange={(v) => patch({ specialOptions: { boldFirstSentence: v } })}
+                  />
+                  <CheckboxField
+                    label="二级标题加粗"
+                    checked={config.specialOptions.boldHeading2}
+                    onChange={(v) => patch({ specialOptions: { boldHeading2: v } })}
+                  />
+                  <CheckboxField
+                    label="三级小标题加粗"
+                    checked={config.specialOptions.boldHeading3}
+                    onChange={(v) => patch({ specialOptions: { boldHeading3: v } })}
+                  />
+                </div>
               </div>
 
+              {/* 落款与印章 */}
               <div className="settings-special-card">
-                <CheckboxField
-                  label="二级标题加粗"
-                  checked={config.specialOptions.boldHeading2}
-                  onChange={(v) => patch({ specialOptions: { boldHeading2: v } })}
-                />
-              </div>
-
-              <div className="settings-special-card">
-                <CheckboxField
-                  label="三级小标题加粗"
-                  checked={config.specialOptions.boldHeading3}
-                  onChange={(v) => patch({ specialOptions: { boldHeading3: v } })}
-                />
-              </div>
-
-              {/* 落款 */}
-              <div className="settings-special-card">
-                <h4 className="settings-special-card-title">落款</h4>
+                <h4 className="settings-special-card-title">落款与印章</h4>
                 <div className="settings-special-card-body">
                   <TextField
                     label="落款人"
@@ -596,55 +594,58 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                     placeholder="如：2024年1月1日"
                     onChange={(v) => patch({ specialOptions: { signatureDate: v } })}
                   />
+                  <div className="settings-stamp-wrap">
+                    <CheckboxField
+                      label={(
+                        <>
+                          加盖印章
+                          <span
+                            className="font-tooltip-icon"
+                            title="成文日期右空四字，发文机关署名以成文日期为基准居中"
+                          >
+                            ?
+                          </span>
+                        </>
+                      )}
+                      checked={config.specialOptions.hasStamp}
+                      onChange={(v) => patch({ specialOptions: { hasStamp: v } })}
+                    />
+                  </div>
                   <p className="settings-hint">落款距离最后一行公文正文空三行，以成文日期为基准居中排版</p>
                 </div>
               </div>
 
+              {/* 页码设置 */}
               <div className="settings-special-card">
-                <CheckboxField
-                  label={(
-                    <>
-                      加盖印章
-                      <span
-                        className="font-tooltip-icon"
-                        title="成文日期右空四字，发文机关署名以成文日期为基准居中"
-                      >
-                        ?
-                      </span>
-                    </>
+                <h4 className="settings-special-card-title">页码设置</h4>
+                <div className="settings-special-card-body">
+                  <CheckboxField
+                    label="添加页码"
+                    checked={config.specialOptions.showPageNumber}
+                    onChange={(v) => patch({ specialOptions: { showPageNumber: v } })}
+                  />
+                  {config.specialOptions.showPageNumber && (
+                    <div className="settings-sub-fields" style={{ marginTop: '10px' }}>
+                      <CheckboxField
+                        label="首页无页码"
+                        checked={config.specialOptions.firstPageNoNumber}
+                        onChange={(v) => patch({ specialOptions: { firstPageNoNumber: v } })}
+                      />
+                      <FontSelectField
+                        label="页码字体"
+                        value={config.specialOptions.pageNumberFont}
+                        {...fontFieldProps}
+                        onChange={(v) => patch({ specialOptions: { pageNumberFont: v } })}
+                      />
+                      <SelectField
+                        label="页码样式"
+                        value={config.specialOptions.pageNumberStyle}
+                        options={PAGE_NUMBER_STYLE_OPTIONS}
+                        onChange={(v) => patch({ specialOptions: { pageNumberStyle: v as PageNumberStyle } })}
+                      />
+                    </div>
                   )}
-                  checked={config.specialOptions.hasStamp}
-                  onChange={(v) => patch({ specialOptions: { hasStamp: v } })}
-                />
-              </div>
-
-              <div className="settings-special-card">
-                <CheckboxField
-                  label="添加页码"
-                  checked={config.specialOptions.showPageNumber}
-                  onChange={(v) => patch({ specialOptions: { showPageNumber: v } })}
-                />
-                {config.specialOptions.showPageNumber && (
-                  <div className="settings-special-card-body">
-                    <CheckboxField
-                      label="首页无页码"
-                      checked={config.specialOptions.firstPageNoNumber}
-                      onChange={(v) => patch({ specialOptions: { firstPageNoNumber: v } })}
-                    />
-                    <FontSelectField
-                      label="页码字体"
-                      value={config.specialOptions.pageNumberFont}
-                      {...fontFieldProps}
-                      onChange={(v) => patch({ specialOptions: { pageNumberFont: v } })}
-                    />
-                    <SelectField
-                      label="页码样式"
-                      value={config.specialOptions.pageNumberStyle}
-                      options={PAGE_NUMBER_STYLE_OPTIONS}
-                      onChange={(v) => patch({ specialOptions: { pageNumberStyle: v as PageNumberStyle } })}
-                    />
-                  </div>
-                )}
+                </div>
               </div>
             </div>
           </section>

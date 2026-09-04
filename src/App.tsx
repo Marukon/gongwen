@@ -13,6 +13,31 @@ import './App.css'
 
 const STORAGE_KEY_TEXT = 'docx-editor-source-text'
 const STORAGE_KEY_FORMATTED = 'docx-editor-formatted-html'
+const STORAGE_KEY_VERSION_SEQ = 'docx-editor-version-seq'
+const STORAGE_KEY_VERSION_DATE = 'docx-editor-version-date'
+
+const baseDate = (() => {
+  const v = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__.split('-')[0] : ''
+  if (/^v\d{4}\.\d{2}\.\d{2}$/.test(v)) return v
+  const now = new Date()
+  const y = now.getFullYear()
+  const m = String(now.getMonth() + 1).padStart(2, '0')
+  const d = String(now.getDate()).padStart(2, '0')
+  return `v${y}.${m}.${d}`
+})()
+
+function loadVersionSeq(currentBaseDate: string): number {
+  try {
+    const savedDate = localStorage.getItem(STORAGE_KEY_VERSION_DATE)
+    if (savedDate === currentBaseDate) {
+      const savedSeq = parseInt(localStorage.getItem(STORAGE_KEY_VERSION_SEQ) || '1', 10)
+      if (!Number.isNaN(savedSeq) && savedSeq >= 1) return savedSeq
+    }
+  } catch {
+    // ignore
+  }
+  return 1
+}
 
 /** 从 localStorage 读取持久化的编辑区文本 */
 function loadSourceText(): string {
@@ -34,14 +59,48 @@ function loadFormattedHtml(): string {
 function App() {
   const [text, setText] = useState(loadSourceText)
   const [formattedHtml, setFormattedHtml] = useState(loadFormattedHtml)
+  const [versionSeq, setVersionSeq] = useState(() => loadVersionSeq(baseDate))
   const [importing, setImporting] = useState(false)
   const [exporting, setExporting] = useState(false)
   const [fixFeedback, setFixFeedback] = useState('')
+
+  const isMountedRef = useRef(false)
+  const prevTextRef = useRef(text)
+  const prevHtmlRef = useRef(formattedHtml)
 
   const { config, updateConfig } = useDocumentConfig()
   const configRef = useRef(config)
   configRef.current = config
   const ast = useDocumentParser(formattedHtml)
+
+  // 监听编辑改动，防抖 600ms 递增版本序号并持久化
+  useEffect(() => {
+    if (!isMountedRef.current) {
+      isMountedRef.current = true
+      return
+    }
+
+    if (text === prevTextRef.current && formattedHtml === prevHtmlRef.current) {
+      return
+    }
+
+    const timer = setTimeout(() => {
+      prevTextRef.current = text
+      prevHtmlRef.current = formattedHtml
+      setVersionSeq((prev) => {
+        const next = prev + 1
+        try {
+          localStorage.setItem(STORAGE_KEY_VERSION_SEQ, String(next))
+          localStorage.setItem(STORAGE_KEY_VERSION_DATE, baseDate)
+        } catch {
+          // ignore
+        }
+        return next
+      })
+    }, 600)
+
+    return () => clearTimeout(timer)
+  }, [text, formattedHtml])
 
   // Auto-Save: debounce 500ms 写入 localStorage
   const timerRef = useRef<ReturnType<typeof setTimeout>>(undefined)
@@ -164,6 +223,7 @@ function App() {
         onImport={handleImport}
         importing={importing}
         exporting={exporting}
+        version={`${baseDate}-${versionSeq}`}
       />
       <div className="app-main">
         <div className="app-editor">

@@ -15,6 +15,9 @@ const DIGIT_OR_CJK_NUMERAL = /[0-9一二三四五六七八九十百千万零]/
 /** 枚举子项：中文数字 + “是”，如「一是」「十二是」（不应被合并进上一段） */
 const SUB_ITEM_RE = /^[一二三四五六七八九十]+是/
 
+/** 副标题行：破折号开头，如「——学习...」「--...」 */
+const SUBTITLE_RE = /^(?:[\u2014\u2015\u2500\u2013\-]{1,2}|——|--|—)\s*/
+
 /** 日期行：全角或半角括号包裹的 YYYY年M月D日，或裸日期 */
 const DATE_LINE_RE = /^(?:（|\()?\d{4}年\d{1,2}月\d{1,2}日(?:）|\))?$/
 
@@ -254,6 +257,22 @@ export function removeMeaninglessLineBreaks(text: string): SanitizeResult {
     // 不向前合并（否则会因上一段不以冒号结尾而被吞并，导致仅首句被加粗）。
     const isCurrentSubItem = SUB_ITEM_RE.test(currentTrimmed)
 
+    // 副标题行（如 ——学习...）不应合并进前行，也不应吞并后行
+    const isCurrentSubtitle = SUBTITLE_RE.test(currentTrimmed)
+    const isPrevSubtitle = SUBTITLE_RE.test(prevTrimmed)
+    // 检查当前行是否为紧随成文日期的姓名短行（如「张三\n2026年8月28日」）
+    let isCurrentNameBeforeDate = false
+    if (currentTrimmed.length > 0 && currentTrimmed.length <= 15) {
+      for (let nextIdx = i + 1; nextIdx < lines.length; nextIdx++) {
+        const nextTrimmed = lines[nextIdx].trim()
+        if (nextTrimmed.length === 0) continue
+        if (DATE_LINE_RE.test(nextTrimmed)) {
+          isCurrentNameBeforeDate = true
+        }
+        break
+      }
+    }
+
     if (
       isPrevSentenceComplete ||
       isPrevHeading ||
@@ -264,7 +283,10 @@ export function removeMeaninglessLineBreaks(text: string): SanitizeResult {
       isCurrentColonEnding ||
       isCurrentDateLine ||
       isPrevDateLine ||
-      isCurrentSubItem
+      isCurrentSubItem ||
+      isCurrentSubtitle ||
+      isPrevSubtitle ||
+      isCurrentNameBeforeDate
     ) {
       resultLines.push(line)
     } else {

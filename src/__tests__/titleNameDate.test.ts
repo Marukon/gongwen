@@ -52,6 +52,32 @@ describe('Issue 1: 有人名日期 checkbox', () => {
     expect(html.match(/（（/g)).toBeNull() // 不应双重括号
   })
 
+  it('含副标题（破折号开头）时：副标题并入标题，姓名与日期正确识别', () => {
+    const subtitleRaw = [
+      '在“上传下达”中走好新时代群众路线',
+      '——学习关于基层工作方法重要论述体会',
+      '张三',
+      '2026年8月28日',
+      '一、总体要求',
+      '抓好落实。',
+    ].join('\n')
+    const ast = parseGongwen(subtitleRaw)
+    expect(ast.title).not.toBeNull()
+    expect(ast.title!.content).toBe('在“上传下达”中走好新时代群众路线\n——学习关于基层工作方法重要论述体会')
+    expect(ast.body[0].content).toBe('张三')
+    expect(ast.body[1].content).toBe('2026年8月28日')
+
+    const html = astToStyledHtml(ast, config)
+    // 包含两个独立的 a4-title 段落
+    expect(html).toContain('<p class="a4-title">在“上传下达”中走好新时代群众路线</p>')
+    expect(html).toContain('<p class="a4-title">——学习关于基层工作方法重要论述体会</p>')
+    // 姓名和日期类
+    expect(html).toContain('a4-title-secondary')
+    expect(html).toContain('张三')
+    expect(html).toContain('a4-title-date')
+    expect(html).toContain('（2026年8月28日）')
+  })
+
   it('unchecked: line2 treated as body (no name/date classes)', () => {
     const ast = parseGongwen(raw)
     const html = astToStyledHtml(ast, DEFAULT_CONFIG)
