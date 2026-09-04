@@ -44,15 +44,35 @@ export function normalizeEditorHtml(html: string): string {
 
   const doc = createDocument(html)
   const root = getRoot(doc)
-  if (!root) return plainTextToEditorHtml(html)
+  if (!doc || !root) return plainTextToEditorHtml(html)
 
-  const directBlockChildren = Array.from(root.childNodes).some((node) => (
+  const children = Array.from(root.childNodes)
+  const directBlockChildren = children.some((node) => (
     node.nodeType === Node.ELEMENT_NODE && BLOCK_TAGS.has((node as Element).tagName)
   ))
 
   if (!directBlockChildren) {
     const text = root.textContent ?? ''
     return plainTextToEditorHtml(text)
+  }
+
+  // Wrap any orphan inline nodes or text nodes directly under root into <p>
+  let currentP: HTMLElement | null = null
+  for (const child of children) {
+    if (child.nodeType === Node.ELEMENT_NODE && BLOCK_TAGS.has((child as Element).tagName)) {
+      currentP = null
+      continue
+    }
+
+    if (child.nodeType === Node.TEXT_NODE && !child.textContent?.trim()) {
+      continue
+    }
+
+    if (!currentP) {
+      currentP = doc.createElement('p')
+      root.insertBefore(currentP, child)
+    }
+    currentP.appendChild(child)
   }
 
   if (root.innerHTML.trim() === '') return '<p><br></p>'

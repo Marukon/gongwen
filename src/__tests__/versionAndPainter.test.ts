@@ -55,3 +55,55 @@ describe('Version Sequence Numbering', () => {
     expect(v2).toMatch(/^v\d{4}\.\d{2}\.\d{2}-2$/)
   })
 })
+
+describe('parseRichGongwen handles format painter HTML', () => {
+  it('parses spans at root level or nested inside paragraphs', async () => {
+    const { parseRichGongwen } = await import('../parser/richParser')
+    // Scenario 1: span wrapped around text inside paragraph
+    const html1 = '<p class="a4-title">这是公文标题</p><p class="a4-paragraph"><span style="font-family: FangSong; font-size: 16pt;">被刷格式的文字</span>正常文字</p>'
+    const ast1 = parseRichGongwen(html1)
+    expect(ast1.body[0].content).toContain('被刷格式的文字')
+
+    // Scenario 2: span inserted at root level (extracted contents)
+    const html2 = '<p class="a4-title">这是公文标题</p><span style="font-family: FangSong; font-size: 16pt;">被刷格式的文字</span><p class="a4-paragraph">正常文字</p>'
+    const ast2 = parseRichGongwen(html2)
+    expect(ast2.body.some(b => b.content.includes('被刷格式的文字'))).toBe(true)
+  })
+
+  it('exports manual rich runs to docx without losing text or formatting even with boldFirstSentence', async () => {
+    const { buildDocument } = await import('../exporter/docxBuilder')
+    const { DEFAULT_CONFIG } = await import('../types/documentConfig')
+    const { NodeType } = await import('../types/ast')
+    const { Packer } = await import('docx')
+    const JSZip = (await import('jszip')).default
+
+    const config = {
+      ...DEFAULT_CONFIG,
+      specialOptions: { ...DEFAULT_CONFIG.specialOptions, boldFirstSentence: true },
+    }
+
+    const ast = {
+      title: { type: NodeType.DOCUMENT_TITLE, content: '测试标题', lineNumber: 1 },
+      body: [
+        {
+          type: NodeType.PARAGRAPH,
+          content: '被刷格式的文字和后续普通文字。',
+          lineNumber: 2,
+          runs: [
+            { text: '被刷格式的文字', bold: true, fontFamily: '黑体', fontSize: 16 },
+            { text: '和后续普通文字。' },
+          ],
+        },
+      ],
+    }
+
+    const doc = buildDocument(ast, config)
+    const buf = await Packer.toBuffer(doc)
+    const zip = await JSZip.loadAsync(buf)
+    const xml = await zip.file('word/document.xml')!.async('string')
+
+    expect(xml).toContain('被刷格式的文字')
+    expect(xml).toContain('和后续普通文字。')
+    expect(xml).toContain('黑体')
+  })
+})

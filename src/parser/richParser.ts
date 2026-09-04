@@ -1,5 +1,6 @@
 import type { GongwenAST, ParagraphAlignment, RichTextRun } from '../types/ast'
 import { parseParsedLines } from './parser'
+import { normalizeFontName } from '../utils/fontAliases'
 
 interface ParsedRichLine {
   text: string
@@ -8,8 +9,6 @@ interface ParsedRichLine {
   alignment?: ParagraphAlignment
   noIndent?: boolean
 }
-
-const BLOCK_TAGS = new Set(['P', 'DIV', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6'])
 
 function mergeAdjacentRuns(runs: RichTextRun[]): RichTextRun[] {
   const merged: RichTextRun[] = []
@@ -75,12 +74,15 @@ function extractRuns(node: Node, inherited: Omit<RichTextRun, 'text'> = {}): Ric
   if (inlineStyle.fontWeight === 'bold') nextStyle.bold = true
   if (inlineStyle.fontStyle === 'italic') nextStyle.italic = true
   if (inlineStyle.textDecoration.includes('underline')) nextStyle.underline = true
-  if (inlineStyle.fontFamily) nextStyle.fontFamily = inlineStyle.fontFamily.split(',')[0].trim().replace(/^['"]|['"]$/g, '')
+  if (inlineStyle.fontFamily) {
+    const rawFamily = inlineStyle.fontFamily.split(',')[0].trim().replace(/^['"]|['"]$/g, '')
+    nextStyle.fontFamily = normalizeFontName(rawFamily)
+  }
   if (inlineStyle.fontSize) nextStyle.fontSize = parseFontSize(inlineStyle.fontSize)
 
   if (tagName === 'FONT') {
     const face = element.getAttribute('face')
-    if (face) nextStyle.fontFamily = face
+    if (face) nextStyle.fontFamily = normalizeFontName(face)
   }
 
   if (tagName === 'BR') return [{ text: '', ...nextStyle }]
@@ -95,7 +97,7 @@ function extractBlocks(root: HTMLElement): ParsedRichLine[] {
   let lineNumber = 1
 
   for (const child of Array.from(root.childNodes)) {
-    if (child.nodeType === Node.ELEMENT_NODE && BLOCK_TAGS.has((child as Element).tagName)) {
+    if (child.nodeType === Node.ELEMENT_NODE) {
       const element = child as HTMLElement
       const rawText = element.textContent?.replace(/\u00a0/g, ' ') ?? ''
       const alignment = parseTextAlign(element.style.textAlign || element.getAttribute('align'))
@@ -119,12 +121,14 @@ function extractBlocks(root: HTMLElement): ParsedRichLine[] {
 
     if (child.nodeType === Node.TEXT_NODE) {
       const rawText = child.textContent?.replace(/\u00a0/g, ' ') ?? ''
-      blocks.push({
-        text: rawText,
-        lineNumber,
-        runs: [{ text: rawText }],
-      })
-      lineNumber++
+      if (rawText.trim().length > 0) {
+        blocks.push({
+          text: rawText,
+          lineNumber,
+          runs: [{ text: rawText }],
+        })
+        lineNumber++
+      }
     }
   }
 

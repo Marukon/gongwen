@@ -12,6 +12,39 @@ const PREVIEW_FONT_ALIASES: Record<string, string[]> = {
   华文仿宋: ['华文仿宋', 'STFangsong', '仿宋', 'FangSong'],
   华文楷体: ['华文楷体', 'STKaiti', '楷体', 'KaiTi'],
   华文彩云: ['华文彩云', 'STCaiyun'],
+  SimHei: ['黑体', 'SimHei', 'STHeiti', 'Heiti SC'],
+  SimSun: ['宋体', 'SimSun', 'STSong', 'Songti SC'],
+  FangSong: ['仿宋_GB2312', '仿宋', 'FangSong', 'STFangsong'],
+  KaiTi: ['楷体_GB2312', '楷体', 'KaiTi', 'STKaiti'],
+}
+
+export function normalizeFontName(fontName: string): string {
+  const trimmed = fontName.trim().replace(/^['"]|['"]$/g, '')
+  if (!trimmed) return ''
+  switch (trimmed.toLowerCase()) {
+    case 'simhei':
+    case 'heiti sc':
+    case 'stheiti':
+      return '黑体'
+    case 'fangsong':
+    case 'fangsong_gb2312':
+    case 'stfangsong':
+      return '仿宋_GB2312'
+    case 'kaiti':
+    case 'kaiti_gb2312':
+    case 'stkaiti':
+      return '楷体_GB2312'
+    case 'simsun':
+    case 'stsong':
+    case 'songti sc':
+      return '宋体'
+    case 'fzxiaobiaosong-b05s':
+    case 'fzxiaobiaosong-b05':
+    case '方正小标宋_gbk':
+      return '方正小标宋简体'
+    default:
+      return trimmed
+  }
 }
 
 function quoteFontFamily(fontName: string): string {

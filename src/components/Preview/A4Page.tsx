@@ -2,6 +2,7 @@ import React, { type CSSProperties, memo } from 'react'
 import { NodeType } from '../../types/ast'
 import type { DocumentNode, AttachmentNode, RichTextRun } from '../../types/ast'
 import type { HeaderConfig, FooterNoteConfig, SpecialOptionsConfig } from '../../types/documentConfig'
+import { getPreviewFontFamily } from '../../utils/fontAliases'
 import './A4Page.css'
 
 /** 节点类型 → CSS 类名映射 */
@@ -252,6 +253,9 @@ export function renderA4Content(opts: A4ContentRenderOptions): React.ReactNode {
             nodeContent = hasRichStyleOverrides(node.runs)
               ? renderRichRuns(node.runs ?? [])
               : ensureTitleDateParentheses(node.content)
+          } else if (hasRichStyleOverrides(node.runs)) {
+            nodeClassName = NODE_CLASS_MAP[node.type]
+            nodeContent = renderRichRuns(node.runs ?? [])
           } else if (node.type === NodeType.HEADING_1) {
             nodeClassName = 'a4-h1'
             nodeContent = renderHeading1(node.content)
@@ -272,9 +276,7 @@ export function renderA4Content(opts: A4ContentRenderOptions): React.ReactNode {
             nodeContent = node.content ? renderBoldFirstSentence(node.content) : <br />
           } else {
             nodeClassName = NODE_CLASS_MAP[node.type]
-            nodeContent = hasRichStyleOverrides(node.runs)
-              ? renderRichRuns(node.runs ?? [])
-              : (node.content ? node.content : <br />)
+            nodeContent = node.content ? node.content : <br />
           }
 
           elements.push(
@@ -299,12 +301,18 @@ export function renderA4Content(opts: A4ContentRenderOptions): React.ReactNode {
               <p key={`sig-empty-${j}`} className="a4-empty-line">{'\u200B'}</p>
             ))}
             {signatureName && (
-              <p data-signature="true" className="a4-paragraph" style={{ textAlign: 'right', paddingRight: `${nameIndentEm}em` }}>
+              <p
+                className="a4-signature a4-signature-standalone"
+                style={{ paddingRight: `${nameIndentEm}em` }}
+              >
                 {signatureName}
               </p>
             )}
             {signatureDate && (
-              <p data-signature="true" className="a4-paragraph" style={{ textAlign: 'right', paddingRight: `${dateIndentEm}em` }}>
+              <p
+                className="a4-date a4-date-standalone"
+                style={{ paddingRight: `${dateIndentEm}em` }}
+              >
                 {signatureDate}
               </p>
             )}
@@ -327,8 +335,8 @@ function renderRichRuns(runs: RichTextRun[]) {
     <span
       key={`${index}-${run.text}`}
       style={{
-        fontFamily: run.fontFamily,
-        fontSize: run.fontSize ? `${run.fontSize}px` : undefined,
+        fontFamily: run.fontFamily ? getPreviewFontFamily(run.fontFamily) : undefined,
+        fontSize: run.fontSize ? `${run.fontSize}pt` : undefined,
         fontWeight: run.bold ? 'bold' : undefined,
         fontStyle: run.italic ? 'italic' : undefined,
         textDecoration: run.underline ? 'underline' : undefined,

@@ -386,6 +386,11 @@ function nodeToParagraph(
     return paragraph
   }
 
+  // 编辑器中手动加粗/斜体/下划线等：使用 runs 中的样式信息，优先于规则推导
+  if (node.runs && node.runs.length > 0 && node.runs.some((r) => r.bold || r.italic || r.underline || r.fontFamily || r.fontSize)) {
+    return createParagraph(runsToTextRuns(node.runs, runStyle))
+  }
+
   // 一至四级标题：首句用标题样式，句号后切换为正文样式
   if (
     node.type === NodeType.HEADING_1 ||
@@ -399,11 +404,6 @@ function nodeToParagraph(
   // 正文首句加粗
   if (node.type === NodeType.PARAGRAPH && config.specialOptions.boldFirstSentence) {
     return createParagraph(splitBoldFirstSentence(node.content, runStyle))
-  }
-
-  // 编辑器中手动加粗/斜体/下划线等：使用 runs 中的样式信息
-  if (node.runs && node.runs.length > 0 && node.runs.some((r) => r.bold || r.italic || r.underline || r.fontFamily || r.fontSize)) {
-    return createParagraph(runsToTextRuns(node.runs, runStyle))
   }
 
   return createParagraph([

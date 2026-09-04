@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useRef, useState, useCallback, type CSSProperties, type KeyboardEvent } from 'react'
 import { useDocumentConfig } from '../../contexts/useDocumentConfig'
 import { CHARS_PER_LINE, FONT_OPTIONS, FONT_SIZE_OPTIONS, cmToPagePercent, A4_RENDER_WIDTH_PX, A4_RENDER_HEIGHT_PX } from '../../types/documentConfig'
+import type { ParagraphAlignment } from '../../types/ast'
 import { normalizeEditorHtml } from '../../utils/richText'
+import { normalizeFontName } from '../../utils/fontAliases'
 import { useDocumentParser } from '../../hooks/useDocumentParser'
 import { useFitScale } from '../../hooks/useFitScale'
 import { PrintPreview } from './PrintPreview'
@@ -26,20 +28,77 @@ function exec(command: string, value?: string) {
   document.execCommand(command, false, value)
 }
 
+function applyInlineStyleToRange(range: Range, format: Partial<CapturedFormat>) {
+  const container = range.commonAncestorContainer.nodeType === Node.TEXT_NODE
+    ? range.commonAncestorContainer.parentElement!
+    : range.commonAncestorContainer
+
+  const textNodes: Text[] = []
+  const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT, {
+    acceptNode(node) {
+      try {
+        if (!range.intersectsNode(node)) return NodeFilter.FILTER_REJECT
+        return NodeFilter.FILTER_ACCEPT
+      } catch {
+        return NodeFilter.FILTER_REJECT
+      }
+    },
+  })
+
+  let currentNode = walker.nextNode() as Text | null
+  while (currentNode) {
+    textNodes.push(currentNode)
+    currentNode = walker.nextNode() as Text | null
+  }
+
+  if (textNodes.length === 0 && range.commonAncestorContainer.nodeType === Node.TEXT_NODE) {
+    textNodes.push(range.commonAncestorContainer as Text)
+  }
+
+  for (const textNode of textNodes) {
+    const textVal = textNode.textContent ?? ''
+    if (textVal.length === 0) continue
+
+    let startOffset = 0
+    let endOffset = textVal.length
+
+    if (textNode === range.startContainer) {
+      startOffset = range.startOffset
+    }
+    if (textNode === range.endContainer) {
+      endOffset = range.endOffset
+    }
+
+    if (startOffset >= endOffset) continue
+
+    let targetNode = textNode
+    if (startOffset > 0) {
+      targetNode = textNode.splitText(startOffset)
+      endOffset -= startOffset
+    }
+    if (endOffset < (targetNode.textContent?.length ?? 0)) {
+      targetNode.splitText(endOffset)
+    }
+
+    const span = document.createElement('span')
+    if (format.fontFamily) span.style.fontFamily = format.fontFamily
+    if (format.fontSizePt) span.style.fontSize = `${format.fontSizePt}pt`
+    if (format.bold) span.style.fontWeight = 'bold'
+    if (format.italic) span.style.fontStyle = 'italic'
+    if (format.underline) span.style.textDecoration = 'underline'
+    if (format.color) span.style.color = format.color
+
+    targetNode.parentNode?.insertBefore(span, targetNode)
+    span.appendChild(targetNode)
+  }
+}
+
 function applyFontSize(size: number) {
   const selection = window.getSelection()
   if (!selection || selection.rangeCount === 0 || selection.isCollapsed) return
 
   const range = selection.getRangeAt(0)
-  const span = document.createElement('span')
-  span.style.fontSize = `${size}pt`
-  try {
-    range.surroundContents(span)
-  } catch {
-    const fragment = range.extractContents()
-    span.appendChild(fragment)
-    range.insertNode(span)
-  }
+  applyInlineStyleToRange(range, { fontSizePt: size })
   selection.removeAllRanges()
 }
 
@@ -75,12 +134,13 @@ function getSelectedBlocks(root: HTMLElement): HTMLElement[] {
 
 interface CapturedFormat {
   fontFamily?: string
-  fontSize?: string
-  fontWeight?: string
-  fontStyle?: string
-  textDecoration?: string
+  fontSizePt?: number
+  bold?: boolean
+  italic?: boolean
+  underline?: boolean
   color?: string
-  textAlign?: string
+  textAlign?: ParagraphAlignment
+  blockClassName?: string
 }
 
 function getFormatAtSelection(editor: HTMLElement): CapturedFormat | null {
@@ -106,14 +166,48 @@ function getFormatAtSelection(editor: HTMLElement): CapturedFormat | null {
   const block = targetElement.closest<HTMLElement>(BLOCK_SELECTOR) || targetElement
   const blockComputed = window.getComputedStyle(block)
 
+  let fontFamily = targetElement.style.fontFamily || block.style.fontFamily
+  if (!fontFamily) {
+    const rawFont = computed.fontFamily || blockComputed.fontFamily
+    fontFamily = rawFont.split(',')[0].trim().replace(/^['"]|['"]$/g, '')
+  }
+  fontFamily = normalizeFontName(fontFamily)
+
+  let fontSizePt: number | undefined
+  const rawFontSize = targetElement.style.fontSize || block.style.fontSize || computed.fontSize
+  if (rawFontSize) {
+    if (rawFontSize.includes('pt')) {
+      fontSizePt = parseFloat(rawFontSize)
+    } else if (rawFontSize.includes('px')) {
+      fontSizePt = Math.round(parseFloat(rawFontSize) * 72 / 96)
+    }
+  }
+
+  const isBoldTag = targetElement.closest('b, strong') !== null
+  const isBoldWeight = computed.fontWeight === 'bold' || parseInt(computed.fontWeight, 10) >= 600
+  const isH1 = block.classList.contains('a4-h1') || block.tagName === 'H1' || targetElement.classList.contains('a4-h1-inline')
+  const isTitle = block.classList.contains('a4-title') || block.tagName === 'H1'
+  const bold = isBoldTag || isBoldWeight || isH1 || isTitle
+
+  const isItalicTag = targetElement.closest('i, em') !== null
+  const italic = isItalicTag || computed.fontStyle === 'italic'
+
+  const isUnderlineTag = targetElement.closest('u') !== null
+  const underline = isUnderlineTag || computed.textDecoration.includes('underline')
+
+  const textAlign = (block.style.textAlign || blockComputed.textAlign) as ParagraphAlignment
+
+  const blockClassName = Array.from(block.classList).find((c) => c.startsWith('a4-')) || 'a4-paragraph'
+
   return {
-    fontFamily: targetElement.style.fontFamily || computed.fontFamily,
-    fontSize: targetElement.style.fontSize || computed.fontSize,
-    fontWeight: targetElement.style.fontWeight || computed.fontWeight,
-    fontStyle: targetElement.style.fontStyle || computed.fontStyle,
-    textDecoration: targetElement.style.textDecoration || computed.textDecoration,
+    fontFamily,
+    fontSizePt,
+    bold,
+    italic,
+    underline,
     color: targetElement.style.color || computed.color,
-    textAlign: block.style.textAlign || blockComputed.textAlign,
+    textAlign,
+    blockClassName,
   }
 }
 
@@ -123,21 +217,7 @@ function applyFormatToSelection(editor: HTMLElement, format: CapturedFormat) {
   const range = sel.getRangeAt(0)
   if (!editor.contains(range.commonAncestorContainer)) return
 
-  const span = document.createElement('span')
-  if (format.fontFamily) span.style.fontFamily = format.fontFamily
-  if (format.fontSize) span.style.fontSize = format.fontSize
-  if (format.fontWeight) span.style.fontWeight = format.fontWeight
-  if (format.fontStyle) span.style.fontStyle = format.fontStyle
-  if (format.textDecoration) span.style.textDecoration = format.textDecoration
-  if (format.color) span.style.color = format.color
-
-  try {
-    range.surroundContents(span)
-  } catch {
-    const fragment = range.extractContents()
-    span.appendChild(fragment)
-    range.insertNode(span)
-  }
+  applyInlineStyleToRange(range, format)
 
   const blocks = getSelectedBlocks(editor)
   if (format.textAlign && blocks.length > 0) {
@@ -165,12 +245,38 @@ function applyFormatToBlock(block: HTMLElement, format: CapturedFormat) {
       block.dataset.alignNoIndent = 'true'
     }
   }
-  if (format.fontFamily) block.style.fontFamily = format.fontFamily
-  if (format.fontSize) block.style.fontSize = format.fontSize
-  if (format.fontWeight) block.style.fontWeight = format.fontWeight
-  if (format.fontStyle) block.style.fontStyle = format.fontStyle
-  if (format.textDecoration) block.style.textDecoration = format.textDecoration
-  if (format.color) block.style.color = format.color
+
+  if (format.blockClassName) {
+    block.className = format.blockClassName
+  }
+
+  if (format.fontFamily) {
+    block.style.fontFamily = format.fontFamily
+  }
+  if (format.fontSizePt) {
+    block.style.fontSize = `${format.fontSizePt}pt`
+  }
+  if (format.bold !== undefined) {
+    block.style.fontWeight = format.bold ? 'bold' : 'normal'
+  }
+  if (format.italic !== undefined) {
+    block.style.fontStyle = format.italic ? 'italic' : 'normal'
+  }
+  if (format.underline !== undefined) {
+    block.style.textDecoration = format.underline ? 'underline' : 'none'
+  }
+  if (format.color) {
+    block.style.color = format.color
+  }
+
+  for (const child of Array.from(block.querySelectorAll<HTMLElement>('span, strong, em, b, i, u'))) {
+    if (format.fontFamily) child.style.fontFamily = format.fontFamily
+    if (format.fontSizePt) child.style.fontSize = `${format.fontSizePt}pt`
+    if (format.bold !== undefined) child.style.fontWeight = format.bold ? 'bold' : 'normal'
+    if (format.italic !== undefined) child.style.fontStyle = format.italic ? 'italic' : 'normal'
+    if (format.underline !== undefined) child.style.textDecoration = format.underline ? 'underline' : 'none'
+    if (format.color) child.style.color = format.color
+  }
 }
 
 export function Preview({ value, onChange }: PreviewProps) {
