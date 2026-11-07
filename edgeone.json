@@ -6,14 +6,141 @@
         {
           "key": "X-Robots-Tag",
           "value": "noindex, nofollow, noarchive, nosnippet"
+        },
+        {
+          "key": "X-Content-Type-Options",
+          "value": "nosniff"
+        },
+        {
+          "key": "Referrer-Policy",
+          "value": "strict-origin-when-cross-origin"
+        }
+      ]
+    },
+    {
+      "source": "/sw.js",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-cache, no-store, must-revalidate"
+        },
+        {
+          "key": "Pragma",
+          "value": "no-cache"
+        },
+        {
+          "key": "Expires",
+          "value": "0"
+        }
+      ]
+    },
+    {
+      "source": "/*.html",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-cache, no-store, must-revalidate"
+        },
+        {
+          "key": "Pragma",
+          "value": "no-cache"
+        },
+        {
+          "key": "Expires",
+          "value": "0"
+        }
+      ]
+    },
+    {
+      "source": "/",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-cache, no-store, must-revalidate"
+        },
+        {
+          "key": "Pragma",
+          "value": "no-cache"
+        },
+        {
+          "key": "Expires",
+          "value": "0"
+        }
+      ]
+    },
+    {
+      "source": "/assets/*",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=31536000, immutable"
+        }
+      ]
+    },
+    {
+      "source": "/static/*",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=31536000, immutable"
+        }
+      ]
+    },
+    {
+      "source": "/*.wasm",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=2592000"
+        }
+      ]
+    },
+    {
+      "source": "/manifest.json",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=86400"
         }
       ]
     }
   ],
   "caches": [
     {
+      "source": "/sw.js",
+      "cacheTtl": 0
+    },
+    {
+      "source": "/",
+      "cacheTtl": 0
+    },
+    {
+      "source": "/index.html",
+      "cacheTtl": 0
+    },
+    {
+      "source": "/*.html",
+      "cacheTtl": 0
+    },
+    {
       "source": "/sitemap.xml",
       "cacheTtl": 0
+    },
+    {
+      "source": "/robots.txt",
+      "cacheTtl": 0
+    },
+    {
+      "source": "/assets/*",
+      "cacheTtl": 2592000
+    },
+    {
+      "source": "/static/*",
+      "cacheTtl": 2592000
+    },
+    {
+      "source": "/*.wasm",
+      "cacheTtl": 2592000
     },
     {
       "source": "/*.js",
@@ -25,31 +152,71 @@
     },
     {
       "source": "/*.woff2",
-      "cacheTtl": 864000
+      "cacheTtl": 2592000
     },
     {
       "source": "/*.woff",
-      "cacheTtl": 864000
+      "cacheTtl": 2592000
     },
     {
       "source": "/*.ttf",
-      "cacheTtl": 864000
+      "cacheTtl": 2592000
     },
     {
       "source": "/*.otf",
-      "cacheTtl": 864000
+      "cacheTtl": 2592000
+    },
+    {
+      "source": "/*.eot",
+      "cacheTtl": 2592000
     },
     {
       "source": "/*.png",
-      "cacheTtl": 864000
+      "cacheTtl": 2592000
+    },
+    {
+      "source": "/*.jpg",
+      "cacheTtl": 2592000
+    },
+    {
+      "source": "/*.jpeg",
+      "cacheTtl": 2592000
     },
     {
       "source": "/*.webp",
-      "cacheTtl": 864000
+      "cacheTtl": 2592000
+    },
+    {
+      "source": "/*.avif",
+      "cacheTtl": 2592000
+    },
+    {
+      "source": "/*.gif",
+      "cacheTtl": 2592000
     },
     {
       "source": "/*.svg",
-      "cacheTtl": 864000
+      "cacheTtl": 2592000
+    },
+    {
+      "source": "/*.ico",
+      "cacheTtl": 604800
+    },
+    {
+      "source": "/*.mp3",
+      "cacheTtl": 2592000
+    },
+    {
+      "source": "/*.mp4",
+      "cacheTtl": 2592000
+    },
+    {
+      "source": "/*.webm",
+      "cacheTtl": 2592000
+    },
+    {
+      "source": "/manifest.json",
+      "cacheTtl": 86400
     }
   ]
 }
