@@ -45,6 +45,8 @@ export interface DocumentNode {
   alignment?: ParagraphAlignment
   /** 取消默认首行缩进 */
   noIndent?: boolean
+  /** 标题的独立版面行，保存分行后的富文本和对齐。 */
+  titleLines?: Array<Pick<DocumentNode, 'content' | 'lineNumber' | 'runs' | 'alignment' | 'noIndent'>>
 }
 
 /** 附件项 */
@@ -68,4 +70,10 @@ export interface AttachmentNode extends DocumentNode {
 export interface GongwenAST {
   title: DocumentNode | null
   body: DocumentNode[]
+}
+
+export function getTitleLines(title: DocumentNode): DocumentNode[] {
+  if (title.titleLines) return title.titleLines.map((line) => ({ ...line, type: NodeType.DOCUMENT_TITLE }))
+  const lines = title.content.split('\n').filter(Boolean)
+  return lines.map((content) => ({ ...title, content, runs: lines.length === 1 ? title.runs : undefined }))
 }

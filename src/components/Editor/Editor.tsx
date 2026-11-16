@@ -69,7 +69,7 @@ export const Editor = memo(function Editor({
       <div className="editor-header">
         <div className="editor-header-main">
           <span className="editor-label">原文</span>
-          <span className="editor-hint">左侧只保留原始内容输入，右侧用于排版和局部样式调整</span>
+          <span className="editor-hint">修改原文会重新排版；微调请在版面编辑区完成。</span>
         </div>
         <div className="editor-header-actions">
           {fixFeedback && (
@@ -80,7 +80,7 @@ export const Editor = memo(function Editor({
           {onToggleHasTitleNameDate && (
             <label
               className="editor-checkbox"
-              title="勾选后：第二行识别为姓名，第三行识别为日期（日期自动加括号，姓名与日期楷体居中三号）"
+              title="勾选后识别标题下相邻的姓名和有效日期，空行不影响识别。"
             >
               <input
                 type="checkbox"

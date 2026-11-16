@@ -159,13 +159,7 @@ export const DEFAULT_CONFIG: DocumentConfig = {
     boldHeading3: true,
     hasStamp: false,
     signatureName: '',
-    signatureDate: (() => {
-      const d = new Date()
-      const y = d.getFullYear()
-      const m = String(d.getMonth() + 1).padStart(2, '0')
-      const day = String(d.getDate()).padStart(2, '0')
-      return `${y}年${m}月${day}日`
-    })(),
+    signatureDate: '',
     hasTitleNameDate: false,
   },
   textFixOptions: {

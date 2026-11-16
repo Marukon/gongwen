@@ -64,7 +64,11 @@ export function DocumentConfigProvider({ children }: { children: ReactNode }) {
 
   // 持久化到 localStorage
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(config))
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(config))
+    } catch {
+      // 禁用存储或超出配额时，仍可编辑并使用本次会话中的配置。
+    }
   }, [config])
 
   return (

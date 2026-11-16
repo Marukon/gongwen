@@ -6,13 +6,15 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
-    "build:single": "tsc -b && SINGLE_FILE=1 vite build",
+    "build:single": "tsc -b && vite build --mode single",
+    "test": "vitest run",
     "lint": "eslint .",
     "preview": "vite preview"
   },
   "dependencies": {
     "@vercel/analytics": "^2.0.1",
     "docx": "^9.6.1",
+    "dompurify": "3.4.18",
     "file-saver": "^2.0.5",
     "mammoth": "^1.11.0",
     "react": "^19.2.0",

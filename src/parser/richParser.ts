@@ -54,7 +54,8 @@ function parseTextAlign(raw: string | null): ParagraphAlignment | undefined {
   }
 }
 
-function extractRuns(node: Node, inherited: Omit<RichTextRun, 'text'> = {}): RichTextRun[] {
+// null 表示实际的 DOM 换行；源码里的空白字符仍按普通文本处理。
+function extractRuns(node: Node, inherited: Omit<RichTextRun, 'text'> = {}): (RichTextRun | null)[] {
   if (node.nodeType === Node.TEXT_NODE) {
     return [{ text: node.textContent?.replace(/\u00a0/g, ' ') ?? '', ...inherited }]
   }
@@ -70,9 +71,10 @@ function extractRuns(node: Node, inherited: Omit<RichTextRun, 'text'> = {}): Ric
   if (tagName === 'U') nextStyle.underline = true
 
   const inlineStyle = element.style
-  if (inlineStyle.fontWeight && Number(inlineStyle.fontWeight) >= 600) nextStyle.bold = true
-  if (inlineStyle.fontWeight === 'bold') nextStyle.bold = true
+  if (inlineStyle.fontWeight === 'bold' || Number(inlineStyle.fontWeight) >= 600) nextStyle.bold = true
+  else if (inlineStyle.fontWeight === 'normal' || (inlineStyle.fontWeight && Number(inlineStyle.fontWeight) < 600)) nextStyle.bold = false
   if (inlineStyle.fontStyle === 'italic') nextStyle.italic = true
+  else if (inlineStyle.fontStyle === 'normal') nextStyle.italic = false
   if (inlineStyle.textDecoration.includes('underline')) nextStyle.underline = true
   if (inlineStyle.fontFamily) {
     const rawFamily = inlineStyle.fontFamily.split(',')[0].trim().replace(/^['"]|['"]$/g, '')
@@ -85,11 +87,19 @@ function extractRuns(node: Node, inherited: Omit<RichTextRun, 'text'> = {}): Ric
     if (face) nextStyle.fontFamily = normalizeFontName(face)
   }
 
-  if (tagName === 'BR') return [{ text: '', ...nextStyle }]
+  if (tagName === 'BR') return [null]
 
-  return mergeAdjacentRuns(
-    Array.from(element.childNodes).flatMap((child) => extractRuns(child, nextStyle)),
-  )
+  const result: (RichTextRun | null)[] = []
+  let previousWasBlock = false
+  for (const child of Array.from(element.childNodes)) {
+    const runs = extractRuns(child, nextStyle)
+    if (!runs.length) continue
+    const isBlock = child instanceof HTMLElement && /^(?:DIV|P|H[1-6])$/.test(child.tagName)
+    if ((isBlock || previousWasBlock) && result.length && result[result.length - 1] !== null) result.push(null)
+    for (const run of runs) result.push(run)
+    previousWasBlock = isBlock
+  }
+  return result
 }
 
 function extractBlocks(root: HTMLElement): ParsedRichLine[] {
@@ -99,23 +109,25 @@ function extractBlocks(root: HTMLElement): ParsedRichLine[] {
   for (const child of Array.from(root.childNodes)) {
     if (child.nodeType === Node.ELEMENT_NODE) {
       const element = child as HTMLElement
-      const rawText = element.textContent?.replace(/\u00a0/g, ' ') ?? ''
       const alignment = parseTextAlign(element.style.textAlign || element.getAttribute('align'))
       const noIndent = element.dataset.noIndent === 'true'
-      if (rawText.trim().length === 0) {
-        // 空段落（回车）：保留为占位块，使预览中增删回车能如实反映到导出结果
-        blocks.push({ text: '', lineNumber, runs: [], alignment, noIndent })
-      } else {
-        const runs = mergeAdjacentRuns(extractRuns(element))
+      const lines: RichTextRun[][] = [[]]
+      for (const run of extractRuns(element)) {
+        if (run === null) lines.push([])
+        else lines[lines.length - 1].push(run)
+      }
+      // 浏览器常在末尾插一个 BR 占位；显式连续换行仍保留。
+      if (lines.length > 1 && lines[lines.length - 1].length === 0) lines.pop()
+      for (const line of lines) {
+        const runs = mergeAdjacentRuns(line)
         blocks.push({
           text: runs.map((run) => run.text).join(''),
-          lineNumber,
+          lineNumber: lineNumber++,
           runs,
           alignment,
           noIndent,
         })
       }
-      lineNumber++
       continue
     }
 

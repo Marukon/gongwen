@@ -4,7 +4,9 @@ import type { ParsedLineInput } from '../parser/parser'
 import { astToStyledHtml } from '../utils/richText'
 import { buildDocument } from '../exporter/docxBuilder'
 import { DEFAULT_CONFIG, type DocumentConfig } from '../types/documentConfig'
-import { getTitleRole, ensureTitleDateParentheses } from '../components/Preview/A4Page'
+import { renderA4Content } from '../components/Preview/A4Page'
+import { ensureTitleDateParentheses, getSupplementalSignature, getTitleMetadataIndices } from '../utils/documentDates'
+import { renderToStaticMarkup } from 'react-dom/server'
 import { NodeType, type DocumentNode } from '../types/ast'
 
 function docNode(content: string): DocumentNode {
@@ -26,6 +28,16 @@ describe('Issue 2: empty paragraphs preserved (return deletion propagates)', () 
   it('raw text path (preserveEmptyLines=false) still skips empty lines', () => {
     const ast = parseParsedLines(linesFromText('标题\n\n正文一\n\n正文二'), false)
     expect(ast.body.map((n) => n.content)).toEqual(['正文一', '正文二'])
+  })
+
+  it('缩进与空行不妨碍连续附件解析，文末空行不遮挡成文日期', () => {
+    const ast = parseGongwen('工作通知\n正文。\n  附件：1.清单\r\n\r\n  2.计划\r\n示例市人民政府办公室\r\n2024年02月29日\r\n', { preserveEmptyLines: true })
+    expect(ast.body.find((node) => node.type === NodeType.ATTACHMENT)).toMatchObject({
+      items: [{ index: 1, name: '清单' }, { index: 2, name: '计划' }],
+    })
+    expect(ast.body.slice(-3).map((node) => [node.type, node.content])).toEqual([
+      [NodeType.SIGNATURE, '示例市人民政府办公室'], [NodeType.DATE, '2024年2月29日'], [NodeType.PARAGRAPH, ''],
+    ])
   })
 })
 
@@ -96,24 +108,49 @@ describe('Issue 1: 有人名日期 checkbox', () => {
     expect(xml).toContain('楷体') // 楷体字体应用于姓名/日期
     expect(xml).toContain('（2024年1月1日）') // 导出 word 中日期自动加括号
   })
+
+  it('主副标题各自保留手工样式，保留一个成文日期并去掉前导零', async () => {
+    const ast = parseParsedLines([
+      { text: '工作报告', lineNumber: 1, runs: [{ text: '工作报告', bold: true }] },
+      { text: '——年度工作回顾', lineNumber: 2, runs: [{ text: '——年度工作回顾', italic: true }] },
+      { text: '正文。', lineNumber: 3 },
+      { text: '2024年02月29日', lineNumber: 4, runs: [{ text: '2024年', bold: true }, { text: '02月29日' }] },
+    ])
+    const settings = { ...config, specialOptions: { ...config.specialOptions, signatureDate: '2026年1月1日' } }
+    const signature = getSupplementalSignature(ast, settings.specialOptions)
+    const html = renderToStaticMarkup(renderA4Content({ ...settings.specialOptions, ...ast, signatureDate: signature.date }))
+    expect(html).toContain('style="font-weight:bold">工作报告</span>')
+    expect(html).toContain('style="font-style:italic">——年度工作回顾</span>')
+    expect(html).not.toContain('a4-title-secondary')
+    expect(html).not.toContain('2026年1月1日')
+    const { Packer } = await import('docx')
+    const JSZip = (await import('jszip')).default
+    const xml = await (await JSZip.loadAsync(await Packer.toBuffer(buildDocument(ast, settings))))
+      .file('word/document.xml')!.async('string')
+    expect(xml.match(/工作报告/g)).toHaveLength(1)
+    expect(xml).toContain('——年度工作回顾')
+    expect(xml).toContain('<w:i/>')
+    expect(xml).toContain('2月29日')
+    expect(xml).not.toContain('02月29日')
+    expect(xml).not.toContain('2026年1月1日')
+  })
 })
 
-describe('A4Page: 有人名日期 gating (mirrors richText/docxBuilder)', () => {
-  const title = docNode('关于XX工作的通知')
+describe('姓名、日期在编辑和分页预览中使用同一规则', () => {
+  const sample = parseGongwen('工作报告\n\n张三\n\n(2024年02月09日)\n一、总体要求', { preserveEmptyLines: true })
 
-  it('checked: index0=name, index1=date, index2=null', () => {
-    expect(getTitleRole(docNode('张三'), 0, title, true)).toBe('name')
-    expect(getTitleRole(docNode('2024年1月1日'), 1, title, true)).toBe('date')
-    expect(getTitleRole(docNode('一、总体要求'), 2, title, true)).toBeNull()
+  it('识别时跳过空行，分页预览统一使用全角括号并去除补零', () => {
+    expect(getTitleMetadataIndices(sample, true)).toEqual({ name: 1, date: 3 })
+    const html = renderToStaticMarkup(renderA4Content({ ...DEFAULT_CONFIG.specialOptions, ...sample, hasTitleNameDate: true }))
+    expect(html).toContain('a4-title-secondary')
+    expect(html).toContain('（2024年2月9日）')
   })
 
-  it('unchecked: everything is body (no regex auto-detection)', () => {
-    expect(getTitleRole(docNode('张三'), 0, title, false)).toBeNull()
-    expect(getTitleRole(docNode('2024年1月1日'), 1, title, false)).toBeNull()
-  })
-
-  it('no title: never name/date', () => {
-    expect(getTitleRole(docNode('张三'), 0, null, true)).toBeNull()
+  it('未启用、无标题、或没有有效日期时保留正文角色', () => {
+    expect(getTitleMetadataIndices(sample, false)).toEqual({ name: -1, date: -1 })
+    expect(getTitleMetadataIndices({ ...sample, title: null }, true)).toEqual({ name: -1, date: -1 })
+    const invalid = { title: sample.title, body: [docNode('张三'), docNode('2023年2月29日')] }
+    expect(getTitleMetadataIndices(invalid, true)).toEqual({ name: -1, date: -1 })
   })
 
   it('ensureTitleDateParentheses adds full-width parens, no double-wrap', () => {

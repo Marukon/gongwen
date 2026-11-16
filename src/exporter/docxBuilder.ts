@@ -6,15 +6,19 @@ import {
 } from 'docx'
 import type { IRunOptions, IBorderOptions, IParagraphOptions } from 'docx'
 import type { GongwenAST, DocumentNode, AttachmentNode, RichTextRun } from '../types/ast'
-import { NodeType } from '../types/ast'
+import { getTitleLines, NodeType } from '../types/ast'
 import type { DocumentConfig, PageNumberStyle } from '../types/documentConfig'
 import { cmToTwip, ptToTwip } from '../types/documentConfig'
+import { ensureTitleDateParentheses, getSupplementalSignature, getTitleMetadataIndices, normalizeDocumentDate } from '../utils/documentDates'
+import { getHeadingSpans, isDiscourseHeading, sliceHeadingText } from '../parser/headings'
 import {
   createCharacterFirstLineIndent,
   getParagraphStyle,
   getRunStyle,
   getAttachmentParagraphStyle,
   getAttachmentRunStyle,
+  hasRichStyleOverrides,
+  buildRunStyleOverride,
 } from './styleFactory'
 
 type StaticParagraphType =
@@ -181,29 +185,6 @@ function ensureChinesePeriod(text: string): string {
 }
 
 /**
- * 拆分标题首句：首句（到第一个"。"）用标题字体/样式，其余用仿宋正文样式
- * 适用于一至四级标题（黑体/楷体/仿宋加粗 + 仿宋正文）
- */
-function splitHeadingSentence(
-  content: string,
-  headingStyle: Partial<IRunOptions>,
-  bodyStyle: Partial<IRunOptions>,
-): TextRun[] {
-  const idx = content.indexOf('。')
-  if (idx === -1 || idx === content.length - 1) {
-    return [new TextRun({ ...headingStyle, text: content })]
-  }
-
-  const headingText = content.slice(0, idx + 1)
-  const bodyText = content.slice(idx + 1)
-
-  return [
-    new TextRun({ ...headingStyle, text: headingText }),
-    new TextRun({ ...bodyStyle, text: bodyText }),
-  ]
-}
-
-/**
  * 拆分正文首句加粗：首句（到第一个"。"）加粗
  */
 function splitBoldFirstSentence(content: string, runStyle: Partial<IRunOptions>): TextRun[] {
@@ -229,21 +210,7 @@ function runsToTextRuns(
   return runs
     .filter((run) => run.text.length > 0)
     .map((run) => {
-      const style: any = { ...baseRunStyle, text: run.text }
-      if (run.bold) style.bold = true
-      if (run.italic) style.italic = true
-      if (run.underline) style.underline = {}
-      if (run.fontFamily) {
-        style.font = {
-          ascii: run.fontFamily,
-          eastAsia: run.fontFamily,
-          hAnsi: run.fontFamily,
-        }
-      }
-      if (run.fontSize !== undefined) {
-        style.size = ptToTwip(run.fontSize) / 10
-      }
-      return new TextRun(style)
+      return new TextRun(buildRunStyleOverride(baseRunStyle, run))
     })
 }
 
@@ -347,11 +314,12 @@ function nodeToParagraph(
   dateContent?: string
 ): Paragraph {
   let paragraphStyle =
-    node.type === NodeType.SIGNATURE
-      ? getParagraphStyle(node.type, config, signatureContent, dateContent)
+    node.type === NodeType.SIGNATURE || node.alignment || node.noIndent
+      ? getParagraphStyle(node.type, config, signatureContent, dateContent, false, false, node.alignment, node.noIndent)
       : cache.paragraphStyles[node.type as StaticParagraphType] ?? getParagraphStyle(node.type, config)
   const runStyle = cache.runStyles[node.type] ?? getRunStyle(node.type, config)
-  const useCharacterIndent = cache.useCharacterIndent.has(node.type)
+  const useCharacterIndent = cache.useCharacterIndent.has(node.type) &&
+    !node.noIndent && (!node.alignment || node.alignment === 'justify')
 
   // 外部传入的额外 spacing.before（如版头后标题空二行）
   if (spacingBefore > 0) {
@@ -364,7 +332,9 @@ function nodeToParagraph(
   const baseParagraphStyle = useCharacterIndent
     ? { ...paragraphStyle, indent: undefined }
     : paragraphStyle
-  const wordHeadingOptions = getWordHeadingOptions(node.type)
+  const wordHeadingOptions = node.type === NodeType.HEADING_3 && isDiscourseHeading(node.content)
+    ? undefined
+    : getWordHeadingOptions(node.type)
 
   function createParagraph(children: TextRun[]): Paragraph {
     const paragraph = new Paragraph({
@@ -386,19 +356,17 @@ function nodeToParagraph(
     return paragraph
   }
 
-  // 编辑器中手动加粗/斜体/下划线等：使用 runs 中的样式信息，优先于规则推导
-  if (node.runs && node.runs.length > 0 && node.runs.some((r) => r.bold || r.italic || r.underline || r.fontFamily || r.fontSize)) {
-    return createParagraph(runsToTextRuns(node.runs, runStyle))
+  const styledRuns = hasRichStyleOverrides(node.runs) ? node.runs : undefined
+  const spans = getHeadingSpans(node.content, node.type)
+  if (spans.length > 0) {
+    return createParagraph(sliceHeadingText(node.content, spans, styledRuns).flatMap(({ text, type, runs }) => {
+      const base = type ? cache.runStyles[type] : cache.bodyRunStyle
+      return runs ? runsToTextRuns(runs, base) : [new TextRun({ ...base, text })]
+    }))
   }
 
-  // 一至四级标题：首句用标题样式，句号后切换为正文样式
-  if (
-    node.type === NodeType.HEADING_1 ||
-    node.type === NodeType.HEADING_2 ||
-    node.type === NodeType.HEADING_3 ||
-    node.type === NodeType.HEADING_4
-  ) {
-    return createParagraph(splitHeadingSentence(node.content, runStyle, cache.bodyRunStyle))
+  if (styledRuns) {
+    return createParagraph(runsToTextRuns(styledRuns, runStyle))
   }
 
   // 正文首句加粗
@@ -563,11 +531,10 @@ export function buildDocument(ast: GongwenAST, config: DocumentConfig): Document
     : 0
 
   if (ast.title) {
-    const title = ast.title
-    const lines = title.content.split('\n').filter(l => l.length > 0)
+    const lines = getTitleLines(ast.title)
     lines.forEach((line, idx) => {
       children.push(nodeToParagraph(
-        { ...title, content: line },
+        line,
         config,
         cache,
         idx === 0 ? titleSpacingBefore : 0,
@@ -575,7 +542,7 @@ export function buildDocument(ast: GongwenAST, config: DocumentConfig): Document
     })
   }
 
-  const hasTitleNameDate = config.specialOptions.hasTitleNameDate && ast.title !== null
+  const titleMetadata = getTitleMetadataIndices(ast, config.specialOptions.hasTitleNameDate)
   const bodyLineSpacing = ptToTwip(config.body.lineSpacing)
   const nameDateFont = {
     ascii: 'Times New Roman',
@@ -589,33 +556,20 @@ export function buildDocument(ast: GongwenAST, config: DocumentConfig): Document
     const node = ast.body[i]
     const isFirstBodyNode = i === 0
     
-    // hasTitleNameDate: 正文第 0 个节点为姓名，第 1 个为日期
-    if (hasTitleNameDate && i <= 1) {
-      if (i === 0) {
-        // 姓名：楷体 三号 居中
-        children.push(new Paragraph({
-          alignment: AlignmentType.CENTER,
-          spacing: { line: bodyLineSpacing, lineRule: LineRuleType.EXACT, before: 0, after: 0 },
-          children: [new TextRun({ font: nameDateFont, size: nameDateFontSize, text: node.content })],
-        }))
-        continue
-      }
-      if (i === 1) {
-        // 日期：楷体 三号 居中，自动加全角括号
-        let dateText = node.content.trim()
-        if (/^\d{4}年\d{1,2}月\d{1,2}日$/.test(dateText)) {
-          dateText = `（${dateText}）`
-        }
-        children.push(new Paragraph({
-          alignment: AlignmentType.CENTER,
-          spacing: { line: bodyLineSpacing, lineRule: LineRuleType.EXACT, before: 0, after: 0 },
-          children: [new TextRun({ font: nameDateFont, size: nameDateFontSize, text: dateText })],
-        }))
-        continue
-      }
+    if (i === titleMetadata.name || i === titleMetadata.date) {
+      const text = i === titleMetadata.date ? ensureTitleDateParentheses(node.content) : node.content
+      const style = { font: nameDateFont, size: nameDateFontSize }
+      children.push(new Paragraph({
+        ...getParagraphStyle(node.type, config, undefined, undefined, i === titleMetadata.date,
+          i === titleMetadata.name, node.alignment, node.noIndent),
+        children: node.runs && hasRichStyleOverrides(node.runs)
+          ? runsToTextRuns(node.runs, style)
+          : [new TextRun({ ...style, text })],
+      }))
+      continue
     }
     
-    // 发文机关署名前插入 2 个空行
+    // 与预览保持相同的署名前行距。
     if (node.type === NodeType.SIGNATURE) {
       const bodyFont = {
         ascii: 'Times New Roman',
@@ -625,7 +579,7 @@ export function buildDocument(ast: GongwenAST, config: DocumentConfig): Document
       }
       const bodyFontSize = config.body.fontSize * 2
       
-      for (let j = 0; j < 2; j++) {
+      for (let j = 0; j < (config.specialOptions.hasStamp ? 3 : 1); j++) {
         children.push(new Paragraph({
           spacing: { line: bodyLineSpacing, lineRule: LineRuleType.EXACT, before: 0, after: 0 },
           children: [new TextRun({ font: bodyFont, size: bodyFontSize, text: '' })],
@@ -653,8 +607,8 @@ export function buildDocument(ast: GongwenAST, config: DocumentConfig): Document
   }
 
   // ---- 落款（发文机关署名 + 成文日期） ----
-  const hasSignature = config.specialOptions.signatureName || config.specialOptions.signatureDate
-  if (hasSignature) {
+  const { name: nameText, date: dateText } = getSupplementalSignature(ast, config.specialOptions)
+  if (nameText || dateText) {
     const bodyFont = {
       ascii: 'Times New Roman',
       eastAsia: config.body.fontFamily,
@@ -663,10 +617,7 @@ export function buildDocument(ast: GongwenAST, config: DocumentConfig): Document
     }
     const bodyFontSize = config.body.fontSize * 2
     const oneCharWidth = ptToTwip(config.body.fontSize)
-    const nameText = config.specialOptions.signatureName || ''
-    const dateText = (config.specialOptions.signatureDate || '').trim()
-    const sigRunOptions: any = { font: bodyFont, size: bodyFontSize }
-    const dateRunOptions: any = { font: bodyFont, size: bodyFontSize }
+    const runOptions = { font: bodyFont, size: bodyFontSize }
 
     // 落款前空三行（距最后一行公文正文）
     for (let j = 0; j < 3; j++) {
@@ -688,24 +639,20 @@ export function buildDocument(ast: GongwenAST, config: DocumentConfig): Document
     const nameIndentChars = Math.max(0, dateIndentChars + (dateW - nameW) / 2)
 
     // 发文机关署名
-    children.push(new Paragraph({
+    if (nameText) children.push(new Paragraph({
       alignment: AlignmentType.RIGHT,
       indent: { right: Math.round(oneCharWidth * nameIndentChars) },
       spacing: { line: bodyLineSpacing, lineRule: LineRuleType.EXACT, before: 0, after: 0 },
-      children: nameText ? [
-        new TextRun({ ...sigRunOptions, text: nameText }),
-      ] : [],
+      children: [new TextRun({ ...runOptions, text: nameText })],
     }))
 
     // 成文日期（不添加括号）：在署名右空基础上向左微调 0.5 字，
     // 补偿仿宋中阿拉伯数字实际宽度大于 0.5em 估算造成的视觉左偏
-    children.push(new Paragraph({
+    if (dateText) children.push(new Paragraph({
       alignment: AlignmentType.RIGHT,
       indent: { right: Math.max(0, Math.round(oneCharWidth * (dateIndentChars - 0.5))) },
       spacing: { line: bodyLineSpacing, lineRule: LineRuleType.EXACT, before: 0, after: 0 },
-      children: dateText ? [
-        new TextRun({ ...dateRunOptions, text: dateText }),
-      ] : [],
+      children: [new TextRun({ ...runOptions, text: dateText })],
     }))
   }
 
@@ -767,8 +714,8 @@ export function buildDocument(ast: GongwenAST, config: DocumentConfig): Document
 
     if (hasPrint) {
       const printerText = config.footerNote.printer || ''
-      const dateText = config.footerNote.printDate
-        ? `${config.footerNote.printDate}印发`
+        const dateText = config.footerNote.printDate
+          ? `${normalizeDocumentDate(config.footerNote.printDate) ?? config.footerNote.printDate}印发`
         : ''
 
       footerRows.push(new TableRow({

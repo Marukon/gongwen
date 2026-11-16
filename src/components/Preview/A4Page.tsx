@@ -1,8 +1,10 @@
 import React, { type CSSProperties, memo } from 'react'
-import { NodeType } from '../../types/ast'
+import { getTitleLines, NodeType } from '../../types/ast'
 import type { DocumentNode, AttachmentNode, RichTextRun } from '../../types/ast'
 import type { HeaderConfig, FooterNoteConfig, SpecialOptionsConfig } from '../../types/documentConfig'
 import { getPreviewFontFamily } from '../../utils/fontAliases'
+import { ensureTitleDateParentheses, getTitleMetadataIndices, normalizeDocumentDate } from '../../utils/documentDates'
+import { getHeadingSpans, headingClass, sliceHeadingText } from '../../parser/headings'
 import './A4Page.css'
 
 /** 节点类型 → CSS 类名映射 */
@@ -56,33 +58,6 @@ export function calculateSignatureIndentEm(
   return Math.max(0, baseIndent + centerOffset)
 }
 
-export function ensureTitleDateParentheses(content: string): string {
-  const trimmed = content.trim()
-  if (/^[（(]\d{4}年\d{1,2}月\d{1,2}日[）)]$/.test(trimmed)) return trimmed
-  if (/^\d{4}年\d{1,2}月\d{1,2}日$/.test(trimmed)) return `（${trimmed}）`
-  return content
-}
-
-export type TitleRole = 'name' | 'date' | null
-
-/**
- * 计算节点是否为「标题下姓名/日期」
- * - 完全由 specialOptions.hasTitleNameDate 控制，与 richText.ts / docxBuilder.ts 行为一致：
- *   勾选 → 第二行(name, index 0)、第三行(date, index 1)
- *   未勾选 → 按正文处理（纯正文，不做正则自动识别）
- */
-export function getTitleRole(
-  _node: DocumentNode,
-  index: number,
-  title: DocumentNode | null,
-  hasTitleNameDate: boolean,
-): TitleRole {
-  if (title === null || !hasTitleNameDate) return null
-  if (index === 0) return 'name'
-  if (index === 1) return 'date'
-  return null
-}
-
 /* ------------------------------------------------------------------ */
 /* 以下渲染函数提取为模块级，供 A4Page 与打印预览的隐藏度量容器共用， */
 /* 确保度量结构与页面完全一致、分页行高准确。                          */
@@ -127,6 +102,7 @@ export function renderA4Header(headerConfig: HeaderConfig, fontSizePt?: number):
 /** 版记（抄送 / 印发机关 / 印发日期） */
 export function renderA4FooterNote(footerNoteConfig: FooterNoteConfig): React.ReactNode {
   if (!footerNoteConfig.enabled) return null
+  const printDate = normalizeDocumentDate(footerNoteConfig.printDate) ?? footerNoteConfig.printDate
   return (
     <div className="a4-footer-note">
       <div className="a4-footer-note-line-top"></div>
@@ -142,7 +118,7 @@ export function renderA4FooterNote(footerNoteConfig: FooterNoteConfig): React.Re
       {(footerNoteConfig.printer || footerNoteConfig.printDate) && (
         <div className="a4-footer-note-printer">
           <span>{footerNoteConfig.printer}</span>
-          <span>{footerNoteConfig.printDate}{footerNoteConfig.printDate && '印发'}</span>
+          <span>{printDate}{printDate && '印发'}</span>
         </div>
       )}
       <div className="a4-footer-note-line-bottom"></div>
@@ -151,15 +127,13 @@ export function renderA4FooterNote(footerNoteConfig: FooterNoteConfig): React.Re
 }
 
 /** 单个正文节点的缩进样式（署名/日期右空字数） */
-export function getA4NodeStyle(
+function getA4NodeStyle(
   node: DocumentNode,
   index: number,
-  title: DocumentNode | null,
-  hasTitleNameDate: boolean,
   hasStamp: boolean,
   body: DocumentNode[],
 ): CSSProperties | undefined {
-  if (getTitleRole(node, index, title, hasTitleNameDate) !== null) return undefined
+  if (node.alignment) return { textAlign: node.alignment }
   if (node.type === NodeType.SIGNATURE) {
     const nextNode = body[index + 1]
     if (nextNode && nextNode.type === NodeType.DATE) {
@@ -208,23 +182,24 @@ export function getSignatureIndents(nameText: string, dateText: string): { nameI
 /** 渲染标题 + 正文流（不含版头/版记外壳） */
 export function renderA4Content(opts: A4ContentRenderOptions): React.ReactNode {
   const { title, body, hasTitleNameDate, boldFirstSentence, boldHeading3, hasStamp, signatureName, signatureDate } = opts
+  const metadata = getTitleMetadataIndices({ title, body }, hasTitleNameDate)
   return (
     <>
-      {title && title.content.split('\n').filter(Boolean).map((line, idx, arr) => (
+      {title && getTitleLines(title).map((line, idx, arr) => (
         <p
           key={`title-${title.lineNumber}-${idx}`}
           className={NODE_CLASS_MAP[title.type]}
-          style={idx < arr.length - 1 ? { marginBottom: 0 } : undefined}
+          style={{ marginBottom: idx < arr.length - 1 ? 0 : undefined, textAlign: line.alignment }}
         >
-          {hasRichStyleOverrides(title.runs) ? renderRichRuns(title.runs ?? []) : line}
+          {hasRichStyleOverrides(line.runs) ? renderRichRuns(line.runs ?? []) : line.content}
         </p>
       ))}
       {body.flatMap((node, index) => {
         const elements: React.ReactNode[] = []
 
-        // 发文机关署名前插入 3 个空行
-        if (node.type === NodeType.SIGNATURE) {
-          for (let j = 0; j < 3; j++) {
+        // 无印章单机关公文，正文与署名之间空一行。
+        if (node.type === NodeType.SIGNATURE && index !== metadata.name) {
+          for (let j = 0; j < (hasStamp ? 3 : 1); j++) {
             elements.push(
               <p key={`empty-${node.lineNumber}-${j}`} className="a4-empty-line">{'\u200B'}</p>
             )
@@ -239,7 +214,8 @@ export function renderA4Content(opts: A4ContentRenderOptions): React.ReactNode {
             </React.Fragment>
           )
         } else {
-          const role = getTitleRole(node, index, title, hasTitleNameDate)
+          const role = index === metadata.name ? 'name' : index === metadata.date ? 'date' : null
+          const spans = getHeadingSpans(node.content, node.type)
           let nodeClassName: string
           let nodeContent: React.ReactNode
 
@@ -253,21 +229,12 @@ export function renderA4Content(opts: A4ContentRenderOptions): React.ReactNode {
             nodeContent = hasRichStyleOverrides(node.runs)
               ? renderRichRuns(node.runs ?? [])
               : ensureTitleDateParentheses(node.content)
+          } else if (spans.length > 0) {
+            nodeClassName = NODE_CLASS_MAP[node.type]
+            nodeContent = renderHeadingSpans(node.content, spans, boldHeading3, hasRichStyleOverrides(node.runs) ? node.runs : undefined)
           } else if (hasRichStyleOverrides(node.runs)) {
             nodeClassName = NODE_CLASS_MAP[node.type]
             nodeContent = renderRichRuns(node.runs ?? [])
-          } else if (node.type === NodeType.HEADING_1) {
-            nodeClassName = 'a4-h1'
-            nodeContent = renderHeading1(node.content)
-          } else if (node.type === NodeType.HEADING_2) {
-            nodeClassName = 'a4-h2'
-            nodeContent = renderHeading2(node.content)
-          } else if (node.type === NodeType.HEADING_3) {
-            nodeClassName = 'a4-h3'
-            nodeContent = renderHeading3(node.content, boldHeading3)
-          } else if (node.type === NodeType.HEADING_4) {
-            nodeClassName = 'a4-h4'
-            nodeContent = renderHeading4(node.content)
           } else if (
             boldFirstSentence &&
             node.type === NodeType.PARAGRAPH
@@ -283,7 +250,8 @@ export function renderA4Content(opts: A4ContentRenderOptions): React.ReactNode {
             <p
               key={node.lineNumber}
               className={nodeClassName}
-              style={getA4NodeStyle(node, index, title, hasTitleNameDate, hasStamp, body)}
+              data-no-indent={node.noIndent || undefined}
+              style={role ? { textAlign: node.alignment } : getA4NodeStyle(node, index, hasStamp, body)}
             >
               {nodeContent}
             </p>
@@ -327,7 +295,7 @@ export function renderA4Content(opts: A4ContentRenderOptions): React.ReactNode {
 }
 
 function hasRichStyleOverrides(runs?: RichTextRun[]): boolean {
-  return !!runs?.some((run) => run.bold || run.italic || run.underline || run.fontFamily || run.fontSize)
+  return !!runs?.some((run) => run.bold !== undefined || run.italic !== undefined || run.underline || run.fontFamily || run.fontSize)
 }
 
 function renderRichRuns(runs: RichTextRun[]) {
@@ -337,8 +305,8 @@ function renderRichRuns(runs: RichTextRun[]) {
       style={{
         fontFamily: run.fontFamily ? getPreviewFontFamily(run.fontFamily) : undefined,
         fontSize: run.fontSize ? `${run.fontSize}pt` : undefined,
-        fontWeight: run.bold ? 'bold' : undefined,
-        fontStyle: run.italic ? 'italic' : undefined,
+        fontWeight: run.bold === undefined ? undefined : run.bold ? 'bold' : 'normal',
+        fontStyle: run.italic === undefined ? undefined : run.italic ? 'italic' : 'normal',
         textDecoration: run.underline ? 'underline' : undefined,
       }}
     >
@@ -347,77 +315,17 @@ function renderRichRuns(runs: RichTextRun[]) {
   ))
 }
 
-/**
- * 渲染一级标题：首句（到第一个"。"）用黑体，其余用仿宋正文样式
- */
-export function renderHeading1(content: string) {
-  const idx = content.indexOf('。')
-  if (idx === -1 || idx === content.length - 1) {
-    return <span className="a4-h1-inline">{content}</span>
-  }
-  return (
-    <>
-      <span className="a4-h1-inline">{content.slice(0, idx + 1)}</span>
-      <span className="a4-paragraph-inline">{content.slice(idx + 1)}</span>
-    </>
-  )
-}
-
-/**
- * 渲染二级标题：首句（到第一个"。"）用楷体，其余用仿宋正文样式
- */
-export function renderHeading2(content: string) {
-  const idx = content.indexOf('。')
-  if (idx === -1 || idx === content.length - 1) {
-    return <span className="a4-h2-inline">{content}</span>
-  }
-  return (
-    <>
-      <span className="a4-h2-inline">{content.slice(0, idx + 1)}</span>
-      <span className="a4-paragraph-inline">{content.slice(idx + 1)}</span>
-    </>
-  )
-}
-
-/**
- * 渲染三级标题：首句（到第一个"。"）用仿宋加粗，其余用仿宋正文样式
- */
-export function renderHeading3(content: string, bold = true) {
-  const idx = content.indexOf('。')
-  const className = bold ? 'a4-h3-inline a4-h3-inline--bold' : 'a4-h3-inline'
-  if (idx === -1 || idx === content.length - 1) {
-    return <span className={className}>{content}</span>
-  }
-  return (
-    <>
-      <span className={className}>{content.slice(0, idx + 1)}</span>
-      <span className="a4-paragraph-inline">{content.slice(idx + 1)}</span>
-    </>
-  )
-}
-
-/**
- * 渲染四级标题：首句（到第一个"。"）用仿宋，其余用仿宋正文样式
- * 四级标题本身与正文同字体，但保持拆分逻辑一致性
- */
-export function renderHeading4(content: string) {
-  const idx = content.indexOf('。')
-  if (idx === -1 || idx === content.length - 1) {
-    return <span className="a4-h4-inline">{content}</span>
-  }
-  return (
-    <>
-      <span className="a4-h4-inline">{content.slice(0, idx + 1)}</span>
-      <span className="a4-paragraph-inline">{content.slice(idx + 1)}</span>
-    </>
-  )
+function renderHeadingSpans(content: string, spans: ReturnType<typeof getHeadingSpans>, bold = true, richRuns?: RichTextRun[]) {
+  return sliceHeadingText(content, spans, richRuns).map(({ text, type, runs }, index) => (
+    <span key={index} className={type ? headingClass(type, bold) : 'a4-paragraph-inline'}>{runs ? renderRichRuns(runs) : text}</span>
+  ))
 }
 
 /**
  * 渲染正文首句加粗：
  * - 普通段落：首句（到第一个“。”）加粗，其余正常。
  */
-export function renderBoldFirstSentence(content: string): React.ReactNode {
+function renderBoldFirstSentence(content: string): React.ReactNode {
   const idx = content.indexOf('。')
   if (idx === -1 || idx === content.length - 1) {
     return <span className="a4-bold-first">{content}</span>
@@ -439,7 +347,7 @@ export function renderBoldFirstSentence(content: string): React.ReactNode {
  *                   2.xxx
  *                   3.xxx
  */
-export function renderAttachment(node: AttachmentNode): React.ReactNode {
+function renderAttachment(node: AttachmentNode): React.ReactNode {
   if (!node.isMultiple) {
     // 单附件模式
     return (

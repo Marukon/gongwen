@@ -8,6 +8,22 @@ import {
 } from './sanitize'
 
 describe('replaceEnglishPunctuation', () => {
+  it.each([
+    ['他说"同意"。', '他说“同意”。', 2],
+    ['"甲"和"乙"', '“甲”和“乙”', 4],
+    ['""', '“”', 2],
+    ['“已经全角”', '“已经全角”', 0],
+    ['未闭合"引文', '未闭合“引文', 1],
+    ['他说:"好",然后走。', '他说：“好”，然后走。', 4],
+    ['🙂中文, 标点', '🙂中文， 标点', 1],
+  ])('转换双引号与中文标点：%s', (input, text, count) => {
+    expect(replaceEnglishPunctuation(input)).toEqual({ text, count })
+  })
+
+  it('保留跨行引文的配对和换行', () => {
+    expect(sanitizeText('他说\n"第一行\n第二行"\n结束').text).toBe('他说\n“第一行\n第二行”\n结束')
+  })
+
   it('将中文语境中的英文标点替换为中文标点', () => {
     const result = replaceEnglishPunctuation('各单位: 请认真贯彻落实, 确保执行到位!')
 

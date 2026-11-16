@@ -1,28 +1,10 @@
 import { NodeType } from '../types/ast'
 import type { AttachmentItem } from '../types/ast'
-
-/**
- * 正则匹配器：识别各级公文标题及特殊段落
- * 支持全角/半角括号容错
- */
-
-// 一级标题：中文数字 + 顿号，如「一、」「十二、」
-export const HEADING_1_RE = /^[一二三四五六七八九十]+、/
-
-// 二级标题：中文数字 + 括号，如「（一）」「(二)」
-const HEADING_2_RE = /^[（(][一二三四五六七八九十]+[）)]/
-
-// 三级标题：阿拉伯数字 + 点号（如「1.」「12．」），或中文数字 + 「是|要」（如「一是」「三要」）
-const HEADING_3_RE = /^(?:\d+[.．]|[一二三四五六七八九十百]+[是要])/
-
-// 四级标题：阿拉伯数字 + 括号，如「（1）」「(2)」
-const HEADING_4_RE = /^[（(]\d+[）)]/
+import { normalizeDocumentDate } from '../utils/documentDates'
+import { detectHeading } from './headings'
 
 // 附件说明：以"附件"开头 + 全角/半角冒号
 export const ATTACHMENT_RE = /^附件[：:]/
-
-// 成文日期：纯日期行（严格匹配整行）
-const DATE_RE = /^\d{4}年\d{1,2}月\d{1,2}日$/
 
 /**
  * 从单行文本中提取连续的附件项
@@ -82,11 +64,6 @@ export function detectNodeType(line: string): NodeType {
   const trimmed = line.trim()
 
   if (ATTACHMENT_RE.test(trimmed)) return NodeType.ATTACHMENT
-  if (DATE_RE.test(trimmed)) return NodeType.DATE
-  if (HEADING_1_RE.test(trimmed)) return NodeType.HEADING_1
-  if (HEADING_2_RE.test(trimmed)) return NodeType.HEADING_2
-  if (HEADING_3_RE.test(trimmed)) return NodeType.HEADING_3
-  if (HEADING_4_RE.test(trimmed)) return NodeType.HEADING_4
-
-  return NodeType.PARAGRAPH
+  if (normalizeDocumentDate(trimmed)) return NodeType.DATE
+  return detectHeading(trimmed) ?? NodeType.PARAGRAPH
 }

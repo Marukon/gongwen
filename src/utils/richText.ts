@@ -1,10 +1,17 @@
 import type { GongwenAST, DocumentNode, AttachmentNode, RichTextRun } from '../types/ast'
-import { NodeType } from '../types/ast'
+import DOMPurify from 'dompurify'
+import { getTitleLines, NodeType } from '../types/ast'
 import type { DocumentConfig } from '../types/documentConfig'
 import type { AutoFixResult, TextFixOptions } from './sanitize'
 import { autoFixDocumentText } from './sanitize'
+import { ensureTitleDateParentheses, getTitleMetadataIndices } from './documentDates'
+import { getHeadingSpans, headingClass, sliceHeadingText } from '../parser/headings'
 
 const BLOCK_TAGS = new Set(['P', 'DIV', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6'])
+const EDITOR_STYLES = new Set([
+  'font-family', 'font-size', 'font-weight', 'font-style', 'text-decoration',
+  'text-decoration-line', 'text-align', 'color',
+])
 
 function wrapHtml(html: string): string {
   return `<div data-editor-root="true">${html}</div>`
@@ -39,23 +46,24 @@ export function plainTextToEditorHtml(text: string): string {
     .join('')
 }
 
-export function normalizeEditorHtml(html: string): string {
-  if (!html.trim()) return '<p><br></p>'
-
-  const doc = createDocument(html)
-  const root = getRoot(doc)
-  if (!doc || !root) return plainTextToEditorHtml(html)
+export function parseEditorContent(html: string): HTMLDivElement {
+  const root = document.createElement('div')
+  const content = DOMPurify.sanitize(html, {
+    RETURN_DOM_FRAGMENT: true,
+    ALLOWED_TAGS: [...Array.from(BLOCK_TAGS, (tag) => tag.toLowerCase()), '#text', 'br', 'span', 'strong', 'em', 'b', 'i', 'u', 'font'],
+    ALLOWED_ATTR: ['class', 'style', 'align', 'face', 'size', 'color', 'data-no-indent', 'data-align-no-indent'],
+    ALLOW_DATA_ATTR: false,
+    ALLOW_ARIA_ATTR: false,
+  })
+  for (const element of content.querySelectorAll<HTMLElement>('[style]')) {
+    for (const property of Array.from(element.style)) {
+      if (!EDITOR_STYLES.has(property)) element.style.removeProperty(property)
+    }
+    if (!element.style.length) element.removeAttribute('style')
+  }
+  root.append(content)
 
   const children = Array.from(root.childNodes)
-  const directBlockChildren = children.some((node) => (
-    node.nodeType === Node.ELEMENT_NODE && BLOCK_TAGS.has((node as Element).tagName)
-  ))
-
-  if (!directBlockChildren) {
-    const text = root.textContent ?? ''
-    return plainTextToEditorHtml(text)
-  }
-
   // Wrap any orphan inline nodes or text nodes directly under root into <p>
   let currentP: HTMLElement | null = null
   for (const child of children) {
@@ -69,14 +77,22 @@ export function normalizeEditorHtml(html: string): string {
     }
 
     if (!currentP) {
-      currentP = doc.createElement('p')
+      currentP = document.createElement('p')
       root.insertBefore(currentP, child)
     }
     currentP.appendChild(child)
   }
 
-  if (root.innerHTML.trim() === '') return '<p><br></p>'
-  return root.innerHTML
+  if (!root.firstElementChild) {
+    root.replaceChildren()
+    root.appendChild(document.createElement('p')).append(document.createElement('br'))
+  }
+  return root
+}
+
+export function normalizeEditorHtml(html: string): string {
+  if (typeof document === 'undefined') return plainTextToEditorHtml(html)
+  return parseEditorContent(html).innerHTML
 }
 
 export function editorHtmlToPlainText(html: string): string {
@@ -141,45 +157,12 @@ function escapeAttribute(value: string): string {
 
 function hasRichStyleOverrides(runs?: RichTextRun[]): boolean {
   return !!runs?.some((run) => (
-    run.bold ||
-    run.italic ||
+    run.bold !== undefined ||
+    run.italic !== undefined ||
     run.underline ||
     !!run.fontFamily ||
     !!run.fontSize
   ))
-}
-
-function renderHeading1Html(content: string): string {
-  const idx = content.indexOf('。')
-  if (idx === -1 || idx === content.length - 1) {
-    return `<span class="a4-h1-inline">${escapeHtml(content)}</span>`
-  }
-  return `<span class="a4-h1-inline">${escapeHtml(content.slice(0, idx + 1))}</span><span class="a4-paragraph-inline">${escapeHtml(content.slice(idx + 1))}</span>`
-}
-
-function renderHeading2Html(content: string): string {
-  const idx = content.indexOf('。')
-  if (idx === -1 || idx === content.length - 1) {
-    return `<span class="a4-h2-inline">${escapeHtml(content)}</span>`
-  }
-  return `<span class="a4-h2-inline">${escapeHtml(content.slice(0, idx + 1))}</span><span class="a4-paragraph-inline">${escapeHtml(content.slice(idx + 1))}</span>`
-}
-
-function renderHeading3Html(content: string, bold = true): string {
-  const headingClassName = bold ? 'a4-h3-inline a4-h3-inline--bold' : 'a4-h3-inline'
-  const idx = content.indexOf('。')
-  if (idx === -1 || idx === content.length - 1) {
-    return `<span class="${headingClassName}">${escapeHtml(content)}</span>`
-  }
-  return `<span class="${headingClassName}">${escapeHtml(content.slice(0, idx + 1))}</span><span class="a4-paragraph-inline">${escapeHtml(content.slice(idx + 1))}</span>`
-}
-
-function renderHeading4Html(content: string): string {
-  const idx = content.indexOf('。')
-  if (idx === -1 || idx === content.length - 1) {
-    return `<span class="a4-h4-inline">${escapeHtml(content)}</span>`
-  }
-  return `<span class="a4-h4-inline">${escapeHtml(content.slice(0, idx + 1))}</span><span class="a4-paragraph-inline">${escapeHtml(content.slice(idx + 1))}</span>`
 }
 
 function renderBoldFirstSentence(text: string): string {
@@ -193,6 +176,18 @@ function renderBoldFirstSentence(text: string): string {
   return `<strong>${escapeHtml(firstSentence)}</strong>${escapeHtml(rest)}`
 }
 
+function runsToHtml(runs: RichTextRun[]): string {
+  return runs.map((run) => {
+    const styles: string[] = []
+    if (run.fontFamily) styles.push(`font-family:${run.fontFamily}`)
+    if (run.fontSize) styles.push(`font-size:${run.fontSize}pt`)
+    if (run.bold !== undefined) styles.push(run.bold ? 'font-weight:bold' : 'font-weight:normal')
+    if (run.italic !== undefined) styles.push(run.italic ? 'font-style:italic' : 'font-style:normal')
+    if (run.underline) styles.push('text-decoration:underline')
+    return styles.length ? `<span style="${escapeAttribute(styles.join(';'))}">${escapeHtml(run.text)}</span>` : escapeHtml(run.text)
+  }).join('')
+}
+
 function paragraphHtml(
   node: DocumentNode,
   className: string,
@@ -201,29 +196,17 @@ function paragraphHtml(
 ): string {
   const alignmentStyle = node.alignment ? ` style="text-align:${escapeAttribute(node.alignment)}"` : ''
   const noIndentAttr = node.noIndent ? ' data-no-indent="true"' : ''
-  if (node.runs && node.runs.length > 0 && hasRichStyleOverrides(node.runs)) {
-    const runHtml = node.runs.map((run) => {
-      const styles: string[] = []
-      if (run.fontFamily) styles.push(`font-family:${run.fontFamily}`)
-      if (run.fontSize) styles.push(`font-size:${run.fontSize}pt`)
-      if (run.bold) styles.push('font-weight:bold')
-      if (run.italic) styles.push('font-style:italic')
-      if (run.underline) styles.push('text-decoration:underline')
-      return `<span${styles.length > 0 ? ` style="${escapeAttribute(styles.join(';'))}"` : ''}>${escapeHtml(run.text)}</span>`
-    }).join('')
-    return `<p class="${className}"${alignmentStyle}${noIndentAttr}>${runHtml || '<br>'}</p>`
-  }
+  const styledRuns = hasRichStyleOverrides(node.runs) ? node.runs : undefined
 
   let content = '<br>'
   if (node.content) {
-    if (node.type === NodeType.HEADING_1) {
-      content = renderHeading1Html(node.content)
-    } else if (node.type === NodeType.HEADING_2) {
-      content = renderHeading2Html(node.content)
-    } else if (node.type === NodeType.HEADING_3) {
-      content = renderHeading3Html(node.content, boldHeading3)
-    } else if (node.type === NodeType.HEADING_4) {
-      content = renderHeading4Html(node.content)
+    const spans = getHeadingSpans(node.content, node.type)
+    if (spans.length > 0) {
+      content = sliceHeadingText(node.content, spans, styledRuns).map(({ text, type, runs }) => (
+        `<span class="${type ? headingClass(type, boldHeading3) : 'a4-paragraph-inline'}">${runs ? runsToHtml(runs) : escapeHtml(text)}</span>`
+      )).join('')
+    } else if (styledRuns) {
+      content = runsToHtml(styledRuns)
     } else if (boldFirstSentence) {
       content = renderBoldFirstSentence(node.content)
     } else {
@@ -245,45 +228,20 @@ function attachmentHtml(node: AttachmentNode): string {
   ].join('')
 }
 
-function isTitleDateNode(ast: GongwenAST, index: number, hasTitleNameDate = false): boolean {
-  if (!ast.title) return false
-  return hasTitleNameDate && index === 1
-}
-
-function isTitleNameNode(ast: GongwenAST, index: number, hasTitleNameDate = false): boolean {
-  if (!ast.title || index !== 0) return false
-  return hasTitleNameDate
-}
-
-/** 为标题下日期补全省份全角括号：已带括号则不处理，纯日期则包裹 */
-function ensureTitleDateParentheses(content: string): string {
-  const trimmed = content.trim()
-  if (/^[（(]\d{4}年\d{1,2}月\d{1,2}日[）)]$/.test(trimmed)) return trimmed
-  if (/^\d{4}年\d{1,2}月\d{1,2}日$/.test(trimmed)) return `（${trimmed}）`
-  return content
-}
-
-function findFirstBodyParagraphIndex(ast: GongwenAST, hasTitleNameDate = false): number {
-  return ast.body.findIndex((node, index) => (
-    node.type === NodeType.PARAGRAPH &&
-    node.content.trim() !== '' &&
-    !isTitleNameNode(ast, index, hasTitleNameDate) &&
-    !isTitleDateNode(ast, index, hasTitleNameDate)
-  ))
-}
-
 export function astToStyledHtml(ast: GongwenAST, config: DocumentConfig): string {
   const html: string[] = []
-  const hasTitleNameDate = config.specialOptions.hasTitleNameDate
-  const firstBodyParagraphIndex = findFirstBodyParagraphIndex(ast, hasTitleNameDate)
+  const titleMetadata = getTitleMetadataIndices(ast, config.specialOptions.hasTitleNameDate)
+  const firstBodyParagraphIndex = ast.body.findIndex((node, index) => (
+    node.type === NodeType.PARAGRAPH && node.content.trim() !== '' &&
+    index !== titleMetadata.name && index !== titleMetadata.date
+  ))
 
   if (ast.title) {
-    const titleLines = ast.title.content.split('\n').filter(Boolean)
-    titleLines.forEach((line) => {
-      html.push(paragraphHtml({ ...ast.title!, content: line }, 'a4-title'))
+    getTitleLines(ast.title).forEach((line) => {
+      html.push(paragraphHtml(line, 'a4-title'))
     })
     if (ast.body.length > 0) {
-      if (!isTitleNameNode(ast, 0, hasTitleNameDate) && !isTitleDateNode(ast, 0, hasTitleNameDate)) {
+      if (titleMetadata.name < 0 && ast.body[0].content !== '') {
         html.push('<p><br></p>')
       }
     }
@@ -295,17 +253,17 @@ export function astToStyledHtml(ast: GongwenAST, config: DocumentConfig): string
       return
     }
 
-    if (isTitleNameNode(ast, index, hasTitleNameDate)) {
+    if (index === titleMetadata.name) {
       html.push(paragraphHtml(node, 'a4-title-secondary'))
       return
     }
 
-    if (isTitleDateNode(ast, index, hasTitleNameDate)) {
-      const dateContent = hasTitleNameDate && !hasRichStyleOverrides(node.runs)
+    if (index === titleMetadata.date) {
+      const dateContent = !hasRichStyleOverrides(node.runs)
         ? ensureTitleDateParentheses(node.content)
         : node.content
       html.push(paragraphHtml({ ...node, content: dateContent }, 'a4-title-date'))
-      if (index + 1 < ast.body.length) {
+      if (index + 1 < ast.body.length && ast.body[index + 1].content !== '') {
         html.push('<p><br></p>')
       }
       return

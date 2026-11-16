@@ -144,3 +144,19 @@
   border-style: solid;
   color: #6b7280;
 }
+
+@media (max-width: 680px) {
+  .editor-header {
+    flex-wrap: wrap;
+    gap: 6px 12px;
+    padding: 8px 12px;
+  }
+
+  .editor-header-actions {
+    flex-wrap: wrap;
+  }
+
+  .editor-label {
+    white-space: nowrap;
+  }
+}

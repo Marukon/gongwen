@@ -216,7 +216,7 @@ export function getParagraphStyle(
       break
   }
 
-  if (type === NodeType.PARAGRAPH && noIndent) {
+  if (shouldUseCharacterFirstLineIndent(type) && noIndent) {
     style = {
       ...style,
       indent: { left: 0, right: 0, firstLine: 0 },
@@ -338,8 +338,8 @@ export function getTitleNameRunStyle(config: DocumentConfig): Partial<IRunOption
 
 export function hasRichStyleOverrides(runs?: RichTextRun[]): boolean {
   return !!runs?.some((run) => (
-    run.bold ||
-    run.italic ||
+    run.bold !== undefined ||
+    run.italic !== undefined ||
     run.underline ||
     !!run.fontFamily ||
     !!run.fontSize

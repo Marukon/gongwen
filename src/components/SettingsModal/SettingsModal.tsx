@@ -583,13 +583,13 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                 <h4 className="settings-special-card-title">落款与印章</h4>
                 <div className="settings-special-card-body">
                   <TextField
-                    label="落款人"
+                    label="备用落款人"
                     value={config.specialOptions.signatureName}
                     placeholder="如：XX市人民政府"
                     onChange={(v) => patch({ specialOptions: { signatureName: v } })}
                   />
                   <TextField
-                    label="落款日期"
+                    label="备用落款日期"
                     value={config.specialOptions.signatureDate}
                     placeholder="如：2024年1月1日"
                     onChange={(v) => patch({ specialOptions: { signatureDate: v } })}

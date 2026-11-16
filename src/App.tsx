@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef } from 'react'
+import { useState, useCallback, useEffect, useMemo, useRef } from 'react'
 import { Editor } from './components/Editor/Editor'
 import { Preview } from './components/Preview/Preview'
 import { Toolbar } from './components/Toolbar/Toolbar'
@@ -6,13 +6,10 @@ import { useDocumentParser } from './hooks/useDocumentParser'
 import { useDocumentConfig } from './contexts/useDocumentConfig'
 import { parseGongwen } from './parser'
 import { autoFixDocumentText, sanitizeText } from './utils/sanitize'
-import {
-  astToStyledHtml,
-} from './utils/richText'
+import { astToStyledHtml, normalizeEditorHtml } from './utils/richText'
+import { loadDraft, saveDraft, type DocumentDraft } from './utils/documentDraft'
 import './App.css'
 
-const STORAGE_KEY_TEXT = 'docx-editor-source-text'
-const STORAGE_KEY_FORMATTED = 'docx-editor-formatted-html'
 const STORAGE_KEY_VERSION_SEQ = 'docx-editor-version-seq'
 const STORAGE_KEY_VERSION_DATE = 'docx-editor-version-date'
 
@@ -39,96 +36,70 @@ function loadVersionSeq(currentBaseDate: string): number {
   return 1
 }
 
-/** 从 localStorage 读取持久化的编辑区文本 */
-function loadSourceText(): string {
+function readDraft(): DocumentDraft {
   try {
-    return localStorage.getItem(STORAGE_KEY_TEXT) ?? ''
+    const draft = loadDraft(localStorage)
+    return { ...draft, editedHtml: draft.editedHtml === null ? null : normalizeEditorHtml(draft.editedHtml) }
   } catch {
-    return ''
-  }
-}
-
-function loadFormattedHtml(): string {
-  try {
-    return localStorage.getItem(STORAGE_KEY_FORMATTED) ?? ''
-  } catch {
-    return ''
+    return { text: '', editedHtml: null }
   }
 }
 
 function App() {
-  const [text, setText] = useState(loadSourceText)
-  const [formattedHtml, setFormattedHtml] = useState(loadFormattedHtml)
+  const [draft, setDraft] = useState(readDraft)
+  const { text, editedHtml } = draft
   const [versionSeq, setVersionSeq] = useState(() => loadVersionSeq(baseDate))
   const [importing, setImporting] = useState(false)
   const [exporting, setExporting] = useState(false)
   const [fixFeedback, setFixFeedback] = useState('')
-
-  const isMountedRef = useRef(false)
-  const prevTextRef = useRef(text)
-  const prevHtmlRef = useRef(formattedHtml)
+  const [draftSaveFailed, setDraftSaveFailed] = useState(false)
 
   const { config, updateConfig } = useDocumentConfig()
-  const configRef = useRef(config)
-  configRef.current = config
+  const formattedHtml = useMemo(() => {
+    if (editedHtml !== null) return editedHtml
+    const sanitized = sanitizeText(text, config.textFixOptions).text
+    return astToStyledHtml(parseGongwen(sanitized, { preserveEmptyLines: true }), config)
+  }, [text, editedHtml, config])
   const ast = useDocumentParser(formattedHtml)
+  const prevDraftRef = useRef(draft)
+
+  const setText = useCallback((nextText: string) => {
+    setDraft((previous) => previous.text === nextText ? previous : { text: nextText, editedHtml: null })
+  }, [])
+
+  const handleFormattedChange = useCallback((html: string) => {
+    if (html === formattedHtml) return
+    setDraft((previous) => ({ ...previous, editedHtml: html }))
+  }, [formattedHtml])
 
   // 监听编辑改动，防抖 600ms 递增版本序号并持久化
   useEffect(() => {
-    if (!isMountedRef.current) {
-      isMountedRef.current = true
-      return
-    }
-
-    if (text === prevTextRef.current && formattedHtml === prevHtmlRef.current) {
-      return
-    }
-
+    if (draft === prevDraftRef.current) return
     const timer = setTimeout(() => {
-      prevTextRef.current = text
-      prevHtmlRef.current = formattedHtml
-      setVersionSeq((prev) => {
-        const next = prev + 1
-        try {
-          localStorage.setItem(STORAGE_KEY_VERSION_SEQ, String(next))
-          localStorage.setItem(STORAGE_KEY_VERSION_DATE, baseDate)
-        } catch {
-          // ignore
-        }
-        return next
-      })
+      prevDraftRef.current = draft
+      setVersionSeq((prev) => prev + 1)
     }, 600)
 
     return () => clearTimeout(timer)
-  }, [text, formattedHtml])
-
-  // Auto-Save: debounce 500ms 写入 localStorage
-  const timerRef = useRef<ReturnType<typeof setTimeout>>(undefined)
-  useEffect(() => {
-    clearTimeout(timerRef.current)
-    timerRef.current = setTimeout(() => {
-      try {
-        localStorage.setItem(STORAGE_KEY_TEXT, text)
-      } catch {
-        // localStorage 写入失败（空间不足等）静默忽略
-      }
-    }, 500)
-    return () => clearTimeout(timerRef.current)
-  }, [text])
+  }, [draft])
 
   useEffect(() => {
     try {
-      localStorage.setItem(STORAGE_KEY_FORMATTED, formattedHtml)
+      localStorage.setItem(STORAGE_KEY_VERSION_SEQ, String(versionSeq))
+      localStorage.setItem(STORAGE_KEY_VERSION_DATE, baseDate)
     } catch {
-      // 静默忽略
+      // 版本标记不影响当前草稿。
     }
-  }, [formattedHtml])
+  }, [versionSeq])
 
   useEffect(() => {
-    const sanitized = sanitizeText(text, config.textFixOptions).text
-    const nextAst = parseGongwen(sanitized, { preserveEmptyLines: true })
-    setFormattedHtml(astToStyledHtml(nextAst, config))
-  }, [text])
+    try {
+      saveDraft(localStorage, draft)
+      setDraftSaveFailed(false)
+    } catch {
+      setDraftSaveFailed(true)
+    }
+  }, [draft])
 
   useEffect(() => {
     if (!fixFeedback) return
@@ -146,7 +117,7 @@ function App() {
 
     try {
       const { downloadDocx } = await import('./exporter/download')
-      await downloadDocx(ast, configRef.current)
+      await downloadDocx(ast, config)
     } catch (err) {
       console.error('导出失败:', err)
       // 动态导入 chunk 404 通常是部署更新后浏览器缓存了旧 index.html
@@ -159,34 +130,27 @@ function App() {
     } finally {
       setExporting(false)
     }
-  }, [ast])
+  }, [ast, config])
 
   const handleClear = useCallback(() => {
-    setText('')
-    setFormattedHtml('')
-    try {
-      localStorage.removeItem(STORAGE_KEY_TEXT)
-      localStorage.removeItem(STORAGE_KEY_FORMATTED)
-    } catch {
-      // 静默忽略
-    }
+    setDraft({ text: '', editedHtml: null })
   }, [])
 
   const handleImport = useCallback(async (file: File) => {
     // 编辑器非空时，确认覆盖
-    if (text.trim() && !confirm('导入文件将覆盖当前内容，是否继续？')) return
+    if ((text.trim() || editedHtml !== null) && !confirm('导入文件将覆盖当前内容，是否继续？')) return
 
     setImporting(true)
     try {
       const { importFile } = await import('./utils/fileImporter')
       const result = await importFile(file)
-      setText(result.text)
+      setDraft({ text: result.text, editedHtml: null })
     } catch (err) {
       alert(err instanceof Error ? err.message : '文件导入失败')
     } finally {
       setImporting(false)
     }
-  }, [text])
+  }, [text, editedHtml])
 
   const handleAutoFix = useCallback(() => {
     const { textFixOptions } = config
@@ -212,7 +176,7 @@ function App() {
     if (result.whitespaceCount > 0) segments.push(`空格 ${result.whitespaceCount} 处`)
     if (result.lineBreakCount > 0) segments.push(`回车 ${result.lineBreakCount} 处`)
     setFixFeedback(`已修复 ${result.count} 处：${segments.join('，')}`)
-  }, [config, text])
+  }, [config, text, setText])
 
   return (
     <div className="app">
@@ -225,6 +189,7 @@ function App() {
         exporting={exporting}
         version={`${baseDate}-${versionSeq}`}
       />
+      {draftSaveFailed && <div className="draft-save-warning" role="status">浏览器未能保存草稿，关闭前请先导出或复制原文。</div>}
       <div className="app-main">
         <div className="app-editor">
           <Editor
@@ -242,7 +207,7 @@ function App() {
           />
         </div>
         <div className="app-preview">
-          <Preview value={formattedHtml} onChange={setFormattedHtml} />
+          <Preview value={formattedHtml} ast={ast} onChange={handleFormattedChange} />
         </div>
       </div>
     </div>

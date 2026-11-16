@@ -1,6 +1,7 @@
 import type { DocumentNode, GongwenAST, AttachmentNode, ParagraphAlignment, RichTextRun } from '../types/ast'
 import { NodeType } from '../types/ast'
-import { detectNodeType, HEADING_1_RE, ATTACHMENT_RE, extractAttachmentItemsFromLine } from './matchers'
+import { detectNodeType, ATTACHMENT_RE, extractAttachmentItemsFromLine } from './matchers'
+import { normalizeDocumentDate, readTitleDate } from '../utils/documentDates'
 
 /** 不应被识别为发文机关署名的结尾标点 */
 const SIGNATURE_EXCLUDE_ENDINGS = ['。', '：', ':', '；', ';', '！', '!', '？', '?', '，', ',']
@@ -45,7 +46,7 @@ const TITLE_FRAGMENT_MAX_LEN = 30
 const TITLE_MERGED_MAX_LEN = 120
 const PREAMBLE_MAX_LINES = 4
 
-const SUBTITLE_RE = /^(?:[\u2014\u2015\u2500\u2013\-]{1,2}|——|--|—)\s*/
+const SUBTITLE_RE = /^[\u2014\u2015\u2500\u2013-]{1,2}\s*/
 
 function isSubtitleLine(line: string): boolean {
   const text = line.trim()
@@ -55,8 +56,8 @@ function isSubtitleLine(line: string): boolean {
 function isPossibleAddressee(line: string): boolean {
   if (!(line.endsWith('：') || line.endsWith(':'))) return false
   if (line.length > ADDRESSEE_MAX_LENGTH) return false
-  if (HEADING_1_RE.test(line) || ATTACHMENT_RE.test(line)) return false
-  return true
+  if (/如下[：:]$/.test(line)) return false
+  return detectNodeType(line) === NodeType.PARAGRAPH
 }
 
 /** 遇到以下行时立即停止标题提取，将其交由正文处理 */
@@ -104,12 +105,6 @@ function endsWithGenre(text: string): boolean {
   return GONGWEN_GENRE_ENDINGS.some(genre => clean.endsWith(genre))
 }
 
-const DATE_LINE_RE = /^(?:（|\()?\d{4}年\d{1,2}月\d{1,2}日(?:）|\))?$/
-
-function isDateLine(text: string): boolean {
-  return DATE_LINE_RE.test(text.trim())
-}
-
 function isNameBeforeDate(lines: ParsedLineInput[], index: number): boolean {
   if (index >= lines.length) return false
   const text = lines[index].text.trim()
@@ -117,7 +112,7 @@ function isNameBeforeDate(lines: ParsedLineInput[], index: number): boolean {
   for (let next = index + 1; next < lines.length; next++) {
     const nextText = lines[next].text.trim()
     if (nextText.length === 0) continue
-    return isDateLine(nextText)
+    return readTitleDate(nextText) !== null
   }
   return false
 }
@@ -202,6 +197,7 @@ function extractPreamble(lines: ParsedLineInput[]): { title: DocumentNode | null
   }
 
   const parts: string[] = [firstTitle]
+  const mainSources = [titleSource]
   const titleLineNumber = orgPrefix ? orgLineNumber : titleSource.lineNumber
   let cursor = i + 1
 
@@ -213,19 +209,20 @@ function extractPreamble(lines: ParsedLineInput[]): { title: DocumentNode | null
       const t = raw.trim()
       if (isStructuralPreambleStop(t)) break
       if (isSubtitleLine(t)) break
-      if (isDateLine(t)) break
+      if (readTitleDate(t)) break
       if (isNameBeforeDate(lines, cursor)) break
       if (!isTitleFragment(t)) break
       const merged = parts.join('') + t
       if (merged.length > TITLE_MERGED_MAX_LEN) break
       parts.push(t)
+      mainSources.push(lines[cursor])
       cursor++
       if (endsWithGenre(t)) break
     }
   }
 
   // 检查是否有副标题（以 —— 开头）
-  let subtitle: string | null = null
+  let subtitle: ParsedLineInput | null = null
   let subtitleCursor = cursor
   while (subtitleCursor < lines.length && lines[subtitleCursor].text.trim().length === 0) {
     if (subtitleCursor - cursor >= 2) break
@@ -234,26 +231,32 @@ function extractPreamble(lines: ParsedLineInput[]): { title: DocumentNode | null
   if (subtitleCursor < lines.length) {
     const possibleSubtitle = lines[subtitleCursor].text.trim()
     if (isSubtitleLine(possibleSubtitle)) {
-      subtitle = possibleSubtitle
+      subtitle = lines[subtitleCursor]
       cursor = subtitleCursor + 1
     }
   }
 
-  const mainTitleContent = parts.join('')
-  let finalTitleContent = mainTitleContent
-  if (orgPrefix) {
-    finalTitleContent = `${orgPrefix}\n${finalTitleContent}`
+  const toTitleLine = (source: ParsedLineInput, content: string) => ({
+    content, lineNumber: source.lineNumber, runs: source.runs,
+    alignment: source.alignment, noIndent: source.noIndent,
+  })
+  const main = toTitleLine(titleSource, parts.join(''))
+  if (mainSources.some((source) => source.runs)) {
+    main.runs = mainSources.flatMap((source) => source.runs ?? [{ text: source.text.trim() }])
   }
-  if (subtitle) {
-    finalTitleContent = `${finalTitleContent}\n${subtitle}`
-  }
+  const titleLines = [
+    ...(orgPrefix ? [toTitleLine(firstSource, orgPrefix)] : []),
+    main,
+    ...(subtitle ? [toTitleLine(subtitle, subtitle.text.trim())] : []),
+  ]
 
   return {
     title: {
       type: NodeType.DOCUMENT_TITLE,
-      content: finalTitleContent,
+      content: titleLines.map((line) => line.content).join('\n'),
       lineNumber: titleLineNumber,
-      runs: titleSource.runs,
+      runs: main.runs,
+      titleLines,
       alignment: titleSource.alignment,
       noIndent: titleSource.noIndent,
     },
@@ -264,7 +267,7 @@ function extractPreamble(lines: ParsedLineInput[]): { title: DocumentNode | null
 /** 查找排除尾部附件说明后的逻辑正文结尾下标 */
 function findLogicalBodyEnd(body: DocumentNode[]): number {
   let end = body.length
-  while (end > 0 && body[end - 1].type === NodeType.ATTACHMENT) {
+  while (end > 0 && (body[end - 1].type === NodeType.ATTACHMENT || body[end - 1].content === '')) {
     end--
   }
   return end
@@ -313,7 +316,7 @@ function parseAttachment(
   currentIndex: number
 ): { node: AttachmentNode; nextIndex: number } {
   // 1. 提取冒号后的内容
-  const colonMatch = source.text.match(/^附件[：:](.*)$/)
+  const colonMatch = source.text.trim().match(/^附件[：:](.*)$/)
   if (!colonMatch) {
     throw new Error('Invalid attachment line')
   }
@@ -394,14 +397,10 @@ function parseAttachment(
     expectedIndex += foundItems.length
 
     // 当前行的附件项已提取完毕，检查下一行是否有后续附件
-    const nextLineIndex = lastConsumedIndex + 1
+    let nextLineIndex = lastConsumedIndex + 1
+    while (nextLineIndex < lines.length && !lines[nextLineIndex].text.trim()) nextLineIndex++
     if (nextLineIndex < lines.length) {
       const nextLine = lines[nextLineIndex].text.trim()
-      // 跳过空行
-      if (nextLine.length === 0) {
-        lastConsumedIndex = nextLineIndex
-        continue
-      }
       // 检查下一行是否以期望的序号开头
       const nextItemMatch = nextLine.match(/^(\d+)[.．．.]/)
       if (nextItemMatch && Number(nextItemMatch[1]) === expectedIndex) {
@@ -440,7 +439,7 @@ function parseAttachment(
  *    - 当文末只有单位署名、没有 DATE 时，若末尾段落满足“短句 + 机关关键词”也改为 SIGNATURE
  */
 export function parseGongwen(text: string, options?: { preserveEmptyLines?: boolean }): GongwenAST {
-  const lines = text.split('\n').map((line, index) => ({ text: line, lineNumber: index + 1 }))
+  const lines = text.split(/\r\n?|\n/).map((line, index) => ({ text: line, lineNumber: index + 1 }))
   return parseParsedLines(lines, options?.preserveEmptyLines ?? false)
 }
 
@@ -482,12 +481,7 @@ export function parseParsedLines(lines: ParsedLineInput[], preserveEmptyLines = 
 
     // 主送机关检测（标题后前 N 个非空行内首次出现的冒号结尾短行）
     if (!addresseeFound && nonEmptyLinesAfterTitle <= ADDRESSEE_PREAMBLE_MAX_LINES) {
-      if (
-        (trimmed.endsWith('：') || trimmed.endsWith(':')) &&
-        trimmed.length <= ADDRESSEE_MAX_LENGTH &&
-        !HEADING_1_RE.test(trimmed) &&
-        !ATTACHMENT_RE.test(trimmed)
-      ) {
+      if (isPossibleAddressee(trimmed)) {
         addresseeFound = true
         body.push({ type: NodeType.ADDRESSEE, content: trimmed, lineNumber, runs: source.runs, alignment: source.alignment, noIndent: source.noIndent })
         i++
@@ -505,7 +499,21 @@ export function parseParsedLines(lines: ParsedLineInput[], preserveEmptyLines = 
 
     // 正则检测类型
     const type = detectNodeType(trimmed)
-    body.push({ type, content: trimmed, lineNumber, runs: source.runs, alignment: source.alignment, noIndent: source.noIndent })
+    const content = type === NodeType.DATE ? normalizeDocumentDate(trimmed) ?? trimmed : trimmed
+    let runs = source.runs
+    if (runs && content !== trimmed) {
+      // 日期规范化只去除空格和前导零，保留其余字符原有的行内样式。
+      let nextChar = 0
+      runs = runs.map((run) => ({
+        ...run,
+        text: Array.from(run.text).filter((char) => {
+          if (char !== content[nextChar]) return false
+          nextChar++
+          return true
+        }).join(''),
+      })).filter((run) => run.text)
+    }
+    body.push({ type, content, lineNumber, runs, alignment: source.alignment, noIndent: source.noIndent })
     i++
   }
 

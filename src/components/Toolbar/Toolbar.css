@@ -100,3 +100,25 @@
 .toolbar-btn--export:hover:not(:disabled) {
   background: #1d4ed8;
 }
+
+@media (max-width: 680px) {
+  .toolbar {
+    height: auto;
+    flex-wrap: wrap;
+    gap: 6px 16px;
+    padding: 8px 12px;
+  }
+
+  .toolbar-right {
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .toolbar-stats {
+    display: none;
+  }
+
+  .toolbar-btn {
+    padding: 8px 12px;
+  }
+}

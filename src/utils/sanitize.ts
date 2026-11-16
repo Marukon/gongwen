@@ -1,5 +1,6 @@
 import { NodeType } from '../types/ast'
 import { detectNodeType } from '../parser/matchers'
+import { readTitleDate } from './documentDates'
 
 /**
  * 文本修复工具
@@ -12,14 +13,8 @@ const CJK_CHAR = /[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]/
 const CJK_OR_FULLWIDTH_CHAR = /[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff\u3000-\u303f\uff00-\uffef]/
 const DIGIT_OR_CJK_NUMERAL = /[0-9一二三四五六七八九十百千万零]/
 
-/** 枚举子项：中文数字 + “是”，如「一是」「十二是」（不应被合并进上一段） */
-const SUB_ITEM_RE = /^[一二三四五六七八九十]+是/
-
 /** 副标题行：破折号开头，如「——学习...」「--...」 */
-const SUBTITLE_RE = /^(?:[\u2014\u2015\u2500\u2013\-]{1,2}|——|--|—)\s*/
-
-/** 日期行：全角或半角括号包裹的 YYYY年M月D日，或裸日期 */
-const DATE_LINE_RE = /^(?:（|\()?\d{4}年\d{1,2}月\d{1,2}日(?:）|\))?$/
+const SUBTITLE_RE = /^[\u2014\u2015\u2500\u2013-]{1,2}\s*/
 
 const PUNCTUATION_REPLACEMENTS = new Map<string, string>([
   [',', '，'],
@@ -75,7 +70,7 @@ function replaceWhenNeeded(
   shouldReplace: (index: number, source: string) => boolean,
 ): SanitizeResult {
   let count = 0
-  const chars = Array.from(text)
+  const chars = text.split('')
 
   for (let index = 0; index < chars.length; index++) {
     const current = chars[index]
@@ -176,7 +171,7 @@ export function removeRedundantSpaces(text: string): SanitizeResult {
     [/\t+/g, ' '],
     [/([（《【“])[ \t]+/g, '$1'],
     [/[ \t]+([）】》”，。；：！？、])/g, '$1'],
-    [/([\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff])[ \t]+([\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff])/g, '$1$2'],
+    [/([\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff])[ \t]+(?=[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff])/g, '$1'],
     [/([\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff])[ \t]+([（《【“])/g, '$1$2'],
     [/([）】》”])[ \t]+([\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff])/g, '$1$2'],
     [/([\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff])[ \t]+([，。；：！？、])/g, '$1$2'],
@@ -204,36 +199,38 @@ export function removeRedundantSpaces(text: string): SanitizeResult {
 }
 
 export function removeMeaninglessLineBreaks(text: string): SanitizeResult {
-  const lines = text.split(/\r?\n/)
+  const lines = text.split(/\r\n?|\n/)
   const resultLines: string[] = []
   let count = 0
+  let nonEmptyCount = 0
+  let quoteDepth = 0
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i]
+    const currentTrimmed = line.trim()
+    const continuesQuote = quoteDepth > 0
+    for (const mark of currentTrimmed.matchAll(/[“”]/g)) {
+      quoteDepth = Math.max(0, quoteDepth + (mark[0] === '“' ? 1 : -1))
+    }
     if (resultLines.length === 0) {
       resultLines.push(line)
+      if (currentTrimmed) nonEmptyCount++
       continue
     }
 
     const prevLine = resultLines[resultLines.length - 1]
     const prevTrimmed = prevLine.trim()
-    const currentTrimmed = line.trim()
-
     if (prevTrimmed.length === 0 || currentTrimmed.length === 0) {
       resultLines.push(line)
+      if (currentTrimmed) nonEmptyCount++
       continue
     }
 
-    let nonEmptyCount = 0
-    for (const l of resultLines) {
-      if (l.trim().length > 0) {
-        nonEmptyCount++
-      }
-    }
     const isPrevTitleLine = nonEmptyCount === 1 && !/[：:]/.test(prevTrimmed)
 
     if (isPrevTitleLine) {
       resultLines.push(line)
+      nonEmptyCount++
       continue
     }
 
@@ -251,11 +248,8 @@ export function removeMeaninglessLineBreaks(text: string): SanitizeResult {
     // 当前行以冒号结尾（如主送机关、通知如下等），应作为独立段落，不向前合并
     const isCurrentColonEnding = /[：:]$/.test(currentTrimmed)
     // 日期行（如（2026年7月24日））应独立，避免与姓名/机关署名合并
-    const isCurrentDateLine = DATE_LINE_RE.test(currentTrimmed)
-    const isPrevDateLine = DATE_LINE_RE.test(prevTrimmed)
-    // 「一是/二是/三是…」等中文数字+“是”开头的枚举子项，应作为独立段落，
-    // 不向前合并（否则会因上一段不以冒号结尾而被吞并，导致仅首句被加粗）。
-    const isCurrentSubItem = SUB_ITEM_RE.test(currentTrimmed)
+    const isCurrentDateLine = readTitleDate(currentTrimmed) !== null
+    const isPrevDateLine = readTitleDate(prevTrimmed) !== null
 
     // 副标题行（如 ——学习...）不应合并进前行，也不应吞并后行
     const isCurrentSubtitle = SUBTITLE_RE.test(currentTrimmed)
@@ -266,7 +260,7 @@ export function removeMeaninglessLineBreaks(text: string): SanitizeResult {
       for (let nextIdx = i + 1; nextIdx < lines.length; nextIdx++) {
         const nextTrimmed = lines[nextIdx].trim()
         if (nextTrimmed.length === 0) continue
-        if (DATE_LINE_RE.test(nextTrimmed)) {
+        if (readTitleDate(nextTrimmed)) {
           isCurrentNameBeforeDate = true
         }
         break
@@ -275,6 +269,7 @@ export function removeMeaninglessLineBreaks(text: string): SanitizeResult {
 
     if (
       isPrevSentenceComplete ||
+      continuesQuote || currentTrimmed.startsWith('“') || prevTrimmed.endsWith('”') ||
       isPrevHeading ||
       isCurrentHeading ||
       isCurrentListMarker ||
@@ -283,12 +278,12 @@ export function removeMeaninglessLineBreaks(text: string): SanitizeResult {
       isCurrentColonEnding ||
       isCurrentDateLine ||
       isPrevDateLine ||
-      isCurrentSubItem ||
       isCurrentSubtitle ||
       isPrevSubtitle ||
       isCurrentNameBeforeDate
     ) {
       resultLines.push(line)
+      nonEmptyCount++
     } else {
       const lastChar = prevLine[prevLine.length - 1]
       const firstChar = line[0]

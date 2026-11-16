@@ -2,6 +2,7 @@
   display: flex;
   flex-direction: column;
   height: 100vh;
+  height: 100dvh;
   overflow: hidden;
 }
 
@@ -9,6 +10,13 @@
   display: flex;
   flex: 1;
   min-height: 0;
+}
+
+.draft-save-warning {
+  padding: 6px 16px;
+  background: #fff3d6;
+  color: #713e09;
+  font-size: 14px;
 }
 
 .app-editor {
@@ -21,4 +29,26 @@
   flex: 1;
   min-width: 0;
   background: #f3f4f6;
+}
+
+@media (max-width: 680px) {
+  .app-main {
+    flex-direction: column;
+    overflow-y: auto;
+  }
+
+  .app-editor,
+  .app-preview {
+    min-height: 0;
+  }
+
+  .app-editor {
+    flex: 0 0 270px;
+    border-right: 0;
+    border-bottom: 1px solid #e5e7eb;
+  }
+
+  .app-preview {
+    flex: 1 0 400px;
+  }
 }

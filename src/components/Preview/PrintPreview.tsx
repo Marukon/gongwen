@@ -10,6 +10,7 @@ import { usePagination, type PaginationConfig } from '../../hooks/usePagination'
 import { useFitScale } from '../../hooks/useFitScale'
 import type { GongwenAST } from '../../types/ast'
 import type { DocumentConfig } from '../../types/documentConfig'
+import { getSupplementalSignature } from '../../utils/documentDates'
 import {
   CHARS_PER_LINE,
   cmToPagePercent,
@@ -131,6 +132,7 @@ export function PrintPreview({ ast, config, onPageCountChange }: PrintPreviewPro
     onPageCountChange?.(pages.length)
   }, [pages.length, onPageCountChange])
 
+  const signature = getSupplementalSignature(ast, config.specialOptions)
   const contentOpts = {
     title: ast.title,
     body: ast.body,
@@ -138,8 +140,8 @@ export function PrintPreview({ ast, config, onPageCountChange }: PrintPreviewPro
     boldFirstSentence: config.specialOptions.boldFirstSentence,
     boldHeading3: config.specialOptions.boldHeading3,
     hasStamp: config.specialOptions.hasStamp,
-    signatureName: config.specialOptions.signatureName,
-    signatureDate: config.specialOptions.signatureDate,
+    signatureName: signature.name,
+    signatureDate: signature.date,
   }
 
   return (
@@ -187,8 +189,8 @@ export function PrintPreview({ ast, config, onPageCountChange }: PrintPreviewPro
               hasStamp={config.specialOptions.hasStamp}
               hasTitleNameDate={config.specialOptions.hasTitleNameDate}
               headerOrgFontSize={headerOrgFontSize}
-              signatureName={config.specialOptions.signatureName}
-              signatureDate={config.specialOptions.signatureDate}
+              signatureName={signature.name}
+              signatureDate={signature.date}
             />
           ))}
         </div>

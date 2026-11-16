@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type RefObject } from 'react'
+import { useLayoutEffect, useRef, useState, type RefObject } from 'react'
 
 /**
  * 计算"固定真实尺寸元素"适配容器宽度所需的总体缩放比例。
@@ -10,14 +10,15 @@ import { useEffect, useRef, useState, type RefObject } from 'react'
  * 注意：transform 不影响布局，调用方需自行把外层容器高度设为
  * `真实总高度 * scale`，否则会出现多余空白或滚动区域不准。
  */
-export function useFitScale(baseWidth: number): {
+export function useFitScale(baseWidth: number, active = true): {
   frameRef: RefObject<HTMLDivElement | null>
   scale: number
 } {
   const frameRef = useRef<HTMLDivElement | null>(null)
   const [scale, setScale] = useState(1)
 
-  useEffect(() => {
+  useLayoutEffect(() => {
+    if (!active) return
     const frame = frameRef.current
     if (!frame) return
 
@@ -32,7 +33,7 @@ export function useFitScale(baseWidth: number): {
     const observer = new ResizeObserver(compute)
     observer.observe(frame)
     return () => observer.disconnect()
-  }, [baseWidth])
+  }, [baseWidth, active])
 
   return { frameRef, scale }
 }

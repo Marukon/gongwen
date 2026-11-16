@@ -2,16 +2,10 @@
 import { execSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
 import { defineConfig } from 'vite'
+import type { UserConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { viteSingleFile } from 'vite-plugin-singlefile'
 import { VitePWA } from 'vite-plugin-pwa'
-
-// 单文件模式：SINGLE_FILE=1 npm run build
-const isSingleFile = !!process.env.SINGLE_FILE
-
-// GitHub Pages 需要子路径前缀，Vercel / 本地开发使用根路径
-// 单文件模式强制使用相对路径以支持离线双击打开
-const base = isSingleFile ? './' : process.env.GITHUB_ACTIONS ? '/gongwen/' : '/'
 
 function formatDate(date: Date): string {
   const year = date.getFullYear()
@@ -122,7 +116,7 @@ function manualChunks(id: string): string | undefined {
 }
 
 // https://vite.dev/config/
-export default defineConfig({
+const createConfig = (isSingleFile: boolean, base: string): UserConfig => ({
   base,
   build: {
     rollupOptions: {
@@ -183,4 +177,11 @@ export default defineConfig({
     globals: true,
     environment: 'node',
   },
+})
+
+export default defineConfig(({ mode }) => {
+  const isSingleFile = mode === 'single' || !!process.env.SINGLE_FILE
+  // GitHub Pages 使用子路径；单文件使用相对路径，以支持离线打开。
+  const base = isSingleFile ? './' : process.env.GITHUB_ACTIONS ? '/gongwen/' : '/'
+  return createConfig(isSingleFile, base)
 })

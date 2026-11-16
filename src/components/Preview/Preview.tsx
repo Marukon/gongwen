@@ -1,10 +1,10 @@
-import { useEffect, useMemo, useRef, useState, useCallback, type CSSProperties, type KeyboardEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, useCallback, type ClipboardEvent, type CSSProperties, type KeyboardEvent } from 'react'
 import { useDocumentConfig } from '../../contexts/useDocumentConfig'
 import { CHARS_PER_LINE, FONT_OPTIONS, FONT_SIZE_OPTIONS, cmToPagePercent, A4_RENDER_WIDTH_PX, A4_RENDER_HEIGHT_PX } from '../../types/documentConfig'
-import type { ParagraphAlignment } from '../../types/ast'
-import { normalizeEditorHtml } from '../../utils/richText'
+import type { GongwenAST, ParagraphAlignment } from '../../types/ast'
+import { normalizeEditorHtml, parseEditorContent } from '../../utils/richText'
 import { normalizeFontName } from '../../utils/fontAliases'
-import { useDocumentParser } from '../../hooks/useDocumentParser'
+import { getSupplementalSignature } from '../../utils/documentDates'
 import { useFitScale } from '../../hooks/useFitScale'
 import { PrintPreview } from './PrintPreview'
 import { renderA4FooterNote, getSignatureIndents } from './A4Page'
@@ -13,6 +13,7 @@ import './Preview.css'
 
 interface PreviewProps {
   value: string
+  ast: GongwenAST
   onChange: (value: string) => void
 }
 
@@ -55,6 +56,7 @@ function applyInlineStyleToRange(range: Range, format: Partial<CapturedFormat>) 
     textNodes.push(range.commonAncestorContainer as Text)
   }
 
+  const { startContainer, startOffset: rangeStart, endContainer, endOffset: rangeEnd } = range
   for (const textNode of textNodes) {
     const textVal = textNode.textContent ?? ''
     if (textVal.length === 0) continue
@@ -62,11 +64,11 @@ function applyInlineStyleToRange(range: Range, format: Partial<CapturedFormat>) 
     let startOffset = 0
     let endOffset = textVal.length
 
-    if (textNode === range.startContainer) {
-      startOffset = range.startOffset
+    if (textNode === startContainer) {
+      startOffset = rangeStart
     }
-    if (textNode === range.endContainer) {
-      endOffset = range.endOffset
+    if (textNode === endContainer) {
+      endOffset = rangeEnd
     }
 
     if (startOffset >= endOffset) continue
@@ -83,8 +85,8 @@ function applyInlineStyleToRange(range: Range, format: Partial<CapturedFormat>) 
     const span = document.createElement('span')
     if (format.fontFamily) span.style.fontFamily = format.fontFamily
     if (format.fontSizePt) span.style.fontSize = `${format.fontSizePt}pt`
-    if (format.bold) span.style.fontWeight = 'bold'
-    if (format.italic) span.style.fontStyle = 'italic'
+    if (format.bold !== undefined) span.style.fontWeight = format.bold ? 'bold' : 'normal'
+    if (format.italic !== undefined) span.style.fontStyle = format.italic ? 'italic' : 'normal'
     if (format.underline) span.style.textDecoration = 'underline'
     if (format.color) span.style.color = format.color
 
@@ -93,11 +95,12 @@ function applyInlineStyleToRange(range: Range, format: Partial<CapturedFormat>) 
   }
 }
 
-function applyFontSize(size: number) {
+function applyFontSize(editor: HTMLElement, size: number) {
   const selection = window.getSelection()
   if (!selection || selection.rangeCount === 0 || selection.isCollapsed) return
 
   const range = selection.getRangeAt(0)
+  if (!editor.contains(range.commonAncestorContainer)) return
   applyInlineStyleToRange(range, { fontSizePt: size })
   selection.removeAllRanges()
 }
@@ -114,6 +117,7 @@ function getSelectedBlocks(root: HTMLElement): HTMLElement[] {
   if (!selection || selection.rangeCount === 0) return []
 
   const range = selection.getRangeAt(0)
+  if (!root.contains(range.commonAncestorContainer)) return []
   const blocks = Array.from(root.querySelectorAll<HTMLElement>(BLOCK_SELECTOR))
   const selected = blocks.filter((block) => {
     try {
@@ -183,14 +187,8 @@ function getFormatAtSelection(editor: HTMLElement): CapturedFormat | null {
     }
   }
 
-  const isBoldTag = targetElement.closest('b, strong') !== null
-  const isBoldWeight = computed.fontWeight === 'bold' || parseInt(computed.fontWeight, 10) >= 600
-  const isH1 = block.classList.contains('a4-h1') || block.tagName === 'H1' || targetElement.classList.contains('a4-h1-inline')
-  const isTitle = block.classList.contains('a4-title') || block.tagName === 'H1'
-  const bold = isBoldTag || isBoldWeight || isH1 || isTitle
-
-  const isItalicTag = targetElement.closest('i, em') !== null
-  const italic = isItalicTag || computed.fontStyle === 'italic'
+  const bold = computed.fontWeight === 'bold' || parseInt(computed.fontWeight, 10) >= 600
+  const italic = computed.fontStyle === 'italic'
 
   const isUnderlineTag = targetElement.closest('u') !== null
   const underline = isUnderlineTag || computed.textDecoration.includes('underline')
@@ -217,9 +215,8 @@ function applyFormatToSelection(editor: HTMLElement, format: CapturedFormat) {
   const range = sel.getRangeAt(0)
   if (!editor.contains(range.commonAncestorContainer)) return
 
-  applyInlineStyleToRange(range, format)
-
   const blocks = getSelectedBlocks(editor)
+  applyInlineStyleToRange(range, format)
   if (format.textAlign && blocks.length > 0) {
     for (const b of blocks) {
       b.style.textAlign = format.textAlign
@@ -279,11 +276,11 @@ function applyFormatToBlock(block: HTMLElement, format: CapturedFormat) {
   }
 }
 
-export function Preview({ value, onChange }: PreviewProps) {
+export function Preview({ value, ast, onChange }: PreviewProps) {
   const { config } = useDocumentConfig()
   const editorRef = useRef<HTMLDivElement>(null)
   const shellRef = useRef<HTMLDivElement>(null)
-  const syncingRef = useRef(false)
+  const lastEmittedRef = useRef<string | null>(null)
   const painterClickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [currentFont, setCurrentFont] = useState(FONT_FAMILY_OPTIONS[0])
   const [currentFontSize, setCurrentFontSize] = useState(FONT_SIZE_OPTIONS_CN[3]?.value ?? 16)
@@ -297,11 +294,21 @@ export function Preview({ value, onChange }: PreviewProps) {
     persistent: false,
     format: null,
   })
-  // 打印预览所需的实时 AST（与导出使用同一解析管线）
-  const ast = useDocumentParser(value)
   const [pageCount, setPageCount] = useState(0)
+  const [editHeight, setEditHeight] = useState(A4_RENDER_HEIGHT_PX)
   // 编辑模式同样以真实 A4 尺寸渲染，再整体缩放适配
-  const { frameRef: editFrameRef, scale: editScale } = useFitScale(A4_RENDER_WIDTH_PX)
+  const { frameRef: editFrameRef, scale: editScale } = useFitScale(A4_RENDER_WIDTH_PX, !showPrintPreview)
+  const signature = getSupplementalSignature(ast, config.specialOptions)
+
+  useEffect(() => {
+    if (showPrintPreview || !shellRef.current) return
+    const shell = shellRef.current
+    const measure = () => setEditHeight(shell.offsetHeight)
+    const observer = new ResizeObserver(measure)
+    measure()
+    observer.observe(shell)
+    return () => observer.disconnect()
+  }, [showPrintPreview])
 
   const isFormalHeader = config.header.mode === 'formal'
   const headerOrgFontSize = useMemo(
@@ -318,11 +325,11 @@ export function Preview({ value, onChange }: PreviewProps) {
   )
 
   const cssVars = useMemo((): CSSProperties => {
-    const pageWidthPx = 595
+    const pageWidthPx = A4_RENDER_WIDTH_PX
     const marginLeftPx = (config.margins.left / 21) * pageWidthPx
     const marginRightPx = (config.margins.right / 21) * pageWidthPx
     const availablePx = pageWidthPx - marginLeftPx - marginRightPx
-    const textWidth = config.body.fontSize * CHARS_PER_LINE
+    const textWidth = config.body.fontSize * (96 / 72) * CHARS_PER_LINE
     const letterSpacingUnits = CHARS_PER_LINE - 1
     const charSpacingPx = (availablePx - textWidth) / letterSpacingUnits
 
@@ -352,18 +359,21 @@ export function Preview({ value, onChange }: PreviewProps) {
 
   useEffect(() => {
     const editor = editorRef.current
-    if (!editor) return
-    const normalized = normalizeEditorHtml(value)
-    if (editor.innerHTML === normalized) return
-    syncingRef.current = true
-    editor.innerHTML = normalized
-    syncingRef.current = false
+    if (!editor) {
+      lastEmittedRef.current = null
+      return
+    }
+    if (lastEmittedRef.current === value || editor.innerHTML === value) return
+    editor.replaceChildren(...parseEditorContent(value).childNodes)
+    lastEmittedRef.current = value
   }, [value, showPrintPreview])
 
   const emitChange = useCallback(() => {
     const editor = editorRef.current
-    if (!editor || syncingRef.current) return
-    onChange(normalizeEditorHtml(editor.innerHTML))
+    if (!editor) return
+    const normalized = normalizeEditorHtml(editor.innerHTML)
+    lastEmittedRef.current = normalized
+    onChange(normalized)
   }, [onChange])
 
   const handleFontChange = useCallback((fontFamily: string) => {
@@ -374,7 +384,7 @@ export function Preview({ value, onChange }: PreviewProps) {
 
   const handleFontSizeChange = useCallback((fontSize: number) => {
     setCurrentFontSize(fontSize)
-    applyFontSize(fontSize)
+    if (editorRef.current) applyFontSize(editorRef.current, fontSize)
     emitChange()
   }, [emitChange])
 
@@ -401,22 +411,30 @@ export function Preview({ value, onChange }: PreviewProps) {
     emitChange()
   }, [emitChange])
 
-  useEffect(() => {
-    if (showPrintPreview) {
-      setPainterState({ active: false, persistent: false, format: null })
-    }
-  }, [showPrintPreview])
+  const cancelPainter = useCallback(() => {
+    if (painterClickTimerRef.current !== null) clearTimeout(painterClickTimerRef.current)
+    painterClickTimerRef.current = null
+    setPainterState({ active: false, persistent: false, format: null })
+  }, [])
+
+  const handleModeChange = () => {
+    cancelPainter()
+    setShowPrintPreview(!showPrintPreview)
+  }
 
   useEffect(() => {
-    if (!painterState.active) return
+    if (showPrintPreview) return
     const handleGlobalKeyDown = (e: globalThis.KeyboardEvent) => {
       if (e.key === 'Escape') {
-        setPainterState({ active: false, persistent: false, format: null })
+        cancelPainter()
       }
     }
     window.addEventListener('keydown', handleGlobalKeyDown)
-    return () => window.removeEventListener('keydown', handleGlobalKeyDown)
-  }, [painterState.active])
+    return () => {
+      window.removeEventListener('keydown', handleGlobalKeyDown)
+      if (painterClickTimerRef.current !== null) clearTimeout(painterClickTimerRef.current)
+    }
+  }, [showPrintPreview, cancelPainter])
 
   const handlePainterClick = useCallback((e: React.MouseEvent) => {
     e.preventDefault()
@@ -424,19 +442,18 @@ export function Preview({ value, onChange }: PreviewProps) {
     if (!editor) return
 
     if (painterState.active) {
-      if (painterClickTimerRef.current) {
-        clearTimeout(painterClickTimerRef.current)
-        painterClickTimerRef.current = null
-      }
-      setPainterState({ active: false, persistent: false, format: null })
+      cancelPainter()
       return
     }
 
     const format = getFormatAtSelection(editor)
     if (!format) return
 
-    if (e.detail === 1) {
+    if (e.detail === 0) {
+      setPainterState({ active: true, persistent: false, format })
+    } else if (e.detail === 1) {
       painterClickTimerRef.current = setTimeout(() => {
+        painterClickTimerRef.current = null
         setPainterState({ active: true, persistent: false, format })
       }, 220)
     } else if (e.detail === 2) {
@@ -446,7 +463,16 @@ export function Preview({ value, onChange }: PreviewProps) {
       }
       setPainterState({ active: true, persistent: true, format })
     }
-  }, [painterState.active])
+  }, [painterState.active, cancelPainter])
+
+  const handlePaste = (event: ClipboardEvent<HTMLDivElement>) => {
+    event.preventDefault()
+    const html = event.clipboardData.getData('text/html')
+    const text = event.clipboardData.getData('text/plain')
+    if (html) exec('insertHTML', normalizeEditorHtml(html))
+    else if (text) exec('insertText', text)
+    emitChange()
+  }
 
   const handleEditorMouseUp = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
     if (!painterState.active || !painterState.format) return
@@ -502,14 +528,15 @@ export function Preview({ value, onChange }: PreviewProps) {
     <div className="preview-container">
       <div className="preview-header">
         <div className="preview-header-top">
-          <span className="preview-label">预览</span>
+          <span className="preview-label">{showPrintPreview ? '分页预览' : '版面编辑'}</span>
           {showPrintPreview && pageCount > 0 && (
             <span className="preview-hint">共 {pageCount} 页</span>
           )}
           <button
             type="button"
             className={`preview-toggle${showPrintPreview ? ' preview-toggle--active' : ''}`}
-            onClick={() => setShowPrintPreview((v) => !v)}
+            onClick={handleModeChange}
+            aria-controls="document-preview"
           >
             {showPrintPreview ? '编辑' : '预览'}
           </button>
@@ -536,6 +563,7 @@ export function Preview({ value, onChange }: PreviewProps) {
             }${painterState.persistent ? ' preview-tool-btn--persistent' : ''}`}
             onMouseDown={(e) => e.preventDefault()}
             onClick={handlePainterClick}
+            aria-pressed={painterState.active}
             title={
               painterState.active
                 ? painterState.persistent
@@ -561,14 +589,14 @@ export function Preview({ value, onChange }: PreviewProps) {
         </div>
         )}
       </div>
-      <div className="preview-scroll" style={cssVars}>
+      <div className="preview-scroll" id="document-preview" style={cssVars}>
         {showPrintPreview ? (
           <PrintPreview ast={ast} config={config} onPageCountChange={setPageCount} />
         ) : (
         <div
           className="preview-scale-frame"
           ref={editFrameRef}
-          style={{ height: `${A4_RENDER_HEIGHT_PX * editScale}px` }}
+          style={{ height: `${editHeight * editScale}px` }}
         >
           <div className="preview-scale-content" style={{ transform: `scale(${editScale})` }}>
             <div className="preview-page-shell" ref={shellRef}>
@@ -602,8 +630,13 @@ export function Preview({ value, onChange }: PreviewProps) {
                     ref={editorRef}
                     className={`preview-editor${painterState.active ? ' preview-editor--painter' : ''}`}
                     contentEditable
+                    role="textbox"
+                    aria-label="版面编辑区"
+                    aria-multiline="true"
                     suppressContentEditableWarning
                     onInput={emitChange}
+                    onPaste={handlePaste}
+                    onDrop={(event) => event.preventDefault()}
                     onBlur={emitChange}
                     onKeyDown={handleKeyDown}
                     onMouseUp={handleEditorMouseUp}
@@ -611,9 +644,8 @@ export function Preview({ value, onChange }: PreviewProps) {
                 </div>
                 {renderA4FooterNote(config.footerNote)}
                 {/* 落款：空三行，署名右空 4-5 字，日期居中于署名 */}
-                {(config.specialOptions.signatureName || config.specialOptions.signatureDate) && (() => {
-                  const dateS = (config.specialOptions.signatureDate || '').trim()
-                  const nameS = (config.specialOptions.signatureName || '').trim()
+                {(signature.name || signature.date) && (() => {
+                  const { name: nameS, date: dateS } = signature
                   const { nameIndentEm, dateIndentEm } = getSignatureIndents(nameS, dateS)
                   const lineStyle: CSSProperties = {
                     fontFamily: config.body.fontFamily,
