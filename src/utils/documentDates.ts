@@ -1,6 +1,21 @@
 import { NodeType, type GongwenAST } from '../types/ast'
 import type { SpecialOptionsConfig } from '../types/documentConfig'
 
+const shanghaiDate = new Intl.DateTimeFormat('zh-CN', {
+  timeZone: 'Asia/Shanghai',
+  calendar: 'gregory',
+  numberingSystem: 'latn',
+  year: 'numeric',
+  month: 'numeric',
+  day: 'numeric',
+})
+
+export function formatShanghaiDocumentDate(now = new Date()): string {
+  const parts = shanghaiDate.formatToParts(now)
+  const value = (type: 'year' | 'month' | 'day') => Number(parts.find((part) => part.type === type)?.value)
+  return `${value('year')}年${value('month')}月${value('day')}日`
+}
+
 // 公文日期是日历值，不经过本地时区转换。
 export function normalizeDocumentDate(text: string): string | null {
   const match = /^(\d{4})年\s*(\d{1,2})月\s*(\d{1,2})日$/.exec(text.trim())

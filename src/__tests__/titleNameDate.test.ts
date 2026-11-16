@@ -5,7 +5,7 @@ import { astToStyledHtml } from '../utils/richText'
 import { buildDocument } from '../exporter/docxBuilder'
 import { DEFAULT_CONFIG, type DocumentConfig } from '../types/documentConfig'
 import { renderA4Content } from '../components/Preview/A4Page'
-import { ensureTitleDateParentheses, getSupplementalSignature, getTitleMetadataIndices } from '../utils/documentDates'
+import { ensureTitleDateParentheses, formatShanghaiDocumentDate, getSupplementalSignature, getTitleMetadataIndices } from '../utils/documentDates'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { NodeType, type DocumentNode } from '../types/ast'
 import { sanitizeText } from '../utils/sanitize'
@@ -17,6 +17,12 @@ function docNode(content: string): DocumentNode {
 function linesFromText(text: string): ParsedLineInput[] {
   return text.split('\n').map((text, i) => ({ text, lineNumber: i + 1 }))
 }
+
+it('备用落款日期默认留空，填写时以北京时间当天为准', () => {
+  expect(DEFAULT_CONFIG.specialOptions.signatureDate).toBe('')
+  expect(formatShanghaiDocumentDate(new Date('2026-01-06T15:59:59Z'))).toBe('2026年1月6日')
+  expect(formatShanghaiDocumentDate(new Date('2026-01-06T16:00:00Z'))).toBe('2026年1月7日')
+})
 
 describe('Issue 2: empty paragraphs preserved (return deletion propagates)', () => {
   it('preserves empty lines as PARAGRAPH nodes when preserveEmptyLines=true', () => {

@@ -1,6 +1,7 @@
 import { useState, type ChangeEvent, type ReactNode } from 'react'
 import { useDocumentConfig } from '../../contexts/useDocumentConfig'
 import { useCustomFonts } from '../../hooks/useCustomFonts'
+import { formatShanghaiDocumentDate } from '../../utils/documentDates'
 import {
   FONT_OPTIONS,
   ASCII_FONT_OPTIONS,
@@ -610,6 +611,13 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                       checked={config.specialOptions.hasStamp}
                       onChange={(v) => patch({ specialOptions: { hasStamp: v } })}
                     />
+                    <button
+                      type="button"
+                      className="settings-btn settings-btn--close"
+                      onClick={() => patch({ specialOptions: { signatureDate: formatShanghaiDocumentDate() } })}
+                    >
+                      填写今天日期
+                    </button>
                   </div>
                   <p className="settings-hint">落款距离最后一行公文正文空三行，以成文日期为基准居中排版</p>
                 </div>

@@ -54,7 +54,7 @@ export interface SpecialOptionsConfig {
    */
   signatureName: string
   /**
-   * 落款日期，默认当天日期
+   * 备用落款日期，默认为空
    */
   signatureDate: string
   /**
