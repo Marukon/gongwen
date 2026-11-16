@@ -53,7 +53,7 @@ export function parseEditorContent(html: string): HTMLDivElement {
   const content = DOMPurify.sanitize(html, {
     RETURN_DOM_FRAGMENT: true,
     ALLOWED_TAGS: [...Array.from(BLOCK_TAGS, (tag) => tag.toLowerCase()), '#text', 'br', 'span', 'strong', 'em', 'b', 'i', 'u', 'font'],
-    ALLOWED_ATTR: ['class', 'style', 'align', 'face', 'size', 'color', 'data-no-indent', 'data-align-no-indent', 'data-offset-chars', 'data-paragraph-indent-twips'],
+    ALLOWED_ATTR: ['class', 'style', 'align', 'face', 'size', 'color', 'data-no-indent', 'data-align-no-indent', 'data-offset-chars', 'data-paragraph-indent-twips', 'data-relative-center-inset'],
     ALLOW_DATA_ATTR: false,
     ALLOW_ARIA_ATTR: false,
   })

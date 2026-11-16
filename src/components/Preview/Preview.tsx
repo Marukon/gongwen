@@ -265,7 +265,7 @@ export function Preview({ value, ast, onChange, editorRef }: PreviewProps) {
     if (!editor || !restoreSelection()) return
     const pair = getRelativeCenterPair(editor)
     if (!pair) return
-    centerBlockOnReference(pair, editScale)
+    centerBlockOnReference(pair, editScale, getParagraphOffsetTwips(1.5, config.body.fontSize))
     emitChange()
   }
 
@@ -450,7 +450,7 @@ export function Preview({ value, ast, onChange, editorRef }: PreviewProps) {
               <button type="button" className="preview-history-btn" disabled={!historyButtons.redo}
                 title="还原已撤销的修改（Ctrl+Y）" onClick={() => stepHistory('redo')}>还原</button>
               <button type="button" className="preview-history-btn" disabled={!canRelativeCenter}
-                title="清除所选两行的空白占位，以段落缩进对准下行的中心" onClick={handleRelativeCenter}>相对居中对齐</button>
+                title="清除空白占位，以上下两行同一中心向左收约一字半" onClick={handleRelativeCenter}>相对居中对齐</button>
             </div>
           )}
         </div>

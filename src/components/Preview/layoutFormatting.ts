@@ -1,7 +1,7 @@
 import type { ParagraphAlignment } from '../../types/ast'
 import { normalizeFontName } from '../../utils/fontAliases'
 import { offsetTransform } from '../../utils/editorLayout'
-import { getSignatureIndentChars, MAX_PARAGRAPH_INDENT_TWIPS, paragraphIndentCss } from '../../utils/documentLayout'
+import { getSignatureIndentChars, MAX_PARAGRAPH_INDENT_TWIPS, paragraphIndentCss, readParagraphIndent } from '../../utils/documentLayout'
 
 export const BLOCK_SELECTOR = 'p,div,h1,h2,h3,h4,h5,h6'
 const ALIGNMENT_BLANK = '[\\p{White_Space}\\u180E\\u200B\\u2060\\u2800\\u3164\\uFEFF\\uFFA0]'
@@ -147,7 +147,7 @@ export function getRelativeCenterPair(editor: HTMLElement): [HTMLElement, HTMLEl
   if (blocks.length === 2) return [blocks[0], blocks[1]]
 }
 
-function getTextCenter(block: HTMLElement): number {
+function getTextBounds(block: HTMLElement): DOMRect {
   const walker = document.createTreeWalker(block, NodeFilter.SHOW_TEXT)
   const range = document.createRange()
   let found = false
@@ -161,8 +161,7 @@ function getTextCenter(block: HTMLElement): number {
     }
     range.setEnd(node, text.length - (text.match(TRAILING_ALIGNMENT_BLANKS)?.[0].length ?? 0))
   }
-  const { left, width } = range.getBoundingClientRect()
-  return left + width / 2
+  return range.getBoundingClientRect()
 }
 
 export function setBlockOffset(block: HTMLElement, offset: number) {
@@ -188,10 +187,13 @@ export function setBlockParagraphIndent(block: HTMLElement, twips: number) {
 }
 
 export function centerBlockOnReference(
-  [upper, lower]: [HTMLElement, HTMLElement], scale: number,
+  [upper, lower]: [HTMLElement, HTMLElement], scale: number, leftInsetTwips: number,
 ) {
   if (scale <= 0) return
-  const targetCenter = getTextCenter(lower)
+  const adjustedIndent = lower.dataset.relativeCenterInset === 'true' && lower.style.textAlign === 'center'
+    ? readParagraphIndent(lower.dataset.paragraphIndentTwips) : undefined
+  const reference = getTextBounds(lower)
+  const referenceCenter = reference.left + reference.width / 2
   for (const block of [upper, lower]) {
     removeAlignmentBlanks(block)
     block.style.textAlign = 'center'
@@ -199,11 +201,19 @@ export function centerBlockOnReference(
     block.dataset.alignNoIndent = 'true'
     setBlockParagraphIndent(block, 0)
   }
-  // A one-sided indent moves the center by half its width. 1 CSS px = 15 twips at 96 DPI.
-  const { left, width } = lower.getBoundingClientRect()
-  const indent = (targetCenter - (left + width / 2)) / scale * 30
+  let indent = adjustedIndent
+  if (indent === undefined) {
+    const { left, width } = lower.getBoundingClientRect()
+    const halfTextWidth = Math.max(getTextBounds(upper).width, getTextBounds(lower).width) / 2
+    // Limit the inset at the left edge so the longer line still fits on one line.
+    const clearance = Math.max(0, referenceCenter - left - halfTextWidth)
+    const shiftPx = Math.min(clearance, leftInsetTwips / 15 * scale)
+    // A one-sided indent moves the center by half its width. 1 CSS px = 15 twips.
+    indent = (referenceCenter - shiftPx - (left + width / 2)) / scale * 30
+  }
   for (const block of [upper, lower]) {
     setBlockParagraphIndent(block, indent)
+    block.dataset.relativeCenterInset = 'true'
   }
 }
 
