@@ -142,15 +142,16 @@ export function sliceHeadingText(text: string, spans: HeadingSpan[], runs?: Rich
     if (source.trim() !== text) return result
     let index = 0
     let offset = 0
-    let skip = source.length - source.trimStart().length
+    const leading = source.length - source.trimStart().length
+    if (leading) result.unshift({ text: source.slice(0, leading), type: result[0]?.type })
+    if (leading + text.length < source.length) {
+      result.push({ text: source.slice(leading + text.length), type: result[result.length - 1]?.type })
+    }
     for (const part of result) {
       let remaining = part.text.length
       part.runs = []
       while (remaining > 0 && index < runs.length) {
         const run = runs[index]
-        const discarded = Math.min(skip, run.text.length - offset)
-        skip -= discarded
-        offset += discarded
         const taken = Math.min(remaining, run.text.length - offset)
         if (taken) part.runs.push({ ...run, text: run.text.slice(offset, offset + taken) })
         remaining -= taken

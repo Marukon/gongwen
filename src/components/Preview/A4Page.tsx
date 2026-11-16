@@ -5,6 +5,7 @@ import type { HeaderConfig, FooterNoteConfig, SpecialOptionsConfig } from '../..
 import { getPreviewFontFamily } from '../../utils/fontAliases'
 import { ensureTitleDateParentheses, getTitleMetadataIndices, normalizeDocumentDate, readTitleByline } from '../../utils/documentDates'
 import { getHeadingSpans, headingClass, sliceHeadingText } from '../../parser/headings'
+import { attachmentClass, hasRichStyleOverrides, offsetTransform } from '../../utils/editorLayout'
 import './A4Page.css'
 
 /** 节点类型 → CSS 类名映射 */
@@ -151,6 +152,7 @@ function getA4NodeStyle(
 export interface A4ContentRenderOptions {
   title: DocumentNode | null
   body: DocumentNode[]
+  layoutEditable?: true
   hasTitleNameDate: boolean
   boldFirstSentence: boolean
   boldHeading3: boolean
@@ -181,7 +183,7 @@ export function getSignatureIndents(nameText: string, dateText: string): { nameI
 
 /** 渲染标题 + 正文流（不含版头/版记外壳） */
 export function renderA4Content(opts: A4ContentRenderOptions): React.ReactNode {
-  const { title, body, hasTitleNameDate, boldFirstSentence, boldHeading3, hasStamp, signatureName, signatureDate } = opts
+  const { title, body, layoutEditable, hasTitleNameDate, boldFirstSentence, boldHeading3, hasStamp, signatureName, signatureDate } = opts
   const metadata = getTitleMetadataIndices({ title, body }, hasTitleNameDate)
   return (
     <>
@@ -189,7 +191,7 @@ export function renderA4Content(opts: A4ContentRenderOptions): React.ReactNode {
         <p
           key={`title-${title.lineNumber}-${idx}`}
           className={NODE_CLASS_MAP[title.type]}
-          style={{ marginBottom: idx < arr.length - 1 ? 0 : undefined, textAlign: line.alignment }}
+          style={{ marginBottom: idx < arr.length - 1 ? 0 : undefined, textAlign: line.alignment, transform: offsetTransform(line.offsetChars) }}
         >
           {hasRichStyleOverrides(line.runs) ? renderRichRuns(line.runs ?? []) : line.content}
         </p>
@@ -198,7 +200,7 @@ export function renderA4Content(opts: A4ContentRenderOptions): React.ReactNode {
         const elements: React.ReactNode[] = []
 
         // 无印章单机关公文，正文与署名之间空一行。
-        if (node.type === NodeType.SIGNATURE && index !== metadata.name) {
+        if (node.type === NodeType.SIGNATURE && index !== metadata.name && !layoutEditable) {
           for (let j = 0; j < (hasStamp ? 3 : 1); j++) {
             elements.push(
               <p key={`empty-${node.lineNumber}-${j}`} className="a4-empty-line">{'\u200B'}</p>
@@ -251,7 +253,10 @@ export function renderA4Content(opts: A4ContentRenderOptions): React.ReactNode {
               key={node.lineNumber}
               className={nodeClassName}
               data-no-indent={node.noIndent || undefined}
-              style={role ? { textAlign: node.alignment } : getA4NodeStyle(node, index, hasStamp, body)}
+              style={{
+                ...(role ? { textAlign: node.alignment } : getA4NodeStyle(node, index, hasStamp, body)),
+                transform: offsetTransform(node.offsetChars),
+              }}
             >
               {nodeContent}
             </p>
@@ -294,10 +299,6 @@ export function renderA4Content(opts: A4ContentRenderOptions): React.ReactNode {
   )
 }
 
-function hasRichStyleOverrides(runs?: RichTextRun[]): boolean {
-  return !!runs?.some((run) => run.bold !== undefined || run.italic !== undefined || run.underline || run.fontFamily || run.fontSize)
-}
-
 function renderRichRuns(runs: RichTextRun[]) {
   return runs.map((run, index) => (
     <span
@@ -307,7 +308,8 @@ function renderRichRuns(runs: RichTextRun[]) {
         fontSize: run.fontSize ? `${run.fontSize}pt` : undefined,
         fontWeight: run.bold === undefined ? undefined : run.bold ? 'bold' : 'normal',
         fontStyle: run.italic === undefined ? undefined : run.italic ? 'italic' : 'normal',
-        textDecoration: run.underline ? 'underline' : undefined,
+        textDecoration: run.underline === undefined ? undefined : run.underline ? 'underline' : 'none',
+        color: run.color ? `#${run.color}` : undefined,
       }}
     >
       {run.text}
@@ -348,6 +350,12 @@ function renderBoldFirstSentence(content: string): React.ReactNode {
  *                   3.xxx
  */
 function renderAttachment(node: AttachmentNode): React.ReactNode {
+  if (node.layoutLine) return (
+    <p className={attachmentClass(node.layoutLine)} data-no-indent={node.noIndent || undefined}
+      style={{ textAlign: node.alignment, transform: offsetTransform(node.offsetChars) }}>
+      {hasRichStyleOverrides(node.runs) ? renderRichRuns(node.runs ?? []) : node.content}
+    </p>
+  )
   if (!node.isMultiple) {
     // 单附件模式
     return (
@@ -384,6 +392,7 @@ function renderAttachment(node: AttachmentNode): React.ReactNode {
 interface A4PageProps {
   title: DocumentNode | null
   body: DocumentNode[]
+  layoutEditable?: true
   pageNumber: number
   /** 内容流偏移量(px)，用于视窗裁剪定位 */
   offsetY: number
@@ -436,6 +445,7 @@ function ensureChinesePeriod(text: string): string {
 export const A4Page = memo(function A4Page({
   title,
   body,
+  layoutEditable,
   pageNumber,
   offsetY,
   clipHeight,
@@ -466,7 +476,7 @@ export const A4Page = memo(function A4Page({
         {isFirstPage && renderA4Header(headerConfig, headerOrgFontSize)}
         <div className="a4-content-viewport" style={{ height: `${clipHeight}px` }}>
           <div style={{ transform: `translateY(-${offsetY}px)` }}>
-            {renderA4Content({ title, body, hasTitleNameDate, boldFirstSentence, boldHeading3, hasStamp, signatureName, signatureDate })}
+            {renderA4Content({ title, body, layoutEditable, hasTitleNameDate, boldFirstSentence, boldHeading3, hasStamp, signatureName, signatureDate })}
           </div>
         </div>
       </div>

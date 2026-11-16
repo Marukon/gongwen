@@ -1,4 +1,4 @@
-import type { DocumentNode, GongwenAST, AttachmentNode, ParagraphAlignment, RichTextRun } from '../types/ast'
+import type { DocumentNode, GongwenAST, AttachmentNode } from '../types/ast'
 import { NodeType } from '../types/ast'
 import { detectNodeType, ATTACHMENT_RE, extractAttachmentItemsFromLine } from './matchers'
 import { normalizeDocumentDate, readTitleByline, readTitleDate } from '../utils/documentDates'
@@ -31,12 +31,11 @@ const ADDRESSEE_MAX_LENGTH = 60
 /** 主送机关检测窗口：标题后前 N 个非空行内首次出现的冒号结尾短行识别为主送机关 */
 const ADDRESSEE_PREAMBLE_MAX_LINES = 4
 
-export interface ParsedLineInput {
+export interface ParsedLineInput extends Pick<DocumentNode, 'runs' | 'alignment' | 'noIndent' | 'offsetChars' | 'bylineRole'> {
   text: string
   lineNumber: number
-  runs?: RichTextRun[]
-  alignment?: ParagraphAlignment
-  noIndent?: boolean
+  layoutType?: NodeType.DOCUMENT_TITLE | NodeType.SIGNATURE | NodeType.DATE | NodeType.ADDRESSEE
+  attachmentLine?: AttachmentNode['layoutLine']
 }
 
 /** 标题不应包含的结尾标点（用于判断是否为完整标题或标题断行） */
@@ -443,8 +442,25 @@ export function parseGongwen(text: string, options?: { preserveEmptyLines?: bool
   return parseParsedLines(lines, options?.preserveEmptyLines ?? false)
 }
 
-export function parseParsedLines(lines: ParsedLineInput[], preserveEmptyLines = false): GongwenAST {
-  const { title, startIndex } = extractPreamble(lines)
+export function parseParsedLines(lines: ParsedLineInput[], preserveEmptyLines = false, explicitLayout = false): GongwenAST {
+  let title: DocumentNode | null = null
+  let startIndex = 0
+  if (explicitLayout) {
+    // 标题只在当前位置组成标题区，移过的段落不会被重新提到文首。
+    const titleLines: NonNullable<DocumentNode['titleLines']> = []
+    while (lines[startIndex]?.layoutType === NodeType.DOCUMENT_TITLE && lines[startIndex].text.trim()) {
+      const { text, lineNumber, runs, alignment, noIndent, offsetChars } = lines[startIndex++]
+      titleLines.push({ content: text.trim(), lineNumber, runs, alignment, noIndent, offsetChars })
+    }
+    if (titleLines.length) title = {
+      type: NodeType.DOCUMENT_TITLE,
+      content: titleLines.map((line) => line.content).join('\n'),
+      lineNumber: titleLines[0].lineNumber,
+      titleLines,
+    }
+  } else {
+    ({ title, startIndex } = extractPreamble(lines))
+  }
   const body: DocumentNode[] = []
 
   let nonEmptyLinesAfterTitle = 0
@@ -454,18 +470,18 @@ export function parseParsedLines(lines: ParsedLineInput[], preserveEmptyLines = 
   while (i < lines.length) {
     const source = lines[i]
     const trimmed = source.text.trim()
+    const { lineNumber, alignment, noIndent, offsetChars, bylineRole } = source
+    const layout = { lineNumber, alignment, noIndent, offsetChars, bylineRole }
 
     // 跳过空行（标题之前 / 普通正文之间）
     if (trimmed.length === 0) {
       // 预览手动编辑场景下保留空行，使增删「回车」能如实反映到导出结果
-      if (preserveEmptyLines && title !== null) {
+      if (preserveEmptyLines && (title !== null || explicitLayout)) {
         body.push({
           type: NodeType.PARAGRAPH,
           content: '',
-          lineNumber: source.lineNumber,
+          ...layout,
           runs: source.runs,
-          alignment: source.alignment,
-          noIndent: source.noIndent,
         })
       }
       i++
@@ -477,13 +493,21 @@ export function parseParsedLines(lines: ParsedLineInput[], preserveEmptyLines = 
       nonEmptyLinesAfterTitle++
     }
 
-    const lineNumber = source.lineNumber
+    if (source.attachmentLine) {
+      const node: AttachmentNode = {
+        ...layout, type: NodeType.ATTACHMENT, content: trimmed, runs: source.runs,
+        layoutLine: source.attachmentLine, isMultiple: source.attachmentLine !== 'single', items: [],
+      }
+      body.push(node)
+      i++
+      continue
+    }
 
     // 主送机关检测（标题后前 N 个非空行内首次出现的冒号结尾短行）
-    if (!addresseeFound && nonEmptyLinesAfterTitle <= ADDRESSEE_PREAMBLE_MAX_LINES) {
+    if (!source.layoutType && !addresseeFound && nonEmptyLinesAfterTitle <= ADDRESSEE_PREAMBLE_MAX_LINES) {
       if (isPossibleAddressee(trimmed)) {
         addresseeFound = true
-        body.push({ type: NodeType.ADDRESSEE, content: trimmed, lineNumber, runs: source.runs, alignment: source.alignment, noIndent: source.noIndent })
+        body.push({ ...layout, type: NodeType.ADDRESSEE, content: trimmed, runs: source.runs })
         i++
         continue
       }
@@ -498,8 +522,8 @@ export function parseParsedLines(lines: ParsedLineInput[], preserveEmptyLines = 
     }
 
     // 正则检测类型
-    const type = detectNodeType(trimmed)
-    const content = type === NodeType.DATE ? normalizeDocumentDate(trimmed) ?? trimmed : trimmed
+    const type = source.layoutType ?? detectNodeType(trimmed)
+    const content = type === NodeType.DATE && !source.layoutType ? normalizeDocumentDate(trimmed) ?? trimmed : trimmed
     let runs = source.runs
     if (runs && content !== trimmed) {
       // 日期规范化只去除空格和前导零，保留其余字符原有的行内样式。
@@ -513,7 +537,7 @@ export function parseParsedLines(lines: ParsedLineInput[], preserveEmptyLines = 
         }).join(''),
       })).filter((run) => run.text)
     }
-    body.push({ type, content, lineNumber, runs, alignment: source.alignment, noIndent: source.noIndent })
+    body.push({ ...layout, type, content, runs })
     i++
   }
 
@@ -523,7 +547,7 @@ export function parseParsedLines(lines: ParsedLineInput[], preserveEmptyLines = 
   // 1) 署名 + 日期场景（在逻辑文末中相邻）
   if (logicalEnd >= 2 && body[logicalEnd - 1].type === NodeType.DATE) {
     const prev = body[logicalEnd - 2]
-    if (isPossibleSignature(prev) && hasSignatureOrgHint(prev.content)) {
+    if (isPossibleSignature(prev) && (hasSignatureOrgHint(prev.content) || /^值班室/.test(prev.content))) {
       body[logicalEnd - 2] = { ...prev, type: NodeType.SIGNATURE }
     }
   } else if (logicalEnd >= 1) {
@@ -534,5 +558,5 @@ export function parseParsedLines(lines: ParsedLineInput[], preserveEmptyLines = 
     }
   }
 
-  return { title, body }
+  return explicitLayout ? { title, body, layoutEditable: true } : { title, body }
 }

@@ -38,8 +38,11 @@ export function readTitleByline(text: string): string | null {
   return date ? `（${match[1].trim()} ${date}）` : null
 }
 
-export function getTitleMetadataIndices({ title, body }: GongwenAST, enabled: boolean): { name: number; date: number; byline?: number } {
+export function getTitleMetadataIndices({ title, body }: GongwenAST, enabled: boolean, honorEditedLayout = true): { name: number; date: number; byline?: number } {
   const none = { name: -1, date: -1 }
+  const editedName = body.findIndex((node) => node.bylineRole === 'name')
+  const editedDate = body.findIndex((node) => node.bylineRole === 'date')
+  if (honorEditedLayout && (editedName >= 0 || editedDate >= 0)) return { name: editedName, date: editedDate }
   if (!title) return none
   const name = body.findIndex((node) => node.content.trim() !== '')
   if (name < 0 || (body[name].type !== NodeType.PARAGRAPH && body[name].type !== NodeType.SIGNATURE)) return none
@@ -72,7 +75,7 @@ function hasClosingDate({ title, body }: GongwenAST, enabled: boolean): boolean 
 }
 
 export function getSupplementalSignature(ast: GongwenAST, options: SpecialOptionsConfig) {
-  const speech = getTitleMetadataIndices(ast, false)
+  const speech = getTitleMetadataIndices(ast, false, false)
   if ((speech.date >= 0 || speech.byline !== undefined) && !options.signatureName.trim()) {
     return { name: '', date: '' }
   }

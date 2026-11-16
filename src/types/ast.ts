@@ -31,6 +31,8 @@ export interface RichTextRun {
   underline?: boolean
   fontFamily?: string
   fontSize?: number
+  /** 不含井号的 RGB 六位十六进制颜色。 */
+  color?: string
 }
 
 /** 单个文档节点 */
@@ -45,8 +47,11 @@ export interface DocumentNode {
   alignment?: ParagraphAlignment
   /** 取消默认首行缩进 */
   noIndent?: boolean
+  /** 从原排版位置左右微移，以正文字号为单位。 */
+  offsetChars?: number
+  bylineRole?: 'name' | 'date'
   /** 标题的独立版面行，保存分行后的富文本和对齐。 */
-  titleLines?: Array<Pick<DocumentNode, 'content' | 'lineNumber' | 'runs' | 'alignment' | 'noIndent'>>
+  titleLines?: Array<Pick<DocumentNode, 'content' | 'lineNumber' | 'runs' | 'alignment' | 'noIndent' | 'offsetChars'>>
 }
 
 /** 附件项 */
@@ -64,12 +69,16 @@ export interface AttachmentNode extends DocumentNode {
   isMultiple: boolean
   /** 附件列表（单附件时只有一项，index 为 0） */
   items: AttachmentItem[]
+  /** 版面编辑中的独立附件行，保持所在位置和手工格式。 */
+  layoutLine?: 'single' | 'first' | 'item'
 }
 
 /** 完整公文 AST */
 export interface GongwenAST {
   title: DocumentNode | null
   body: DocumentNode[]
+  /** 版面中的空段落已显式保存，渲染与导出不再额外添加。 */
+  layoutEditable?: true
 }
 
 export function getTitleLines(title: DocumentNode): DocumentNode[] {

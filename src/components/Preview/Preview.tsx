@@ -1,10 +1,13 @@
-import { useEffect, useMemo, useRef, useState, useCallback, type ClipboardEvent, type CSSProperties, type KeyboardEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, useCallback, type ClipboardEvent, type CSSProperties, type KeyboardEvent, type RefObject } from 'react'
 import { useDocumentConfig } from '../../contexts/useDocumentConfig'
 import { CHARS_PER_LINE, FONT_OPTIONS, FONT_SIZE_OPTIONS, cmToPagePercent, A4_RENDER_WIDTH_PX, A4_RENDER_HEIGHT_PX } from '../../types/documentConfig'
-import type { GongwenAST, ParagraphAlignment } from '../../types/ast'
+import type { GongwenAST } from '../../types/ast'
 import { normalizeEditorHtml, parseEditorContent } from '../../utils/richText'
-import { normalizeFontName } from '../../utils/fontAliases'
+import { BLOCK_SELECTOR, exec, applyFontSize, getSelectedBlocks, getFormatAtSelection, applyFormatToSelection, applyFormatToBlock, type CapturedFormat } from './layoutFormatting'
 import { getSupplementalSignature } from '../../utils/documentDates'
+import { MAX_OFFSET_CHARS, offsetTransform, readOffset } from '../../utils/editorLayout'
+import { LayoutHistory } from '../../utils/layoutHistory'
+import { insertLayoutParagraphs } from '../../utils/editorInsert'
 import { useFitScale } from '../../hooks/useFitScale'
 import { PrintPreview } from './PrintPreview'
 import { renderA4FooterNote, getSignatureIndents } from './A4Page'
@@ -15,6 +18,7 @@ interface PreviewProps {
   value: string
   ast: GongwenAST
   onChange: (value: string) => void
+  editorRef: RefObject<HTMLDivElement | null>
 }
 
 const FONT_FAMILY_OPTIONS = FONT_OPTIONS.map((option) => option.value)
@@ -22,89 +26,6 @@ const FONT_SIZE_OPTIONS_CN = FONT_SIZE_OPTIONS.map((option) => ({
   label: option.label,
   value: option.value,
 }))
-const BLOCK_SELECTOR = 'p,div,h1,h2,h3,h4,h5,h6'
-
-function exec(command: string, value?: string) {
-  document.execCommand('styleWithCSS', false, 'true')
-  document.execCommand(command, false, value)
-}
-
-function applyInlineStyleToRange(range: Range, format: Partial<CapturedFormat>) {
-  const container = range.commonAncestorContainer.nodeType === Node.TEXT_NODE
-    ? range.commonAncestorContainer.parentElement!
-    : range.commonAncestorContainer
-
-  const textNodes: Text[] = []
-  const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT, {
-    acceptNode(node) {
-      try {
-        if (!range.intersectsNode(node)) return NodeFilter.FILTER_REJECT
-        return NodeFilter.FILTER_ACCEPT
-      } catch {
-        return NodeFilter.FILTER_REJECT
-      }
-    },
-  })
-
-  let currentNode = walker.nextNode() as Text | null
-  while (currentNode) {
-    textNodes.push(currentNode)
-    currentNode = walker.nextNode() as Text | null
-  }
-
-  if (textNodes.length === 0 && range.commonAncestorContainer.nodeType === Node.TEXT_NODE) {
-    textNodes.push(range.commonAncestorContainer as Text)
-  }
-
-  const { startContainer, startOffset: rangeStart, endContainer, endOffset: rangeEnd } = range
-  for (const textNode of textNodes) {
-    const textVal = textNode.textContent ?? ''
-    if (textVal.length === 0) continue
-
-    let startOffset = 0
-    let endOffset = textVal.length
-
-    if (textNode === startContainer) {
-      startOffset = rangeStart
-    }
-    if (textNode === endContainer) {
-      endOffset = rangeEnd
-    }
-
-    if (startOffset >= endOffset) continue
-
-    let targetNode = textNode
-    if (startOffset > 0) {
-      targetNode = textNode.splitText(startOffset)
-      endOffset -= startOffset
-    }
-    if (endOffset < (targetNode.textContent?.length ?? 0)) {
-      targetNode.splitText(endOffset)
-    }
-
-    const span = document.createElement('span')
-    if (format.fontFamily) span.style.fontFamily = format.fontFamily
-    if (format.fontSizePt) span.style.fontSize = `${format.fontSizePt}pt`
-    if (format.bold !== undefined) span.style.fontWeight = format.bold ? 'bold' : 'normal'
-    if (format.italic !== undefined) span.style.fontStyle = format.italic ? 'italic' : 'normal'
-    if (format.underline) span.style.textDecoration = 'underline'
-    if (format.color) span.style.color = format.color
-
-    targetNode.parentNode?.insertBefore(span, targetNode)
-    span.appendChild(targetNode)
-  }
-}
-
-function applyFontSize(editor: HTMLElement, size: number) {
-  const selection = window.getSelection()
-  if (!selection || selection.rangeCount === 0 || selection.isCollapsed) return
-
-  const range = selection.getRangeAt(0)
-  if (!editor.contains(range.commonAncestorContainer)) return
-  applyInlineStyleToRange(range, { fontSizePt: size })
-  selection.removeAllRanges()
-}
-
 export function getHeaderOrgFontSize(orgName: string, leftMargin: number, rightMargin: number, isFormal: boolean): number {
   const baseLen = Math.max(1, Array.from(orgName.trim()).length)
   const length = isFormal ? baseLen + 2 : baseLen // 正式文件加"文件"两字
@@ -112,175 +33,16 @@ export function getHeaderOrgFontSize(orgName: string, leftMargin: number, rightM
   return Math.max(18, Math.min(30, Math.floor(availablePx / length)))
 }
 
-function getSelectedBlocks(root: HTMLElement): HTMLElement[] {
-  const selection = window.getSelection()
-  if (!selection || selection.rangeCount === 0) return []
-
-  const range = selection.getRangeAt(0)
-  if (!root.contains(range.commonAncestorContainer)) return []
-  const blocks = Array.from(root.querySelectorAll<HTMLElement>(BLOCK_SELECTOR))
-  const selected = blocks.filter((block) => {
-    try {
-      return range.intersectsNode(block)
-    } catch {
-      return false
-    }
-  })
-
-  if (selected.length > 0) return selected
-
-  const startNode = range.startContainer.nodeType === Node.ELEMENT_NODE
-    ? range.startContainer as HTMLElement
-    : range.startContainer.parentElement
-  const fallback = startNode?.closest<HTMLElement>(BLOCK_SELECTOR)
-  return fallback && root.contains(fallback) ? [fallback] : []
-}
-
-interface CapturedFormat {
-  fontFamily?: string
-  fontSizePt?: number
-  bold?: boolean
-  italic?: boolean
-  underline?: boolean
-  color?: string
-  textAlign?: ParagraphAlignment
-  blockClassName?: string
-}
-
-function getFormatAtSelection(editor: HTMLElement): CapturedFormat | null {
-  const sel = window.getSelection()
-  let targetElement: HTMLElement | null = null
-
-  if (sel && sel.rangeCount > 0) {
-    const range = sel.getRangeAt(0)
-    let node: Node | null = range.startContainer
-    if (node.nodeType === Node.TEXT_NODE) {
-      node = node.parentElement
-    }
-    if (node && editor.contains(node)) {
-      targetElement = node as HTMLElement
-    }
-  }
-
-  if (!targetElement) {
-    targetElement = editor.querySelector<HTMLElement>(BLOCK_SELECTOR) || editor
-  }
-
-  const computed = window.getComputedStyle(targetElement)
-  const block = targetElement.closest<HTMLElement>(BLOCK_SELECTOR) || targetElement
-  const blockComputed = window.getComputedStyle(block)
-
-  let fontFamily = targetElement.style.fontFamily || block.style.fontFamily
-  if (!fontFamily) {
-    const rawFont = computed.fontFamily || blockComputed.fontFamily
-    fontFamily = rawFont.split(',')[0].trim().replace(/^['"]|['"]$/g, '')
-  }
-  fontFamily = normalizeFontName(fontFamily)
-
-  let fontSizePt: number | undefined
-  const rawFontSize = targetElement.style.fontSize || block.style.fontSize || computed.fontSize
-  if (rawFontSize) {
-    if (rawFontSize.includes('pt')) {
-      fontSizePt = parseFloat(rawFontSize)
-    } else if (rawFontSize.includes('px')) {
-      fontSizePt = Math.round(parseFloat(rawFontSize) * 72 / 96)
-    }
-  }
-
-  const bold = computed.fontWeight === 'bold' || parseInt(computed.fontWeight, 10) >= 600
-  const italic = computed.fontStyle === 'italic'
-
-  const isUnderlineTag = targetElement.closest('u') !== null
-  const underline = isUnderlineTag || computed.textDecoration.includes('underline')
-
-  const textAlign = (block.style.textAlign || blockComputed.textAlign) as ParagraphAlignment
-
-  const blockClassName = Array.from(block.classList).find((c) => c.startsWith('a4-')) || 'a4-paragraph'
-
-  return {
-    fontFamily,
-    fontSizePt,
-    bold,
-    italic,
-    underline,
-    color: targetElement.style.color || computed.color,
-    textAlign,
-    blockClassName,
-  }
-}
-
-function applyFormatToSelection(editor: HTMLElement, format: CapturedFormat) {
-  const sel = window.getSelection()
-  if (!sel || sel.rangeCount === 0 || sel.isCollapsed) return
-  const range = sel.getRangeAt(0)
-  if (!editor.contains(range.commonAncestorContainer)) return
-
-  const blocks = getSelectedBlocks(editor)
-  applyInlineStyleToRange(range, format)
-  if (format.textAlign && blocks.length > 0) {
-    for (const b of blocks) {
-      b.style.textAlign = format.textAlign
-      if (format.textAlign === 'justify') {
-        delete b.dataset.alignNoIndent
-        delete b.dataset.noIndent
-      } else {
-        b.dataset.noIndent = 'true'
-        b.dataset.alignNoIndent = 'true'
-      }
-    }
-  }
-}
-
-function applyFormatToBlock(block: HTMLElement, format: CapturedFormat) {
-  if (format.textAlign) {
-    block.style.textAlign = format.textAlign
-    if (format.textAlign === 'justify') {
-      delete block.dataset.alignNoIndent
-      delete block.dataset.noIndent
-    } else {
-      block.dataset.noIndent = 'true'
-      block.dataset.alignNoIndent = 'true'
-    }
-  }
-
-  if (format.blockClassName) {
-    block.className = format.blockClassName
-  }
-
-  if (format.fontFamily) {
-    block.style.fontFamily = format.fontFamily
-  }
-  if (format.fontSizePt) {
-    block.style.fontSize = `${format.fontSizePt}pt`
-  }
-  if (format.bold !== undefined) {
-    block.style.fontWeight = format.bold ? 'bold' : 'normal'
-  }
-  if (format.italic !== undefined) {
-    block.style.fontStyle = format.italic ? 'italic' : 'normal'
-  }
-  if (format.underline !== undefined) {
-    block.style.textDecoration = format.underline ? 'underline' : 'none'
-  }
-  if (format.color) {
-    block.style.color = format.color
-  }
-
-  for (const child of Array.from(block.querySelectorAll<HTMLElement>('span, strong, em, b, i, u'))) {
-    if (format.fontFamily) child.style.fontFamily = format.fontFamily
-    if (format.fontSizePt) child.style.fontSize = `${format.fontSizePt}pt`
-    if (format.bold !== undefined) child.style.fontWeight = format.bold ? 'bold' : 'normal'
-    if (format.italic !== undefined) child.style.fontStyle = format.italic ? 'italic' : 'normal'
-    if (format.underline !== undefined) child.style.textDecoration = format.underline ? 'underline' : 'none'
-    if (format.color) child.style.color = format.color
-  }
-}
-
-export function Preview({ value, ast, onChange }: PreviewProps) {
+export function Preview({ value, ast, onChange, editorRef }: PreviewProps) {
   const { config } = useDocumentConfig()
-  const editorRef = useRef<HTMLDivElement>(null)
   const shellRef = useRef<HTMLDivElement>(null)
   const lastEmittedRef = useRef<string | null>(null)
+  const selectionRef = useRef<Range | null>(null)
+  const internalDrag = useRef(false)
+  const formattingBatch = useRef(false)
+  const historyRef = useRef(new LayoutHistory())
+  const composingRef = useRef(false)
+  const [historyButtons, setHistoryButtons] = useState({ undo: false, redo: false })
   const painterClickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [currentFont, setCurrentFont] = useState(FONT_FAMILY_OPTIONS[0])
   const [currentFontSize, setCurrentFontSize] = useState(FONT_SIZE_OPTIONS_CN[3]?.value ?? 16)
@@ -299,6 +61,12 @@ export function Preview({ value, ast, onChange }: PreviewProps) {
   // 编辑模式同样以真实 A4 尺寸渲染，再整体缩放适配
   const { frameRef: editFrameRef, scale: editScale } = useFitScale(A4_RENDER_WIDTH_PX, !showPrintPreview)
   const signature = getSupplementalSignature(ast, config.specialOptions)
+
+  const updateHistoryButtons = useCallback(() => {
+    const { canUndo, canRedo } = historyRef.current
+    setHistoryButtons((state) => state.undo === canUndo && state.redo === canRedo
+      ? state : { undo: canUndo, redo: canRedo })
+  }, [])
 
   useEffect(() => {
     if (showPrintPreview || !shellRef.current) return
@@ -346,6 +114,7 @@ export function Preview({ value, ast, onChange }: PreviewProps) {
       '--body-size': `${config.body.fontSize}pt`,
       '--body-line-height': `${config.body.lineSpacing}pt`,
       '--body-indent': `${config.body.firstLineIndent}em`,
+      '--signature-indent': config.specialOptions.hasStamp ? '4em' : '2em',
       '--char-spacing': `${charSpacingPx.toFixed(4)}px`,
       '--h1-font': config.advanced.h1.fontFamily,
       '--h1-size': `${config.advanced.h1.fontSize}pt`,
@@ -361,36 +130,120 @@ export function Preview({ value, ast, onChange }: PreviewProps) {
     const editor = editorRef.current
     if (!editor) {
       lastEmittedRef.current = null
+      selectionRef.current = null
       return
     }
-    if (lastEmittedRef.current === value || editor.innerHTML === value) return
-    editor.replaceChildren(...parseEditorContent(value).childNodes)
+    if (lastEmittedRef.current === value) return
+    const content = parseEditorContent(value)
+    if (historyRef.current.present?.html !== content.innerHTML) {
+      historyRef.current.reset({ html: content.innerHTML })
+      updateHistoryButtons()
+    }
+    if (editor.innerHTML !== content.innerHTML) editor.replaceChildren(...content.childNodes)
     lastEmittedRef.current = value
-  }, [value, showPrintPreview])
+  }, [value, showPrintPreview, editorRef, updateHistoryButtons])
 
-  const emitChange = useCallback(() => {
+  useEffect(() => {
+    if (showPrintPreview) return
+    const rememberSelection = () => {
+      const editor = editorRef.current
+      const selection = window.getSelection()
+      if (!editor || !selection?.rangeCount) return
+      const range = selection.getRangeAt(0)
+      if (editor.contains(range.commonAncestorContainer)) selectionRef.current = range.cloneRange()
+    }
+    const clearOutsideSelection = (event: PointerEvent) => {
+      historyRef.current.breakTyping()
+      const target = event.target
+      if (target instanceof Element && !editorRef.current?.contains(target) && !target.closest('.preview-toolbar,.preview-history')) {
+        selectionRef.current = null
+      }
+    }
+    document.addEventListener('selectionchange', rememberSelection)
+    document.addEventListener('pointerdown', clearOutsideSelection)
+    return () => {
+      document.removeEventListener('selectionchange', rememberSelection)
+      document.removeEventListener('pointerdown', clearOutsideSelection)
+    }
+  }, [showPrintPreview, editorRef])
+
+  const restoreSelection = useCallback(() => {
     const editor = editorRef.current
-    if (!editor) return
+    const selection = window.getSelection()
+    if (!editor || !selection) return false
+    const current = selection.rangeCount ? selection.getRangeAt(0) : null
+    const range = current && editor.contains(current.commonAncestorContainer) ? current.cloneRange() : selectionRef.current
+    if (!range || !editor.contains(range.commonAncestorContainer)) return false
+    editor.focus({ preventScroll: true })
+    selection.removeAllRanges()
+    selection.addRange(range)
+    return true
+  }, [editorRef])
+
+  const emitChange = useCallback((typingKind?: string) => {
+    const editor = editorRef.current
+    if (!editor || internalDrag.current || formattingBatch.current) return
     const normalized = normalizeEditorHtml(editor.innerHTML)
+    let element: Node | null | undefined = window.getSelection()?.anchorNode
+    while (element && element.parentNode !== editor) element = element.parentNode
+    const block = element instanceof HTMLElement ? Array.from(editor.children).indexOf(element) : -1
+    historyRef.current.record({ html: normalized, block: block < 0 ? undefined : block }, typingKind)
+    updateHistoryButtons()
+    if (normalized === lastEmittedRef.current) return
     lastEmittedRef.current = normalized
     onChange(normalized)
-  }, [onChange])
+  }, [onChange, editorRef, updateHistoryButtons])
+
+  const stepHistory = useCallback((direction: 'undo' | 'redo') => {
+    const editor = editorRef.current
+    if (!editor || composingRef.current) return
+    emitChange()
+    const snapshot = historyRef.current.step(direction)
+    if (!snapshot) return
+    editor.replaceChildren(...parseEditorContent(snapshot.html).childNodes)
+    lastEmittedRef.current = snapshot.html
+    const caret = document.createRange()
+    caret.selectNodeContents(editor.children[snapshot.block ?? 0] ?? editor)
+    caret.collapse(snapshot.block === undefined)
+    editor.focus({ preventScroll: true })
+    const selection = window.getSelection()
+    selection?.removeAllRanges()
+    selection?.addRange(caret)
+    selectionRef.current = caret.cloneRange()
+    updateHistoryButtons()
+    onChange(snapshot.html)
+  }, [editorRef, emitChange, onChange, updateHistoryButtons])
+
+  useEffect(() => {
+    const editor = editorRef.current
+    if (showPrintPreview || !editor) return
+    const onBrowserHistory = (event: InputEvent) => {
+      if (event.inputType !== 'historyUndo' && event.inputType !== 'historyRedo') return
+      if (!event.cancelable) return
+      event.preventDefault()
+      stepHistory(event.inputType === 'historyUndo' ? 'undo' : 'redo')
+    }
+    editor.addEventListener('beforeinput', onBrowserHistory)
+    return () => editor.removeEventListener('beforeinput', onBrowserHistory)
+  }, [showPrintPreview, editorRef, stepHistory])
 
   const handleFontChange = useCallback((fontFamily: string) => {
     setCurrentFont(fontFamily)
-    exec('fontName', fontFamily)
-    emitChange()
-  }, [emitChange])
+    if (restoreSelection()) {
+      exec('fontName', fontFamily)
+      emitChange()
+    }
+  }, [emitChange, restoreSelection])
 
   const handleFontSizeChange = useCallback((fontSize: number) => {
     setCurrentFontSize(fontSize)
-    if (editorRef.current) applyFontSize(editorRef.current, fontSize)
+    if (editorRef.current && restoreSelection()) applyFontSize(editorRef.current, fontSize)
     emitChange()
-  }, [emitChange])
+  }, [emitChange, restoreSelection, editorRef])
 
   const handleAlignmentChange = useCallback((alignment: 'left' | 'center' | 'right' | 'justify') => {
     const editor = editorRef.current
-    if (!editor) return
+    if (!editor || !restoreSelection()) return
 
     const blocks = getSelectedBlocks(editor)
     if (blocks.length === 0) return
@@ -409,7 +262,45 @@ export function Preview({ value, ast, onChange }: PreviewProps) {
     }
 
     emitChange()
-  }, [emitChange])
+  }, [emitChange, restoreSelection, editorRef])
+
+  const handleOffsetChange = (delta: number) => {
+    const editor = editorRef.current
+    if (!editor || !restoreSelection()) return
+    for (const block of getSelectedBlocks(editor)) {
+      const offset = Math.max(-MAX_OFFSET_CHARS, Math.min(MAX_OFFSET_CHARS, (readOffset(block.dataset.offsetChars) ?? 0) + delta))
+      if (offset) block.dataset.offsetChars = String(offset)
+      else delete block.dataset.offsetChars
+      block.style.transform = offsetTransform(offset) ?? ''
+    }
+    emitChange()
+  }
+
+  const handleParagraphMove = (direction: 'up' | 'down') => {
+    const editor = editorRef.current
+    if (!editor || !restoreSelection()) return
+    const blocks = getSelectedBlocks(editor).filter((block) => block.parentElement === editor)
+    if (!blocks.length) return
+    const neighbor = direction === 'up' ? blocks[0].previousElementSibling : blocks[blocks.length - 1].nextElementSibling
+    if (!neighbor) return
+    if (direction === 'up') neighbor.before(...blocks)
+    else neighbor.after(...blocks)
+    const selection = window.getSelection()
+    const range = document.createRange()
+    range.selectNodeContents(blocks[0])
+    range.collapse(true)
+    selection?.removeAllRanges()
+    selection?.addRange(range)
+    selectionRef.current = range.cloneRange()
+    emitChange()
+  }
+
+  const handleInlineCommand = (command: 'bold' | 'italic' | 'underline') => {
+    if (restoreSelection()) {
+      exec(command)
+      emitChange()
+    }
+  }
 
   const cancelPainter = useCallback(() => {
     if (painterClickTimerRef.current !== null) clearTimeout(painterClickTimerRef.current)
@@ -418,6 +309,7 @@ export function Preview({ value, ast, onChange }: PreviewProps) {
   }, [])
 
   const handleModeChange = () => {
+    if (!showPrintPreview) emitChange()
     cancelPainter()
     setShowPrintPreview(!showPrintPreview)
   }
@@ -446,6 +338,7 @@ export function Preview({ value, ast, onChange }: PreviewProps) {
       return
     }
 
+    restoreSelection()
     const format = getFormatAtSelection(editor)
     if (!format) return
 
@@ -463,13 +356,16 @@ export function Preview({ value, ast, onChange }: PreviewProps) {
       }
       setPainterState({ active: true, persistent: true, format })
     }
-  }, [painterState.active, cancelPainter])
+  }, [painterState.active, cancelPainter, restoreSelection, editorRef])
 
   const handlePaste = (event: ClipboardEvent<HTMLDivElement>) => {
     event.preventDefault()
     const html = event.clipboardData.getData('text/html')
     const text = event.clipboardData.getData('text/plain')
-    if (html) exec('insertHTML', normalizeEditorHtml(html))
+    if (html) {
+      const content = parseEditorContent(html)
+      if (!insertLayoutParagraphs(event.currentTarget, content)) exec('insertHTML', content.innerHTML)
+    }
     else if (text) exec('insertText', text)
     emitChange()
   }
@@ -480,15 +376,20 @@ export function Preview({ value, ast, onChange }: PreviewProps) {
     const editor = editorRef.current
     if (!editor) return
 
-    const sel = window.getSelection()
-    if (sel && sel.rangeCount > 0 && !sel.isCollapsed) {
-      applyFormatToSelection(editor, painterState.format)
-    } else {
-      const target = e.target as HTMLElement
-      const block = target.closest<HTMLElement>(BLOCK_SELECTOR)
-      if (block && editor.contains(block)) {
-        applyFormatToBlock(block, painterState.format)
+    formattingBatch.current = true
+    try {
+      const sel = window.getSelection()
+      if (sel && sel.rangeCount > 0 && !sel.isCollapsed) {
+        applyFormatToSelection(editor, painterState.format)
+      } else {
+        const target = e.target as HTMLElement
+        const block = target.closest<HTMLElement>(BLOCK_SELECTOR)
+        if (block && editor.contains(block)) {
+          applyFormatToBlock(block, painterState.format)
+        }
       }
+    } finally {
+      formattingBatch.current = false
     }
 
     emitChange()
@@ -496,9 +397,17 @@ export function Preview({ value, ast, onChange }: PreviewProps) {
     if (!painterState.persistent) {
       setPainterState({ active: false, persistent: false, format: null })
     }
-  }, [painterState, emitChange])
+  }, [painterState, emitChange, editorRef])
 
   const handleKeyDown = useCallback((e: KeyboardEvent<HTMLDivElement>) => {
+    if (e.nativeEvent.isComposing || composingRef.current) return
+    const key = e.key.toLowerCase()
+    if ((e.ctrlKey || e.metaKey) && !e.altKey && (key === 'z' || key === 'y')) {
+      e.preventDefault()
+      stepHistory(key === 'y' || e.shiftKey ? 'redo' : 'undo')
+      return
+    }
+    if (/^(Arrow|Page|Home|End)/.test(e.key)) historyRef.current.breakTyping()
     if (e.key !== 'Backspace') return
 
     const selection = window.getSelection()
@@ -510,7 +419,7 @@ export function Preview({ value, ast, onChange }: PreviewProps) {
       : range.startContainer.parentElement
     )?.closest('p')
 
-    if (!block || block.dataset.noIndent === 'true') return
+    if (!block || block.dataset.noIndent === 'true' || !parseFloat(window.getComputedStyle(block).textIndent)) return
 
     const blockRange = document.createRange()
     blockRange.selectNodeContents(block)
@@ -522,7 +431,7 @@ export function Preview({ value, ast, onChange }: PreviewProps) {
       emitChange()
       e.preventDefault()
     }
-  }, [emitChange])
+  }, [emitChange, stepHistory])
 
   return (
     <div className="preview-container">
@@ -540,9 +449,19 @@ export function Preview({ value, ast, onChange }: PreviewProps) {
           >
             {showPrintPreview ? '编辑' : '预览'}
           </button>
+          {!showPrintPreview && (
+            <div className="preview-history" role="group" aria-label="编辑历史" onMouseDown={(event) => event.preventDefault()}>
+              <button type="button" className="preview-history-btn" disabled={!historyButtons.undo}
+                title="撤销上一步（Ctrl+Z）" onClick={() => stepHistory('undo')}>撤销</button>
+              <button type="button" className="preview-history-btn" disabled={!historyButtons.redo}
+                title="还原已撤销的修改（Ctrl+Y）" onClick={() => stepHistory('redo')}>还原</button>
+            </div>
+          )}
         </div>
         {!showPrintPreview && (
-        <div className="preview-toolbar">
+        <div className="preview-toolbar" onMouseDown={(event) => {
+          if ((event.target as Element).closest('button')) event.preventDefault()
+        }}>
           <select className="preview-select" value={currentFont} onChange={(e) => handleFontChange(e.target.value)}>
             {FONT_FAMILY_OPTIONS.map((font) => (
               <option key={font} value={font}>{font}</option>
@@ -553,9 +472,9 @@ export function Preview({ value, ast, onChange }: PreviewProps) {
               <option key={option.label} value={option.value}>{option.label}</option>
             ))}
           </select>
-          <button type="button" className="preview-tool-btn" onClick={() => { exec('bold'); emitChange() }}><strong>B</strong></button>
-          <button type="button" className="preview-tool-btn" onClick={() => { exec('italic'); emitChange() }}><em>I</em></button>
-          <button type="button" className="preview-tool-btn" onClick={() => { exec('underline'); emitChange() }}><u>U</u></button>
+          <button type="button" className="preview-tool-btn" aria-label="加粗" onClick={() => handleInlineCommand('bold')}><strong>B</strong></button>
+          <button type="button" className="preview-tool-btn" aria-label="斜体" onClick={() => handleInlineCommand('italic')}><em>I</em></button>
+          <button type="button" className="preview-tool-btn" aria-label="下划线" onClick={() => handleInlineCommand('underline')}><u>U</u></button>
           <button
             type="button"
             className={`preview-tool-btn preview-tool-btn--painter${
@@ -581,6 +500,15 @@ export function Preview({ value, ast, onChange }: PreviewProps) {
           <button type="button" className="preview-tool-btn" onClick={() => handleAlignmentChange('center')}>中</button>
           <button type="button" className="preview-tool-btn" onClick={() => handleAlignmentChange('right')}>右</button>
           <button type="button" className="preview-tool-btn" onClick={() => handleAlignmentChange('justify')}>两端</button>
+          <div className="preview-move-tools" role="group" aria-label="段落移动">
+            <button type="button" className="preview-tool-btn" aria-label="左移一字" title="将当前段落或选中段落左移一字" onClick={() => handleOffsetChange(-1)}>←</button>
+            <button type="button" className="preview-tool-btn" aria-label="右移一字" title="将当前段落或选中段落右移一字" onClick={() => handleOffsetChange(1)}>→</button>
+            <button type="button" className="preview-tool-btn" aria-label="上移段落" title="将当前段落或选中段落上移" onClick={() => handleParagraphMove('up')}>↑</button>
+            <button type="button" className="preview-tool-btn" aria-label="下移段落" title="将当前段落或选中段落下移" onClick={() => handleParagraphMove('down')}>↓</button>
+          </div>
+          {(config.header.enabled || config.footerNote.enabled || signature.name || signature.date) && (
+            <span className="preview-hint">版头、版记和备用落款在「设置」中修改</span>
+          )}
           {painterState.active && (
             <span className="preview-painter-badge">
               {painterState.persistent ? '连续刷格式中 (Esc退出)' : '刷格式中 (Esc退出)'}
@@ -634,10 +562,34 @@ export function Preview({ value, ast, onChange }: PreviewProps) {
                     aria-label="版面编辑区"
                     aria-multiline="true"
                     suppressContentEditableWarning
-                    onInput={emitChange}
+                    onInput={(event) => {
+                      const { inputType, isComposing } = event.nativeEvent as InputEvent
+                      if (isComposing || composingRef.current) return
+                      const typing = /^(insertText|deleteContentBackward|deleteContentForward)$/.test(inputType) ? inputType : undefined
+                      emitChange(typing)
+                    }}
                     onPaste={handlePaste}
-                    onDrop={(event) => event.preventDefault()}
-                    onBlur={emitChange}
+                    onDragStart={() => {
+                      const selection = window.getSelection()
+                      internalDrag.current = !!(selection?.rangeCount && !selection.isCollapsed &&
+                        editorRef.current?.contains(selection.getRangeAt(0).commonAncestorContainer))
+                    }}
+                    onDrop={(event) => {
+                      if (!internalDrag.current || event.dataTransfer.files.length) event.preventDefault()
+                    }}
+                    onDragEnd={() => {
+                      internalDrag.current = false
+                      emitChange()
+                    }}
+                    onCompositionStart={() => {
+                      composingRef.current = true
+                      historyRef.current.breakTyping()
+                    }}
+                    onCompositionEnd={() => {
+                      composingRef.current = false
+                      emitChange()
+                    }}
+                    onBlur={() => emitChange()}
                     onKeyDown={handleKeyDown}
                     onMouseUp={handleEditorMouseUp}
                   />

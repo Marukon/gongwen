@@ -6,6 +6,7 @@ import type { AutoFixResult, TextFixOptions } from './sanitize'
 import { autoFixDocumentText } from './sanitize'
 import { ensureTitleDateParentheses, getTitleMetadataIndices, readTitleByline } from './documentDates'
 import { getHeadingSpans, headingClass, sliceHeadingText } from '../parser/headings'
+import { attachmentClass, hasRichStyleOverrides, offsetTransform, readOffset } from './editorLayout'
 
 const BLOCK_TAGS = new Set(['P', 'DIV', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6'])
 const EDITOR_STYLES = new Set([
@@ -51,7 +52,7 @@ export function parseEditorContent(html: string): HTMLDivElement {
   const content = DOMPurify.sanitize(html, {
     RETURN_DOM_FRAGMENT: true,
     ALLOWED_TAGS: [...Array.from(BLOCK_TAGS, (tag) => tag.toLowerCase()), '#text', 'br', 'span', 'strong', 'em', 'b', 'i', 'u', 'font'],
-    ALLOWED_ATTR: ['class', 'style', 'align', 'face', 'size', 'color', 'data-no-indent', 'data-align-no-indent'],
+    ALLOWED_ATTR: ['class', 'style', 'align', 'face', 'size', 'color', 'data-no-indent', 'data-align-no-indent', 'data-offset-chars'],
     ALLOW_DATA_ATTR: false,
     ALLOW_ARIA_ATTR: false,
   })
@@ -60,6 +61,11 @@ export function parseEditorContent(html: string): HTMLDivElement {
       if (!EDITOR_STYLES.has(property)) element.style.removeProperty(property)
     }
     if (!element.style.length) element.removeAttribute('style')
+  }
+  for (const element of content.querySelectorAll<HTMLElement>('[data-offset-chars]')) {
+    const offset = readOffset(element.dataset.offsetChars)
+    if (offset !== undefined && BLOCK_TAGS.has(element.tagName)) element.style.transform = offsetTransform(offset) ?? ''
+    else delete element.dataset.offsetChars
   }
   root.append(content)
 
@@ -155,16 +161,6 @@ function escapeAttribute(value: string): string {
   return value.replace(/"/g, '&quot;')
 }
 
-function hasRichStyleOverrides(runs?: RichTextRun[]): boolean {
-  return !!runs?.some((run) => (
-    run.bold !== undefined ||
-    run.italic !== undefined ||
-    run.underline ||
-    !!run.fontFamily ||
-    !!run.fontSize
-  ))
-}
-
 function renderBoldFirstSentence(text: string): string {
   const idx = text.indexOf('。')
   if (idx === -1 || idx === text.length - 1) {
@@ -183,7 +179,8 @@ function runsToHtml(runs: RichTextRun[]): string {
     if (run.fontSize) styles.push(`font-size:${run.fontSize}pt`)
     if (run.bold !== undefined) styles.push(run.bold ? 'font-weight:bold' : 'font-weight:normal')
     if (run.italic !== undefined) styles.push(run.italic ? 'font-style:italic' : 'font-style:normal')
-    if (run.underline) styles.push('text-decoration:underline')
+    if (run.underline !== undefined) styles.push(run.underline ? 'text-decoration:underline' : 'text-decoration:none')
+    if (run.color) styles.push(`color:#${run.color}`)
     return styles.length ? `<span style="${escapeAttribute(styles.join(';'))}">${escapeHtml(run.text)}</span>` : escapeHtml(run.text)
   }).join('')
 }
@@ -196,6 +193,7 @@ function paragraphHtml(
 ): string {
   const alignmentStyle = node.alignment ? ` style="text-align:${escapeAttribute(node.alignment)}"` : ''
   const noIndentAttr = node.noIndent ? ' data-no-indent="true"' : ''
+  const offsetAttr = node.offsetChars ? ` data-offset-chars="${node.offsetChars}"` : ''
   const styledRuns = hasRichStyleOverrides(node.runs) ? node.runs : undefined
 
   let content = '<br>'
@@ -213,10 +211,11 @@ function paragraphHtml(
       content = escapeHtml(node.content)
     }
   }
-  return `<p class="${className}"${alignmentStyle}${noIndentAttr}>${content}</p>`
+  return `<p class="${className}"${alignmentStyle}${noIndentAttr}${offsetAttr}>${content}</p>`
 }
 
 function attachmentHtml(node: AttachmentNode): string {
+  if (node.layoutLine) return paragraphHtml(node, attachmentClass(node.layoutLine))
   if (!node.isMultiple) {
     return `<p class="a4-attachment a4-attachment--single">附件：${escapeHtml(node.items[0]?.name ?? '')}</p>`
   }
@@ -264,6 +263,10 @@ export function astToStyledHtml(ast: GongwenAST, config: DocumentConfig): string
         : node.content
       html.push(paragraphHtml({ ...node, content: dateContent }, 'a4-title-date'))
       return
+    }
+
+    if (node.type === NodeType.SIGNATURE && !ast.layoutEditable) {
+      html.push(...Array.from({ length: config.specialOptions.hasStamp ? 3 : 1 }, () => '<p><br></p>'))
     }
 
     const className = {

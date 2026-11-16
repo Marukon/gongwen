@@ -1,10 +1,10 @@
-import { useState, useCallback, useEffect, useMemo, useRef } from 'react'
+import { useState, useCallback, useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import { Editor } from './components/Editor/Editor'
 import { Preview } from './components/Preview/Preview'
 import { Toolbar } from './components/Toolbar/Toolbar'
 import { useDocumentParser } from './hooks/useDocumentParser'
 import { useDocumentConfig } from './contexts/useDocumentConfig'
-import { parseGongwen } from './parser'
+import { parseGongwen, parseRichGongwen } from './parser'
 import { autoFixDocumentText, sanitizeText } from './utils/sanitize'
 import { astToStyledHtml, normalizeEditorHtml } from './utils/richText'
 import { loadDraft, saveDraft, type DocumentDraft } from './utils/documentDraft'
@@ -53,6 +53,13 @@ function App() {
   const [exporting, setExporting] = useState(false)
   const [fixFeedback, setFixFeedback] = useState('')
   const [draftSaveFailed, setDraftSaveFailed] = useState(false)
+  const layoutEditorRef = useRef<HTMLDivElement>(null)
+  const currentDraftRef = useRef(draft)
+  const importActiveRef = useRef(false)
+
+  useLayoutEffect(() => {
+    currentDraftRef.current = draft
+  }, [draft])
 
   const { config, updateConfig } = useDocumentConfig()
   const formattedHtml = useMemo(() => {
@@ -109,6 +116,10 @@ function App() {
   }, [fixFeedback])
 
   const handleExport = useCallback(async () => {
+    const layout = layoutEditorRef.current
+    const html = layout ? normalizeEditorHtml(layout.innerHTML) : null
+    const exportAst = html !== null && html !== formattedHtml ? parseRichGongwen(html) : ast
+    if (html !== null && html !== formattedHtml) handleFormattedChange(html)
     setExporting(true)
 
     await new Promise<void>((resolve) => {
@@ -117,7 +128,7 @@ function App() {
 
     try {
       const { downloadDocx } = await import('./exporter/download')
-      await downloadDocx(ast, config)
+      await downloadDocx(exportAst, config)
     } catch (err) {
       console.error('导出失败:', err)
       // 动态导入 chunk 404 通常是部署更新后浏览器缓存了旧 index.html
@@ -130,27 +141,30 @@ function App() {
     } finally {
       setExporting(false)
     }
-  }, [ast, config])
+  }, [ast, config, formattedHtml, handleFormattedChange])
 
   const handleClear = useCallback(() => {
     setDraft({ text: '', editedHtml: null })
   }, [])
 
   const handleImport = useCallback(async (file: File) => {
-    // 编辑器非空时，确认覆盖
-    if ((text.trim() || editedHtml !== null) && !confirm('导入文件将覆盖当前内容，是否继续？')) return
-
+    if (importActiveRef.current) return
+    const initial = currentDraftRef.current
+    if ((initial.text.trim() || initial.editedHtml !== null) && !confirm('导入文件将覆盖当前内容，是否继续？')) return
+    importActiveRef.current = true
     setImporting(true)
     try {
       const { importFile } = await import('./utils/fileImporter')
       const result = await importFile(file)
+      if (currentDraftRef.current !== initial && !confirm('导入期间草稿有新修改。仍要用文件覆盖吗？')) return
       setDraft({ text: result.text, editedHtml: null })
     } catch (err) {
       alert(err instanceof Error ? err.message : '文件导入失败')
     } finally {
+      importActiveRef.current = false
       setImporting(false)
     }
-  }, [text, editedHtml])
+  }, [])
 
   const handleAutoFix = useCallback(() => {
     const { textFixOptions } = config
@@ -207,7 +221,7 @@ function App() {
           />
         </div>
         <div className="app-preview">
-          <Preview value={formattedHtml} ast={ast} onChange={handleFormattedChange} />
+          <Preview value={formattedHtml} ast={ast} onChange={handleFormattedChange} editorRef={layoutEditorRef} />
         </div>
       </div>
     </div>

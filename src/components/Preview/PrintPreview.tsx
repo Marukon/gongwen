@@ -136,6 +136,7 @@ export function PrintPreview({ ast, config, onPageCountChange }: PrintPreviewPro
   const contentOpts = {
     title: ast.title,
     body: ast.body,
+    layoutEditable: ast.layoutEditable,
     hasTitleNameDate: config.specialOptions.hasTitleNameDate,
     boldFirstSentence: config.specialOptions.boldFirstSentence,
     boldHeading3: config.specialOptions.boldHeading3,
@@ -174,6 +175,7 @@ export function PrintPreview({ ast, config, onPageCountChange }: PrintPreviewPro
               key={i}
               title={ast.title}
               body={ast.body}
+              layoutEditable={ast.layoutEditable}
               pageNumber={i + 1}
               offsetY={slice.offsetY}
               clipHeight={slice.clipHeight}

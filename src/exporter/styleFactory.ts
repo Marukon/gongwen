@@ -10,6 +10,7 @@ import {
 import { NodeType, type ParagraphAlignment, type RichTextRun } from '../types/ast'
 import type { DocumentConfig } from '../types/documentConfig'
 import { ptToTwip, cmToTwip, CHARS_PER_LINE } from '../types/documentConfig'
+export { hasRichStyleOverrides } from '../utils/editorLayout'
 
 const TITLE_DATE_RE = /^[（(]?\d{4}年\d{1,2}月\d{1,2}日[）)]?$/
 const TITLE_NAME_RE = /^[\u4e00-\u9fff]{2,4}$/
@@ -51,11 +52,12 @@ export function shouldUseCharacterFirstLineIndent(type: NodeType): boolean {
     || type === NodeType.PARAGRAPH
 }
 
-export function createCharacterFirstLineIndent(config: DocumentConfig): BuilderElement {
+export function createCharacterFirstLineIndent(config: DocumentConfig, offsetTwips = 0): BuilderElement {
   return new BuilderElement({
     name: 'w:ind',
     attributes: {
-      left: { key: 'w:left', value: 0 },
+      left: { key: 'w:left', value: offsetTwips },
+      ...(offsetTwips ? { right: { key: 'w:right', value: -offsetTwips } } : {}),
       // OOXML uses 1/100 character as the unit for firstLineChars.
       firstLineChars: { key: 'w:firstLineChars', value: config.body.firstLineIndent * 100 },
       firstLine: { key: 'w:firstLine', value: calculateFirstLineIndent(config) },
@@ -336,16 +338,6 @@ export function getTitleNameRunStyle(config: DocumentConfig): Partial<IRunOption
   return getTitleDateRunStyle(config)
 }
 
-export function hasRichStyleOverrides(runs?: RichTextRun[]): boolean {
-  return !!runs?.some((run) => (
-    run.bold !== undefined ||
-    run.italic !== undefined ||
-    run.underline ||
-    !!run.fontFamily ||
-    !!run.fontSize
-  ))
-}
-
 export function buildRunStyleOverride(
   baseStyle: Partial<IRunOptions>,
   run: RichTextRun,
@@ -354,10 +346,11 @@ export function buildRunStyleOverride(
     ...baseStyle,
     text: run.text,
     ...(run.fontFamily ? { font: font(run.fontFamily, run.fontFamily) } : {}),
-    ...(run.fontSize ? { size: run.fontSize * 2 } : {}),
+    ...(run.fontSize ? { size: Math.round(run.fontSize * 2) } : {}),
     ...(run.bold !== undefined ? { bold: run.bold } : {}),
     ...(run.italic !== undefined ? { italics: run.italic } : {}),
-    ...(run.underline ? { underline: { type: UnderlineType.SINGLE } } : {}),
+    ...(run.underline !== undefined ? { underline: { type: run.underline ? UnderlineType.SINGLE : UnderlineType.NONE } } : {}),
+    ...(run.color ? { color: run.color } : {}),
   }
 }
 

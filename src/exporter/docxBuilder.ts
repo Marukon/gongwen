@@ -225,10 +225,27 @@ function runsToTextRuns(
 function attachmentToParagraphs(
   node: AttachmentNode,
   cache: BuildStyleCache,
-  omitSpacingBefore = false
+  config: DocumentConfig,
+  omitSpacingBefore = false,
 ): Paragraph[] {
   const paragraphs: Paragraph[] = []
   const runStyle = cache.attachmentRunStyle
+  if (node.layoutLine) {
+    const styles = cache.attachmentParagraphStyles
+    const base = node.layoutLine === 'item' ? styles.multiRest : node.layoutLine === 'first'
+      ? (omitSpacingBefore ? styles.multiFirstNoSpacingBefore : styles.multiFirst)
+      : (omitSpacingBefore ? styles.singleNoSpacingBefore : styles.single)
+    const alignment = node.alignment
+      ? getParagraphStyle(NodeType.ATTACHMENT, config, undefined, undefined, false, false, node.alignment).alignment
+      : base.alignment
+    const position = (node.alignment && node.alignment !== 'justify') || node.noIndent
+      ? { ...base, alignment, indent: { left: 0, right: 0 } }
+      : { ...base, alignment }
+    return [new Paragraph({
+      ...shiftParagraph(position, (node.offsetChars || 0) * ptToTwip(config.body.fontSize)),
+      children: node.runs?.length ? runsToTextRuns(node.runs, runStyle) : [new TextRun({ ...runStyle, text: node.content })],
+    })]
+  }
 
   if (!node.isMultiple) {
     // 单附件模式
@@ -304,6 +321,18 @@ export function getWordHeadingMeta(nodeType: NodeType): Pick<IParagraphOptions, 
   return getWordHeadingOptions(nodeType)
 }
 
+function shiftParagraph(style: Partial<IParagraphOptions>, offset: number): Partial<IParagraphOptions> {
+  if (!offset) return style
+  return {
+    ...style,
+    indent: {
+      ...style.indent,
+      left: (typeof style.indent?.left === 'number' ? style.indent.left : 0) + offset,
+      right: (typeof style.indent?.right === 'number' ? style.indent.right : 0) - offset,
+    },
+  }
+}
+
 /** 将单个 AST 节点转换为 docx Paragraph */
 function nodeToParagraph(
   node: DocumentNode,
@@ -329,9 +358,10 @@ function nodeToParagraph(
     }
   }
 
+  const offset = (node.offsetChars || 0) * ptToTwip(config.body.fontSize)
   const baseParagraphStyle = useCharacterIndent
     ? { ...paragraphStyle, indent: undefined }
-    : paragraphStyle
+    : shiftParagraph(paragraphStyle, offset)
   const wordHeadingOptions = node.type === NodeType.HEADING_3 && isDiscourseHeading(node.content)
     ? undefined
     : getWordHeadingOptions(node.type)
@@ -350,7 +380,7 @@ function nodeToParagraph(
             push: (item: ReturnType<typeof createCharacterFirstLineIndent>) => void
           }
         }
-      ).properties.push(createCharacterFirstLineIndent(config))
+      ).properties.push(createCharacterFirstLineIndent(config, offset))
     }
 
     return paragraph
@@ -561,8 +591,8 @@ export function buildDocument(ast: GongwenAST, config: DocumentConfig): Document
       const text = isTitleDate ? readTitleByline(node.content) ?? ensureTitleDateParentheses(node.content) : node.content
       const style = { font: nameDateFont, size: nameDateFontSize }
       children.push(new Paragraph({
-        ...getParagraphStyle(node.type, config, undefined, undefined, isTitleDate,
-          i === titleMetadata.name, node.alignment, node.noIndent),
+        ...shiftParagraph(getParagraphStyle(node.type, config, undefined, undefined, isTitleDate,
+          i === titleMetadata.name, node.alignment, node.noIndent), (node.offsetChars || 0) * ptToTwip(config.body.fontSize)),
         children: node.runs && hasRichStyleOverrides(node.runs)
           ? runsToTextRuns(node.runs, style)
           : [new TextRun({ ...style, text })],
@@ -571,7 +601,7 @@ export function buildDocument(ast: GongwenAST, config: DocumentConfig): Document
     }
     
     // 与预览保持相同的署名前行距。
-    if (node.type === NodeType.SIGNATURE) {
+    if (node.type === NodeType.SIGNATURE && !ast.layoutEditable) {
       const bodyFont = {
         ascii: 'Times New Roman',
         eastAsia: config.body.fontFamily,
@@ -593,6 +623,7 @@ export function buildDocument(ast: GongwenAST, config: DocumentConfig): Document
       const attachmentParagraphs = attachmentToParagraphs(
         node as AttachmentNode,
         cache,
+        config,
         isFirstBodyNode,
       )
       children.push(...attachmentParagraphs)

@@ -49,6 +49,16 @@
   letter-spacing: var(--char-spacing, 0);
 }
 
+.a4-content p {
+  white-space: pre-wrap;
+}
+
+.a4-attachment[data-no-indent='true'],
+.a4-attachment-item[data-no-indent='true'] {
+  text-indent: 0;
+  padding-left: 0;
+}
+
 /* 公文标题: 方正小标宋_GBK 22pt 居中, 固定行距 */
 .a4-title {
   font-family: var(--title-font, 'FZXiaoBiaoSong-B05S'), 'STSong', 'SimSun', serif;
@@ -247,7 +257,7 @@
   font-size: var(--body-size, 16pt);
   text-indent: 0;
   text-align: right;
-  padding-right: 4em;
+  padding-right: var(--signature-indent, 2em);
   line-height: var(--body-line-height, 29pt);
   margin: 0;
 }
@@ -261,8 +271,14 @@
   font-size: var(--body-size, 16pt);
   text-indent: 0;
   text-align: right;
+  padding-right: var(--signature-indent, 2em);
   line-height: var(--body-line-height, 29pt);
   margin: 0;
+}
+
+.a4-date[data-no-indent='true'],
+.a4-signature[data-no-indent='true'] {
+  padding-right: 0;
 }
 
 /* 空行：用于发文机关署名前的段前间距 */
