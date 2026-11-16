@@ -1,6 +1,7 @@
 import { NodeType } from '../types/ast'
 import { detectNodeType } from '../parser/matchers'
-import { readTitleDate } from './documentDates'
+import { readTitleByline, readTitleDate } from './documentDates'
+import { getHeadingSpans, isDiscourseHeading } from '../parser/headings'
 
 /**
  * 文本修复工具
@@ -15,6 +16,7 @@ const DIGIT_OR_CJK_NUMERAL = /[0-9一二三四五六七八九十百千万零]/
 
 /** 副标题行：破折号开头，如「——学习...」「--...」 */
 const SUBTITLE_RE = /^[\u2014\u2015\u2500\u2013-]{1,2}\s*/
+const SPEECH_CLOSING_RE = /^(?:发言完毕|我的发言(?:到此结束|就到这里)|以上(?:是|就是)|谢谢大家|感谢大家|不当之处)/
 
 const PUNCTUATION_REPLACEMENTS = new Map<string, string>([
   [',', '，'],
@@ -198,7 +200,7 @@ export function removeRedundantSpaces(text: string): SanitizeResult {
   return { text: result, count }
 }
 
-export function removeMeaninglessLineBreaks(text: string): SanitizeResult {
+export function removeMeaninglessLineBreaks(text: string, compact = false): SanitizeResult {
   const lines = text.split(/\r\n?|\n/)
   const resultLines: string[] = []
   let count = 0
@@ -248,8 +250,8 @@ export function removeMeaninglessLineBreaks(text: string): SanitizeResult {
     // 当前行以冒号结尾（如主送机关、通知如下等），应作为独立段落，不向前合并
     const isCurrentColonEnding = /[：:]$/.test(currentTrimmed)
     // 日期行（如（2026年7月24日））应独立，避免与姓名/机关署名合并
-    const isCurrentDateLine = readTitleDate(currentTrimmed) !== null
-    const isPrevDateLine = readTitleDate(prevTrimmed) !== null
+    const isCurrentDateLine = !!(readTitleDate(currentTrimmed) || readTitleByline(currentTrimmed))
+    const isPrevDateLine = !!(readTitleDate(prevTrimmed) || readTitleByline(prevTrimmed))
 
     // 副标题行（如 ——学习...）不应合并进前行，也不应吞并后行
     const isCurrentSubtitle = SUBTITLE_RE.test(currentTrimmed)
@@ -293,7 +295,30 @@ export function removeMeaninglessLineBreaks(text: string): SanitizeResult {
     }
   }
 
-  return { text: resultLines.join('\n'), count }
+  if (!compact) return { text: resultLines.join('\n'), count }
+
+  // 粘贴形成的空段落可以删除，但始终保留正常的段落边界。
+  const compacted: string[] = []
+  for (const line of resultLines) {
+    const current = line.trim()
+    if (!current) {
+      if (resultLines.length > 1) count++
+      continue
+    }
+    const previous = compacted[compacted.length - 1]?.trim()
+    // 讲话稿的引导句与紧随其后的展开段合并，下一编号仍独立成段。
+    if (previous && current.length >= 24 && !/^(?:[“‘「『]|[\s　]{2})/.test(line) &&
+      /[。！？]/.test(current) && !SUBTITLE_RE.test(current) && !SPEECH_CLOSING_RE.test(current) &&
+      detectNodeType(current) === NodeType.PARAGRAPH &&
+      isDiscourseHeading(previous) && /[。！？]$/.test(previous) &&
+      getHeadingSpans(previous, NodeType.HEADING_3)[0]?.end === previous.length) {
+      compacted[compacted.length - 1] = previous + current
+      count++
+    } else {
+      compacted.push(line)
+    }
+  }
+  return { text: compacted.join('\n'), count }
 }
 
 export function autoFixDocumentText(
@@ -305,7 +330,7 @@ export function autoFixDocumentText(
     : { text, count: 0 }
 
   const lineBreaks = options.removeMeaninglessLineBreaks
-    ? removeMeaninglessLineBreaks(punctuation.text)
+    ? removeMeaninglessLineBreaks(punctuation.text, true)
     : { text: punctuation.text, count: 0 }
 
   const whitespace = options.removeRedundantSpaces

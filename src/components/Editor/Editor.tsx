@@ -80,7 +80,7 @@ export const Editor = memo(function Editor({
           {onToggleHasTitleNameDate && (
             <label
               className="editor-checkbox"
-              title="勾选后识别标题下相邻的姓名和有效日期，空行不影响识别。"
+              title="常见讲话稿会自动识别标题下的姓名和日期。其他文稿可勾选此项开启识别。"
             >
               <input
                 type="checkbox"
@@ -95,7 +95,7 @@ export const Editor = memo(function Editor({
             className="editor-action-btn"
             onClick={onTextCleanup}
             disabled={!canTextCleanup}
-            title="把原文中的英文标点和多余空格整理成规范公文写法"
+            title="清理多余空行、空格和英文标点，衔接讲话稿分项与紧随其后的说明"
           >
             整理原文
           </button>

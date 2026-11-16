@@ -10,6 +10,7 @@ const CHINESE_PARENS = new RegExp('^[（(]\\s*' + ORDINAL + '\\s*[）)]')
 const ARABIC_DOT = /^[0-9０-９]+[ \t\u3000]*[.．](?![0-9０-９])/
 const ARABIC_PARENS = /^[（(][ \t\u3000]*[0-9０-９]+[ \t\u3000]*[）)]/
 const DISCOURSE = new RegExp('^(' + ORDINAL + ')[ \\t\\u3000]*(是|要(?![素件点]))')
+const ORDERED_CLAUSE = new RegExp('^第\\s*' + ORDINAL + '\\s*[，,]')
 
 export function isHeading(type: NodeType): type is HeadingType {
   return type === NodeType.HEADING_1 || type === NodeType.HEADING_2 ||
@@ -17,7 +18,8 @@ export function isHeading(type: NodeType): type is HeadingType {
 }
 
 export function isDiscourseHeading(text: string): boolean {
-  return DISCOURSE.test(text.trimStart())
+  const line = text.trimStart()
+  return DISCOURSE.test(line) || ORDERED_CLAUSE.test(line)
 }
 
 export function detectHeading(text: string): HeadingType | null {

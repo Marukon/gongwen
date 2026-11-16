@@ -31,6 +31,7 @@
 }
 
 .editor-label {
+  white-space: nowrap;
   font-size: 15px;
   font-weight: 600;
   color: #1f2937;
@@ -156,7 +157,4 @@
     flex-wrap: wrap;
   }
 
-  .editor-label {
-    white-space: nowrap;
-  }
 }

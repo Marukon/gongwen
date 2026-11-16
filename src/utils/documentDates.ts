@@ -26,15 +26,36 @@ export function ensureTitleDateParentheses(text: string): string {
   return date ? `（${date}）` : text
 }
 
-export function getTitleMetadataIndices({ title, body }: GongwenAST, enabled: boolean) {
+const PERSON_NAME = /^\p{Script=Han}{2,4}(?:[·・]\p{Script=Han}{1,6})?$/u
+const SPEECH_SALUTATION = /^(?:尊敬的|各位|同志们|大家).{0,45}[：:！!]$/
+
+export function readTitleByline(text: string): string | null {
+  const wrapped = /^(?:（(.*)）|\((.*)\))$/.exec(text.trim())
+  if (!wrapped) return null
+  const match = /^(.+?)\s*(\d{4}年.*日)$/.exec((wrapped[1] ?? wrapped[2]).trim())
+  if (!match || !PERSON_NAME.test(match[1].trim())) return null
+  const date = normalizeDocumentDate(match[2])
+  return date ? `（${match[1].trim()} ${date}）` : null
+}
+
+export function getTitleMetadataIndices({ title, body }: GongwenAST, enabled: boolean): { name: number; date: number; byline?: number } {
   const none = { name: -1, date: -1 }
-  if (!enabled || !title) return none
+  if (!title) return none
   const name = body.findIndex((node) => node.content.trim() !== '')
   if (name < 0 || (body[name].type !== NodeType.PARAGRAPH && body[name].type !== NodeType.SIGNATURE)) return none
   const nameText = body[name].content.trim()
+  const hasSpeechHeading = /\n[—–-]|(?:发言稿|交流发言)$/.test(title.content)
+  const hasSalutationAfter = (index: number) => {
+    const next = body.find((node, i) => i > index && node.content.trim())
+    return !!next && SPEECH_SALUTATION.test(next.content.trim())
+  }
+  if (readTitleByline(nameText) && (enabled || (hasSpeechHeading && hasSalutationAfter(name)))) {
+    return { ...none, byline: name }
+  }
   if (nameText.length > 24 || /[。！？；：，、!?;:,]/.test(nameText)) return none
   const date = body.findIndex((node, index) => index > name && node.content.trim() !== '')
   if (date < 0 || !readTitleDate(body[date].content)) return none
+  if (!enabled && !(hasSpeechHeading && PERSON_NAME.test(nameText) && hasSalutationAfter(date))) return none
   return { name, date }
 }
 
@@ -51,6 +72,10 @@ function hasClosingDate({ title, body }: GongwenAST, enabled: boolean): boolean 
 }
 
 export function getSupplementalSignature(ast: GongwenAST, options: SpecialOptionsConfig) {
+  const speech = getTitleMetadataIndices(ast, false)
+  if ((speech.date >= 0 || speech.byline !== undefined) && !options.signatureName.trim()) {
+    return { name: '', date: '' }
+  }
   if (hasClosingDate(ast, options.hasTitleNameDate)) return { name: '', date: '' }
   return {
     name: options.signatureName.trim(),

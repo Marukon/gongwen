@@ -9,7 +9,7 @@ import type { GongwenAST, DocumentNode, AttachmentNode, RichTextRun } from '../t
 import { getTitleLines, NodeType } from '../types/ast'
 import type { DocumentConfig, PageNumberStyle } from '../types/documentConfig'
 import { cmToTwip, ptToTwip } from '../types/documentConfig'
-import { ensureTitleDateParentheses, getSupplementalSignature, getTitleMetadataIndices, normalizeDocumentDate } from '../utils/documentDates'
+import { ensureTitleDateParentheses, getSupplementalSignature, getTitleMetadataIndices, normalizeDocumentDate, readTitleByline } from '../utils/documentDates'
 import { getHeadingSpans, isDiscourseHeading, sliceHeadingText } from '../parser/headings'
 import {
   createCharacterFirstLineIndent,
@@ -556,11 +556,12 @@ export function buildDocument(ast: GongwenAST, config: DocumentConfig): Document
     const node = ast.body[i]
     const isFirstBodyNode = i === 0
     
-    if (i === titleMetadata.name || i === titleMetadata.date) {
-      const text = i === titleMetadata.date ? ensureTitleDateParentheses(node.content) : node.content
+    const isTitleDate = i === titleMetadata.date || i === titleMetadata.byline
+    if (i === titleMetadata.name || isTitleDate) {
+      const text = isTitleDate ? readTitleByline(node.content) ?? ensureTitleDateParentheses(node.content) : node.content
       const style = { font: nameDateFont, size: nameDateFontSize }
       children.push(new Paragraph({
-        ...getParagraphStyle(node.type, config, undefined, undefined, i === titleMetadata.date,
+        ...getParagraphStyle(node.type, config, undefined, undefined, isTitleDate,
           i === titleMetadata.name, node.alignment, node.noIndent),
         children: node.runs && hasRichStyleOverrides(node.runs)
           ? runsToTextRuns(node.runs, style)

@@ -4,7 +4,7 @@ import { getTitleLines, NodeType } from '../types/ast'
 import type { DocumentConfig } from '../types/documentConfig'
 import type { AutoFixResult, TextFixOptions } from './sanitize'
 import { autoFixDocumentText } from './sanitize'
-import { ensureTitleDateParentheses, getTitleMetadataIndices } from './documentDates'
+import { ensureTitleDateParentheses, getTitleMetadataIndices, readTitleByline } from './documentDates'
 import { getHeadingSpans, headingClass, sliceHeadingText } from '../parser/headings'
 
 const BLOCK_TAGS = new Set(['P', 'DIV', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6'])
@@ -233,7 +233,7 @@ export function astToStyledHtml(ast: GongwenAST, config: DocumentConfig): string
   const titleMetadata = getTitleMetadataIndices(ast, config.specialOptions.hasTitleNameDate)
   const firstBodyParagraphIndex = ast.body.findIndex((node, index) => (
     node.type === NodeType.PARAGRAPH && node.content.trim() !== '' &&
-    index !== titleMetadata.name && index !== titleMetadata.date
+    index !== titleMetadata.name && index !== titleMetadata.date && index !== titleMetadata.byline
   ))
 
   if (ast.title) {
@@ -241,7 +241,7 @@ export function astToStyledHtml(ast: GongwenAST, config: DocumentConfig): string
       html.push(paragraphHtml(line, 'a4-title'))
     })
     if (ast.body.length > 0) {
-      if (titleMetadata.name < 0 && ast.body[0].content !== '') {
+      if (titleMetadata.name < 0 && titleMetadata.byline === undefined && ast.body[0].content !== '') {
         html.push('<p><br></p>')
       }
     }
@@ -258,14 +258,11 @@ export function astToStyledHtml(ast: GongwenAST, config: DocumentConfig): string
       return
     }
 
-    if (index === titleMetadata.date) {
+    if (index === titleMetadata.date || index === titleMetadata.byline) {
       const dateContent = !hasRichStyleOverrides(node.runs)
-        ? ensureTitleDateParentheses(node.content)
+        ? readTitleByline(node.content) ?? ensureTitleDateParentheses(node.content)
         : node.content
       html.push(paragraphHtml({ ...node, content: dateContent }, 'a4-title-date'))
-      if (index + 1 < ast.body.length && ast.body[index + 1].content !== '') {
-        html.push('<p><br></p>')
-      }
       return
     }
 

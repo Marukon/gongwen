@@ -3,7 +3,7 @@ import { getTitleLines, NodeType } from '../../types/ast'
 import type { DocumentNode, AttachmentNode, RichTextRun } from '../../types/ast'
 import type { HeaderConfig, FooterNoteConfig, SpecialOptionsConfig } from '../../types/documentConfig'
 import { getPreviewFontFamily } from '../../utils/fontAliases'
-import { ensureTitleDateParentheses, getTitleMetadataIndices, normalizeDocumentDate } from '../../utils/documentDates'
+import { ensureTitleDateParentheses, getTitleMetadataIndices, normalizeDocumentDate, readTitleByline } from '../../utils/documentDates'
 import { getHeadingSpans, headingClass, sliceHeadingText } from '../../parser/headings'
 import './A4Page.css'
 
@@ -214,7 +214,7 @@ export function renderA4Content(opts: A4ContentRenderOptions): React.ReactNode {
             </React.Fragment>
           )
         } else {
-          const role = index === metadata.name ? 'name' : index === metadata.date ? 'date' : null
+          const role = index === metadata.name ? 'name' : index === metadata.date || index === metadata.byline ? 'date' : null
           const spans = getHeadingSpans(node.content, node.type)
           let nodeClassName: string
           let nodeContent: React.ReactNode
@@ -228,7 +228,7 @@ export function renderA4Content(opts: A4ContentRenderOptions): React.ReactNode {
             nodeClassName = 'a4-title-date'
             nodeContent = hasRichStyleOverrides(node.runs)
               ? renderRichRuns(node.runs ?? [])
-              : ensureTitleDateParentheses(node.content)
+              : readTitleByline(node.content) ?? ensureTitleDateParentheses(node.content)
           } else if (spans.length > 0) {
             nodeClassName = NODE_CLASS_MAP[node.type]
             nodeContent = renderHeadingSpans(node.content, spans, boldHeading3, hasRichStyleOverrides(node.runs) ? node.runs : undefined)

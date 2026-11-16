@@ -1,7 +1,7 @@
 import type { DocumentNode, GongwenAST, AttachmentNode, ParagraphAlignment, RichTextRun } from '../types/ast'
 import { NodeType } from '../types/ast'
 import { detectNodeType, ATTACHMENT_RE, extractAttachmentItemsFromLine } from './matchers'
-import { normalizeDocumentDate, readTitleDate } from '../utils/documentDates'
+import { normalizeDocumentDate, readTitleByline, readTitleDate } from '../utils/documentDates'
 
 /** 不应被识别为发文机关署名的结尾标点 */
 const SIGNATURE_EXCLUDE_ENDINGS = ['。', '：', ':', '；', ';', '！', '!', '？', '?', '，', ',']
@@ -62,6 +62,7 @@ function isPossibleAddressee(line: string): boolean {
 
 /** 遇到以下行时立即停止标题提取，将其交由正文处理 */
 function isStructuralPreambleStop(text: string): boolean {
+  if (readTitleByline(text) || readTitleDate(text)) return true
   if (detectNodeType(text) !== NodeType.PARAGRAPH) return true
   if (isPossibleAddressee(text)) return true
   return false
@@ -209,7 +210,6 @@ function extractPreamble(lines: ParsedLineInput[]): { title: DocumentNode | null
       const t = raw.trim()
       if (isStructuralPreambleStop(t)) break
       if (isSubtitleLine(t)) break
-      if (readTitleDate(t)) break
       if (isNameBeforeDate(lines, cursor)) break
       if (!isTitleFragment(t)) break
       const merged = parts.join('') + t

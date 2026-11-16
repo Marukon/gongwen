@@ -8,6 +8,7 @@ import { renderA4Content } from '../components/Preview/A4Page'
 import { ensureTitleDateParentheses, getSupplementalSignature, getTitleMetadataIndices } from '../utils/documentDates'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { NodeType, type DocumentNode } from '../types/ast'
+import { sanitizeText } from '../utils/sanitize'
 
 function docNode(content: string): DocumentNode {
   return { type: NodeType.PARAGRAPH, content, lineNumber: 1 }
@@ -137,6 +138,27 @@ describe('Issue 1: 有人名日期 checkbox', () => {
 })
 
 describe('姓名、日期在编辑和分页预览中使用同一规则', () => {
+  it.each([
+    { lines: ['（张三 2026年10月15日）'], rendered: '（张三 2026年10月15日）', nameSeparate: false },
+    { lines: ['张三', '2026年9月30日'], rendered: '（2026年9月30日）', nameSeparate: true },
+  ])('不勾选也能识别带副标题和称呼的讲话稿日期：$rendered', async ({ lines, rendered, nameSeparate }) => {
+    const raw = ['青年干部交流体会', '——立足本职服务发展', ...lines, '尊敬的各位领导、同志们：', '大家下午好！', '这是正文。'].join('\n\n')
+    const ast = parseGongwen(sanitizeText(raw).text, { preserveEmptyLines: true })
+    expect(ast.title?.content).toBe('青年干部交流体会\n——立足本职服务发展')
+    for (const html of [astToStyledHtml(ast, DEFAULT_CONFIG), renderToStaticMarkup(renderA4Content({ ...DEFAULT_CONFIG.specialOptions, ...ast }))]) {
+      expect(html).toContain(`<p class="a4-title-date">${rendered}</p>`)
+      expect(html.includes('a4-title-secondary')).toBe(nameSeparate)
+      expect(html).not.toContain('<p><br></p>')
+    }
+    const { Packer } = await import('docx')
+    const JSZip = (await import('jszip')).default
+    const settings = { ...DEFAULT_CONFIG, specialOptions: { ...DEFAULT_CONFIG.specialOptions, signatureDate: '2026年11月16日' } }
+    const zip = await JSZip.loadAsync(await Packer.toBuffer(buildDocument(ast, settings)))
+    const xml = await zip.file('word/document.xml')!.async('string')
+    expect(xml).toContain(rendered)
+    expect(xml).not.toContain('2026年11月16日')
+  })
+
   const sample = parseGongwen('工作报告\n\n张三\n\n(2024年02月09日)\n一、总体要求', { preserveEmptyLines: true })
 
   it('识别时跳过空行，分页预览统一使用全角括号并去除补零', () => {

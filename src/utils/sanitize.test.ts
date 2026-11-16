@@ -153,6 +153,27 @@ describe('removeMeaninglessLineBreaks', () => {
 })
 
 describe('autoFixDocumentText', () => {
+  it('删除讲话稿粘贴空行并衔接分项，保留下一编号和独立的致谢段', () => {
+    const source = [
+      '二、思路举措：以务实作风服务大局',
+      '二是筑牢安全防线，在信息报送中当好科学决策的“千里眼”。',
+      '承德是首都的水源涵养功能区和生态环境支撑区，防范化解各类风险隐患责任重大。',
+      '三是发扬奉献精神。',
+      '发言完毕，不当之处请各位领导和同志们批评指正。谢谢大家！',
+    ]
+    const input = source.join('\r\n \r\n')
+    const expected = [source[0], source[1] + source[2], source[3], source[4]].join('\n')
+    expect(autoFixDocumentText(input)).toMatchObject({ text: expected, lineBreakCount: 5 })
+    expect(autoFixDocumentText(expected)).toMatchObject({ text: expected, lineBreakCount: 0 })
+  })
+
+  it('同样衔接「第一，」分项，独立保留正式标题', () => {
+    const title = '一、认识体会'
+    const lead = '第一，公文运转是经济决策高效落地的“传动轴”。'
+    const detail = '市委市政府关于产业升级、扩大内需、优化营商环境的一系列部署，需要通过公文传达。'
+    expect(autoFixDocumentText([title, lead, detail].join('\n\n')).text).toBe(`${title}\n${lead}${detail}`)
+  })
+
   it('组合修复英文标点、回车和多余空格', () => {
     const result = autoFixDocumentText('各 单位: 请\n 认真 贯彻 落实, 确保成效!')
 
