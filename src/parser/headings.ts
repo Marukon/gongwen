@@ -70,21 +70,24 @@ function ordinalValue(text: string): number {
 }
 
 export function getHeadingSpans(text: string, type: NodeType): HeadingSpan[] {
-  if (!isHeading(type) && (type !== NodeType.PARAGRAPH || !/[：:；;]/.test(text))) return []
+  if (!isHeading(type) && (type !== NodeType.PARAGRAPH || !/[：:；;。！？!?]/.test(text))) return []
   const marks = topLevelMarks(text)
   const spans: HeadingSpan[] = []
-  // 正式标题止于句末或引出正文的冒号；语篇分项也可在分号处结束。
   const endings = marks.filter(({ mark }) => /[；;。！？!?]/.test(mark))
   const firstDiscourse = type === NodeType.HEADING_3 && isDiscourseHeading(text)
   if (isHeading(type)) {
-    const first = firstDiscourse ? endings[0] : marks.find(({ mark, position }) => (
-      /[：。！？!?]/.test(mark) || (mark === ':' && text[position + 1] !== '/')
-    ))
+    const sentenceEnd = marks.find(({ mark }) => /[。！？!?]/.test(mark))
+    // 一级标题中的冒号可连接主标题与说明性标题；有完整的行内正文句才由冒号切开。
+    const first = firstDiscourse ? endings[0] : marks.find(({ mark, position }) =>
+      /[。！？!?]/.test(mark) ||
+      ((mark === '：' || (mark === ':' && text[position + 1] !== '/')) &&
+        (type !== NodeType.HEADING_1 || (sentenceEnd && sentenceEnd.position > position))),
+    )
     spans.push({ start: 0, end: first ? first.position + 1 : text.length, type })
   }
 
   // 段内分项需要同一语式和连续序号；引语、括号及孤立的「一是」保持原样。
-  const candidates = [{ position: -1, mark: '' }, ...marks.filter(({ mark }) => /[：:；;，,]/.test(mark))]
+  const candidates = [{ position: -1, mark: '' }, ...marks]
   let group: { start: number; end: number; ordinal: number; verb: string }[] = []
   let endIndex = 0
   const flush = () => {
@@ -111,8 +114,9 @@ export function getHeadingSpans(text: string, type: NodeType): HeadingSpan[] {
     const item = { start, end, ordinal: ordinalValue(match[1]), verb: match[2] }
     const previous = group[group.length - 1]
     const commaContinues = /[，,]/.test(mark) && previous && previous.end > position
+    const nextAfterBody = previous && previous.end <= start && /[；;。！？!?]/.test(mark)
     if (previous && item.ordinal === previous.ordinal + 1 && item.verb === previous.verb &&
-      (commaContinues || !text.slice(previous.end, item.start).trim() && previous.end <= item.start)) {
+      (commaContinues || nextAfterBody || (!text.slice(previous.end, item.start).trim() && previous.end <= item.start))) {
       previous.end = Math.min(previous.end, offset)
       group.push(item)
     } else {

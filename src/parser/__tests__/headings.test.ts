@@ -61,6 +61,53 @@ describe('公文标题与段内分项', () => {
     ])
   })
 
+  it('一级标题的冒号连接完整标题；明确同行的正文仍使用正文样式', () => {
+    const title = '二、思路举措：以“稳中求进”的务实作风，助推全市经济稳健前行'
+    expect(sliceHeadingText(title, getHeadingSpans(title, NodeType.HEADING_1))).toEqual([
+      { text: title, type: NodeType.HEADING_1 },
+    ])
+    const mixed = '一、加强管理：请各单位按期报送。'
+    expect(sliceHeadingText(mixed, getHeadingSpans(mixed, NodeType.HEADING_1))).toEqual([
+      { text: '一、加强管理：', type: NodeType.HEADING_1 },
+      { text: '请各单位按期报送。' },
+    ])
+  })
+
+  it('同一段中隔着详细说明仍能识别二是、三是，且只突出分项首句', async () => {
+    const title = '二、思路举措：以“稳中求进”的务实作风，助推全市经济稳健前行'
+    const leads = [
+      '一是强化内部培训，提升研判敏锐度。',
+      '二是前移盯办关口，掌握工作主动。',
+      '三是加强对下指导，压实报告责任。',
+    ]
+    const details = [
+      '分清轻重缓急，建立收件分级响应机制；科室对接采取“线上发件+电话提醒”双确认，消除沟通盲区和时间差。',
+      '提前向领导口头报备进展，变“等件齐备”为“动态报告”。',
+      '规范紧急信息报送口径与渠道，做到初报快、续报准。',
+    ]
+    const paragraph = leads.map((lead, i) => lead + details[i]).join('')
+    const ast = parseGongwen(`情况说明\n${title}\n${paragraph}`)
+    expect(ast.body.map((node) => node.content)).toEqual([title, paragraph])
+    const pieces = sliceHeadingText(paragraph, getHeadingSpans(paragraph, NodeType.HEADING_3))
+    expect(pieces.filter((piece) => piece.type).map((piece) => piece.text)).toEqual(leads)
+    expect(pieces.filter((piece) => !piece.type).map((piece) => piece.text)).toEqual(details)
+    expect(pieces.map((piece) => piece.text).join('')).toBe(paragraph)
+
+    for (const html of [astToStyledHtml(ast, DEFAULT_CONFIG), renderToStaticMarkup(renderA4Content({ ...DEFAULT_CONFIG.specialOptions, ...ast }))]) {
+      expect(html).toContain(`<span class="a4-h1-inline">${title}</span>`)
+      leads.forEach((lead) => expect(html).toContain(`a4-h3-inline--bold">${lead}</span>`))
+    }
+    const zip = await JSZip.loadAsync(await Packer.toBuffer(buildDocument(ast, DEFAULT_CONFIG)))
+    const xml = await zip.file('word/document.xml')!.async('string')
+    const headingFont = DEFAULT_CONFIG.advanced.h1.fontFamily
+    expect(xml).toContain(`w:eastAsia="${headingFont}"`)
+    expect(xml).toContain(`${title}</w:t>`)
+    expect(xml.match(/<w:outlineLvl /g)).toHaveLength(1)
+    const bodyParagraph = xml.split('</w:p>').find((part) => part.includes(leads[0])) ?? ''
+    leads.forEach((lead) => expect(bodyParagraph).toContain(`${lead}</w:t>`))
+    details.forEach((detail) => expect(bodyParagraph).toContain(`${detail}</w:t>`))
+  })
+
   it('编辑、打印预览与 DOCX 的分项范围一致，手工对齐和字体局部覆盖', async () => {
     const ast = parseGongwen('工作报告\n一、引用“先归档。”后的说明！正文继续。\n一是建好台账；二是落实责任。后文。\n1.具体工作')
     ast.body[0].alignment = 'center'
