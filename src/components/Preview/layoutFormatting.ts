@@ -1,7 +1,26 @@
 import type { ParagraphAlignment } from '../../types/ast'
 import { normalizeFontName } from '../../utils/fontAliases'
+import { MAX_RELATIVE_OFFSET_CHARS, offsetTransform } from '../../utils/editorLayout'
+import { getSignatureIndentChars } from '../../utils/documentLayout'
 
 export const BLOCK_SELECTOR = 'p,div,h1,h2,h3,h4,h5,h6'
+
+export function updateEditorSignatureLayout(editor: HTMLElement, hasStamp: boolean) {
+  for (const block of editor.querySelectorAll<HTMLElement>(':scope > .a4-signature, :scope > .a4-date')) {
+    const next = block.nextElementSibling
+    const paired = block.classList.contains('a4-signature') && next?.classList.contains('a4-date')
+    const raw = block.style.textAlign || block.getAttribute('align')
+    const alignment = raw === 'left' || raw === 'right' || raw === 'center' || raw === 'justify' ? raw : undefined
+    const indent = getSignatureIndentChars({
+      hasStamp,
+      name: paired ? block.textContent ?? '' : undefined,
+      date: paired ? next?.textContent ?? '' : undefined,
+      alignment,
+      noIndent: block.dataset.noIndent === 'true',
+    })
+    block.style.setProperty('--signature-indent-chars', String(indent))
+  }
+}
 
 export function exec(command: string, value?: string) {
   document.execCommand('styleWithCSS', false, 'true')
@@ -107,6 +126,74 @@ export function getSelectedBlocks(root: HTMLElement): HTMLElement[] {
     : range.startContainer.parentElement
   const fallback = startNode?.closest<HTMLElement>(BLOCK_SELECTOR)
   return fallback && root.contains(fallback) ? [fallback] : []
+}
+
+export function getRelativeCenterPair(editor: HTMLElement): [HTMLElement, HTMLElement] | undefined {
+  const selection = window.getSelection()
+  if (!selection?.rangeCount || selection.isCollapsed) return
+  const selected = selection.getRangeAt(0)
+  const blocks = getSelectedBlocks(editor).filter((block) => {
+    if (block.parentElement !== editor) return false
+    const portion = document.createRange()
+    portion.selectNodeContents(block)
+    if (block.contains(selected.startContainer)) portion.setStart(selected.startContainer, selected.startOffset)
+    if (block.contains(selected.endContainer)) portion.setEnd(selected.endContainer, selected.endOffset)
+    return portion.toString().trim() !== ''
+  })
+  if (blocks.length === 2) return [blocks[0], blocks[1]]
+}
+
+function getTextCenter(block: HTMLElement): number {
+  const walker = document.createTreeWalker(block, NodeFilter.SHOW_TEXT)
+  const range = document.createRange()
+  let found = false
+  for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+    const text = (node as Text).data
+    if (!text.trim()) continue
+    if (!found) {
+      range.setStart(node, text.length - text.trimStart().length)
+      found = true
+    }
+    range.setEnd(node, text.trimEnd().length)
+  }
+  const { left, width } = range.getBoundingClientRect()
+  return left + width / 2
+}
+
+export function setBlockOffset(block: HTMLElement, offset: number) {
+  if (offset) block.dataset.offsetChars = String(offset)
+  else delete block.dataset.offsetChars
+  block.style.transform = offsetTransform(offset) ?? ''
+}
+
+function trimSignaturePadding(block: HTMLElement) {
+  const walker = document.createTreeWalker(block, NodeFilter.SHOW_TEXT)
+  for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+    const text = node as Text
+    const leading = text.data.match(/^[\t \u00A0\u3000]+/)?.[0].length ?? 0
+    if (leading) text.deleteData(0, leading)
+    if (text.length) break
+  }
+}
+
+export function centerBlockOnReference(
+  [upper, lower]: [HTMLElement, HTMLElement], scaledBodyFontPx: number,
+) {
+  if (scaledBodyFontPx <= 0) return
+  const targetCenter = getTextCenter(lower)
+  const isSignature = upper.classList.contains('a4-signature')
+  if (isSignature) trimSignaturePadding(upper)
+  // Pin a signature and its date to the same axis in Word, even when date digits
+  // have different widths there. The axis is the original position of the date.
+  const signingPair = isSignature && lower.classList.contains('a4-date')
+  for (const block of signingPair ? [lower, upper] : [upper]) {
+    block.style.textAlign = 'center'
+    block.dataset.noIndent = 'true'
+    block.dataset.alignNoIndent = 'true'
+    setBlockOffset(block, 0)
+    const offset = Math.round((targetCenter - getTextCenter(block)) / scaledBodyFontPx * 100) / 100
+    setBlockOffset(block, Math.max(-MAX_RELATIVE_OFFSET_CHARS, Math.min(MAX_RELATIVE_OFFSET_CHARS, offset)))
+  }
 }
 
 export interface CapturedFormat {

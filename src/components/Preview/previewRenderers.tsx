@@ -1,6 +1,7 @@
 import React from 'react'
 import { NodeType } from '../../types/ast'
 import type { AttachmentNode } from '../../types/ast'
+import { getSignatureIndentChars } from '../../utils/documentLayout'
 
 export const NODE_CLASS_MAP: Record<NodeType, string> = {
   [NodeType.DOCUMENT_TITLE]: 'a4-title',
@@ -15,28 +16,12 @@ export const NODE_CLASS_MAP: Record<NodeType, string> = {
   [NodeType.DATE]: 'a4-date',
 }
 
-function calculateTextWidthEm(text: string): number {
-  let width = 0
-  for (const char of text) {
-    if (/[\u4e00-\u9fff\u3400-\u4dbf]/.test(char)) {
-      width += 1
-    } else {
-      width += 0.69
-    }
-  }
-  return width
-}
-
 export function calculateSignatureIndentEm(
   signatureContent: string,
   dateContent: string,
   hasStamp: boolean
 ): number {
-  const baseIndent = hasStamp ? 4 : 2
-  const signatureWidth = calculateTextWidthEm(signatureContent)
-  const dateWidth = calculateTextWidthEm(dateContent)
-  const centerOffset = (dateWidth - signatureWidth) / 2
-  return Math.max(0, baseIndent + centerOffset)
+  return getSignatureIndentChars({ hasStamp, name: signatureContent, date: dateContent })
 }
 
 export function renderHeading1(content: string) {

@@ -10,6 +10,7 @@ import {
 import { NodeType, type ParagraphAlignment, type RichTextRun } from '../types/ast'
 import type { DocumentConfig } from '../types/documentConfig'
 import { ptToTwip, cmToTwip, CHARS_PER_LINE } from '../types/documentConfig'
+import { getCharacterSpacingTwips, getGridCharacterWidthTwips, getSignatureIndentChars } from '../utils/documentLayout'
 export { hasRichStyleOverrides } from '../utils/editorLayout'
 
 const TITLE_DATE_RE = /^[（(]?\d{4}年\d{1,2}月\d{1,2}日[）)]?$/
@@ -41,7 +42,7 @@ function font(eastAsia: string, ascii = 'Times New Roman'): IFontAttributesPrope
  * 字符间距用于确保每行恰好28字，缩进也需要同步调整
  */
 function calculateFirstLineIndent(config: DocumentConfig): number {
-  return calculateCharWidth(config) * config.body.firstLineIndent
+  return getGridCharacterWidthTwips(config) * config.body.firstLineIndent
 }
 
 export function shouldUseCharacterFirstLineIndent(type: NodeType): boolean {
@@ -65,62 +66,6 @@ export function createCharacterFirstLineIndent(config: DocumentConfig, offsetTwi
   })
 }
 
-/**
- * 计算单个字符宽度（twips）
- * 字符宽度 = 字号 + 字符间距
- */
-function calculateCharWidth(config: DocumentConfig): number {
-  const availableTwips = 11906 - cmToTwip(config.margins.left) - cmToTwip(config.margins.right)
-  const charGapCount = Math.max(1, CHARS_PER_LINE - 1)
-  const charSpacingTwips = Math.floor(
-    (availableTwips - config.body.fontSize * 20 * CHARS_PER_LINE) / charGapCount
-  )
-  return config.body.fontSize * 20 + charSpacingTwips
-}
-
-/**
- * 计算文本的实际宽度（twips）
- * - 中文字符（含年月日）：宽度 = 1 个汉字宽度
- * - 阿拉伯数字、英文字母：宽度约为汉字的 0.69 倍
- * - 其他 ASCII 字符：宽度约为汉字的 0.69 倍
- */
-function calculateTextWidth(text: string, charWidthTwips: number): number {
-  let width = 0
-  for (const char of text) {
-    // 判断是否为中文字符（含年月日等）
-    // CJK 统一汉字范围：\u4e00-\u9fff
-    // CJK 兼容汉字：\u3400-\u4dbf
-    // 中文标点等也在 CJK 范围内
-    if (/[\u4e00-\u9fff\u3400-\u4dbf]/.test(char)) {
-      width += charWidthTwips
-    } else {
-      // 阿拉伯数字、英文字母等 ASCII 字符，宽度约为汉字的 0.69 倍
-      width += charWidthTwips * 0.69
-    }
-  }
-  return width
-}
-
-/**
- * 计算发文机关署名的右缩进值
- * 公式：基础右空字数 + (成文日期宽度 - 署名宽度) / 2
- * - 有印章（hasStamp = true）：基础右空四字
- * - 无印章（hasStamp = false）：基础右空二字
- * 注意：居中偏移可能为负数（署名比日期长时），只需保证最终右缩进 >= 0
- */
-function calculateSignatureIndent(
-  signatureContent: string,
-  dateContent: string,
-  config: DocumentConfig
-): number {
-  const charWidthTwips = calculateCharWidth(config)
-  const baseIndent = (config.specialOptions.hasStamp ? 4 : 2) * charWidthTwips
-  const signatureWidth = calculateTextWidth(signatureContent, charWidthTwips)
-  const dateWidth = calculateTextWidth(dateContent, charWidthTwips)
-  const centerOffset = (dateWidth - signatureWidth) / 2
-  return Math.max(0, baseIndent + centerOffset)
-}
-
 /** 节点类型 → 段落样式 */
 export function getParagraphStyle(
   type: NodeType,
@@ -134,7 +79,7 @@ export function getParagraphStyle(
 ): Partial<IParagraphOptions> {
   const lineSpacingValue = ptToTwip(config.body.lineSpacing)
   const firstLineIndentTwips = calculateFirstLineIndent(config)
-  const charWidthTwips = calculateCharWidth(config)
+  const charWidthTwips = getGridCharacterWidthTwips(config)
 
   const BASE_SPACING = {
     line: lineSpacingValue,
@@ -177,21 +122,6 @@ export function getParagraphStyle(
       break
 
     case NodeType.SIGNATURE:
-      if (!signatureContent || !dateContent) {
-        style = {
-          alignment: AlignmentType.RIGHT,
-          spacing: BASE_SPACING,
-          indent: { right: (config.specialOptions.hasStamp ? 4 : 2) * charWidthTwips },
-        }
-        break
-      }
-      style = {
-        alignment: AlignmentType.RIGHT,
-        spacing: BASE_SPACING,
-        indent: { right: calculateSignatureIndent(signatureContent, dateContent, config) },
-      }
-      break
-
     case NodeType.DATE:
       if (isTitleDate) {
         style = {
@@ -204,7 +134,10 @@ export function getParagraphStyle(
       style = {
         alignment: AlignmentType.RIGHT,
         spacing: BASE_SPACING,
-        indent: { right: (config.specialOptions.hasStamp ? 4 : 2) * charWidthTwips },
+        indent: { right: Math.round(charWidthTwips * getSignatureIndentChars({
+          hasStamp: config.specialOptions.hasStamp,
+          name: signatureContent, date: dateContent, alignment: manualAlignment, noIndent,
+        })) },
       }
       break
 
@@ -256,11 +189,7 @@ export function getRunStyle(type: NodeType, config: DocumentConfig): Partial<IRu
 
   // 字符间距微调：使每行恰好 28 字 (GB/T 9704)
   // characterSpacing 单位为 twips (1/20 pt)，向下取整确保不超出可用宽度
-  const availableTwips = 11906 - cmToTwip(config.margins.left) - cmToTwip(config.margins.right)
-  const charGapCount = Math.max(1, CHARS_PER_LINE - 1)
-  const charSpacing = Math.floor(
-    (availableTwips - config.body.fontSize * 20 * CHARS_PER_LINE) / charGapCount
-  )
+  const charSpacing = getCharacterSpacingTwips(config)
 
   switch (type) {
     case NodeType.DOCUMENT_TITLE:
@@ -368,7 +297,7 @@ export function getAttachmentParagraphStyle(
   omitSpacingBefore = false
 ): Partial<IParagraphOptions> {
   const lineSpacingValue = ptToTwip(config.body.lineSpacing)
-  const charWidthTwips = calculateCharWidth(config)
+  const charWidthTwips = getGridCharacterWidthTwips(config)
   const spacing = omitSpacingBefore
     ? { line: lineSpacingValue, lineRule: LineRuleType.EXACT }
     : { line: lineSpacingValue, lineRule: LineRuleType.EXACT, before: lineSpacingValue }
@@ -414,11 +343,7 @@ export function getAttachmentParagraphStyle(
  */
 export function getAttachmentRunStyle(config: DocumentConfig): Partial<IRunOptions> {
   const bodyFontSize = config.body.fontSize * 2
-  const availableTwips = 11906 - cmToTwip(config.margins.left) - cmToTwip(config.margins.right)
-  const charGapCount = Math.max(1, CHARS_PER_LINE - 1)
-  const charSpacing = Math.floor(
-    (availableTwips - config.body.fontSize * 20 * CHARS_PER_LINE) / charGapCount
-  )
+  const charSpacing = getCharacterSpacingTwips(config)
 
   return {
     font: {

@@ -1,10 +1,12 @@
 import type { AttachmentNode, RichTextRun } from '../types/ast'
 
 export const MAX_OFFSET_CHARS = 8
+// A text axis can be farther from the page center than the manual nudge range.
+export const MAX_RELATIVE_OFFSET_CHARS = 32
 
 export function readOffset(raw: string | undefined): number | undefined {
   const offset = Number(raw)
-  return Number.isInteger(offset) && offset !== 0 && Math.abs(offset) <= MAX_OFFSET_CHARS ? offset : undefined
+  return offset !== 0 && Math.abs(offset) <= MAX_RELATIVE_OFFSET_CHARS ? offset : undefined
 }
 
 export function offsetTransform(chars: number | undefined): string | undefined {

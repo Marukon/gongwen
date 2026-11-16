@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, type CSSProperties } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import {
   A4Page,
   renderA4Content,
@@ -12,52 +12,13 @@ import type { GongwenAST } from '../../types/ast'
 import type { DocumentConfig } from '../../types/documentConfig'
 import { getSupplementalSignature } from '../../utils/documentDates'
 import {
-  CHARS_PER_LINE,
-  cmToPagePercent,
   A4_RENDER_WIDTH_PX,
   A4_RENDER_HEIGHT_PX,
   A4_PAGE_GAP_PX,
 } from '../../types/documentConfig'
+import { buildA4CssVars } from './pageLayoutStyles'
 import './A4Page.css'
 import './PrintPreview.css'
-
-/** 屏幕 DPI 下 1pt 对应的像素（96dpi ≈ 1pt = 4/3 px），用于估算真实字形宽度 */
-const PT_TO_PX = 96 / 72
-
-/** 由 config 推导 A4 页面所需的 CSS 变量（与预览编辑区保持一致的页边距/字体/字间距） */
-function buildA4CssVars(config: DocumentConfig): CSSProperties {
-  const pageWidthPx = A4_RENDER_WIDTH_PX
-  const marginLeftPx = (config.margins.left / 21) * pageWidthPx
-  const marginRightPx = (config.margins.right / 21) * pageWidthPx
-  const availablePx = pageWidthPx - marginLeftPx - marginRightPx
-  // 真实字形宽度：中文全角字 ≈ 1em，96dpi 下 1pt ≈ 4/3 px
-  const textWidth = config.body.fontSize * PT_TO_PX * CHARS_PER_LINE
-  const letterSpacingUnits = CHARS_PER_LINE - 1
-  const charSpacingPx = (availablePx - textWidth) / letterSpacingUnits
-
-  return {
-    '--margin-top': `${cmToPagePercent(config.margins.top, 'x')}%`,
-    '--margin-bottom': `${cmToPagePercent(config.margins.bottom, 'x')}%`,
-    '--margin-left': `${cmToPagePercent(config.margins.left, 'x')}%`,
-    '--margin-right': `${cmToPagePercent(config.margins.right, 'x')}%`,
-    '--margin-bottom-y': `${cmToPagePercent(config.margins.bottom, 'y')}%`,
-    '--title-font': config.title.fontFamily,
-    '--title-size': `${config.title.fontSize}pt`,
-    '--title-line-height': `${config.title.lineSpacing}pt`,
-    '--body-font': config.body.fontFamily,
-    '--body-size': `${config.body.fontSize}pt`,
-    '--body-line-height': `${config.body.lineSpacing}pt`,
-    '--body-indent': `${config.body.firstLineIndent}em`,
-    '--char-spacing': `${charSpacingPx.toFixed(4)}px`,
-    '--h1-font': config.advanced.h1.fontFamily,
-    '--h1-size': `${config.advanced.h1.fontSize}pt`,
-    '--h2-font': config.advanced.h2.fontFamily,
-    '--h2-size': `${config.advanced.h2.fontSize}pt`,
-    '--h3-font': config.advanced.h3.fontFamily,
-    '--h3-size': `${config.advanced.h3.fontSize}pt`,
-    '--page-number-font': config.specialOptions.pageNumberFont,
-  } as CSSProperties
-}
 
 function buildPaginationConfig(config: DocumentConfig): PaginationConfig {
   return {

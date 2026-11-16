@@ -20,6 +20,7 @@
 .preview-header-top {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 8px;
   flex-shrink: 0;
   margin-right: 2px;
@@ -84,6 +85,7 @@
   background: #fff;
   color: #374151;
   font-size: 13px;
+  white-space: nowrap;
   cursor: pointer;
 }
 
@@ -274,6 +276,10 @@
   outline: none;
   background: transparent;
   text-align: justify;
+}
+
+.preview-editor:has(+ .a4-empty-line) {
+  min-height: 0;
 }
 
 .preview-editor--painter,

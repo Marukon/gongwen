@@ -6,6 +6,8 @@ import { getPreviewFontFamily } from '../../utils/fontAliases'
 import { ensureTitleDateParentheses, getTitleMetadataIndices, normalizeDocumentDate, readTitleByline } from '../../utils/documentDates'
 import { getHeadingSpans, headingClass, sliceHeadingText } from '../../parser/headings'
 import { attachmentClass, hasRichStyleOverrides, offsetTransform } from '../../utils/editorLayout'
+import { getSignatureIndentChars, getSupplementalSignatureIndents } from '../../utils/documentLayout'
+import { signaturePadding } from './pageLayoutStyles'
 import './A4Page.css'
 
 /** 节点类型 → CSS 类名映射 */
@@ -20,43 +22,6 @@ export const NODE_CLASS_MAP: Record<NodeType, string> = {
   [NodeType.ATTACHMENT]: 'a4-attachment',
   [NodeType.SIGNATURE]: 'a4-signature',
   [NodeType.DATE]: 'a4-date',
-}
-
-/**
- * 计算文本的实际宽度（以汉字宽度为单位）
- * - 中文字符（含年月日）：宽度 = 1 个汉字宽度
- * - 阿拉伯数字、英文字母：宽度约为汉字的 0.69 倍
- * - 其他 ASCII 字符：宽度约为汉字的 0.69 倍
- */
-function calculateTextWidthEm(text: string): number {
-  let width = 0
-  for (const char of text) {
-    if (/[\u4e00-\u9fff\u3400-\u4dbf]/.test(char)) {
-      width += 1
-    } else {
-      width += 0.69
-    }
-  }
-  return width
-}
-
-/**
- * 计算发文机关署名的右缩进值（em 单位）
- * 公式：基础右空字数 + (成文日期宽度 - 署名宽度) / 2
- * - 有印章（hasStamp = true）：基础右空四字
- * - 无印章（hasStamp = false）：基础右空二字
- * 注意：居中偏移可能为负数（署名比日期长时），只需保证最终右缩进 >= 0
- */
-export function calculateSignatureIndentEm(
-  signatureContent: string,
-  dateContent: string,
-  hasStamp: boolean
-): number {
-  const baseIndent = hasStamp ? 4 : 2
-  const signatureWidth = calculateTextWidthEm(signatureContent)
-  const dateWidth = calculateTextWidthEm(dateContent)
-  const centerOffset = (dateWidth - signatureWidth) / 2
-  return Math.max(0, baseIndent + centerOffset)
 }
 
 /* ------------------------------------------------------------------ */
@@ -134,19 +99,18 @@ function getA4NodeStyle(
   hasStamp: boolean,
   body: DocumentNode[],
 ): CSSProperties | undefined {
-  if (node.alignment) return { textAlign: node.alignment }
-  if (node.type === NodeType.SIGNATURE) {
+  if (node.type === NodeType.SIGNATURE || node.type === NodeType.DATE) {
     const nextNode = body[index + 1]
-    if (nextNode && nextNode.type === NodeType.DATE) {
-      const indent = calculateSignatureIndentEm(node.content, nextNode.content, hasStamp)
-      return { paddingRight: `${indent}em` }
+    return {
+      textAlign: node.alignment,
+      paddingRight: signaturePadding(getSignatureIndentChars({
+        hasStamp, name: node.type === NodeType.SIGNATURE ? node.content : undefined,
+        date: nextNode?.type === NodeType.DATE ? nextNode.content : undefined,
+        alignment: node.alignment, noIndent: node.noIndent,
+      })),
     }
-    return { paddingRight: `${hasStamp ? 4 : 2}em` }
   }
-  if (node.type === NodeType.DATE) {
-    return { paddingRight: `${hasStamp ? 4 : 2}em` }
-  }
-  return undefined
+  return { textAlign: node.alignment }
 }
 
 export interface A4ContentRenderOptions {
@@ -163,22 +127,18 @@ export interface A4ContentRenderOptions {
   signatureDate?: string
 }
 
-/** 估算文本宽度（em）：中文 1，其他 0.5 */
-function estimateTextEm(text: string): number {
-  let w = 0
-  for (const c of text) {
-    w += /[\u4e00-\u9fff\uff01-\uff5e\u3000-\u303f]/.test(c) ? 1 : 0.5
-  }
-  return w
-}
-
-/** 计算落款右空（em）：署名右空 4 字，日期长于署名 2 字以上则右空 5 字；日期居中于署名 */
-export function getSignatureIndents(nameText: string, dateText: string): { nameIndentEm: number; dateIndentEm: number } {
-  const nameW = nameText ? estimateTextEm(nameText) : 0
-  const dateW = dateText ? estimateTextEm(dateText) : 0
-  const dateIndentEm = dateW > nameW + 2 ? 5 : 4
-  const nameIndentEm = Math.max(0, dateIndentEm + (dateW - nameW) / 2)
-  return { nameIndentEm, dateIndentEm }
+export function renderSupplementalSignature(name = '', date = '') {
+  if (!name && !date) return null
+  const { nameIndent, dateIndent } = getSupplementalSignatureIndents(name, date)
+  return (
+    <>
+      {[0, 1, 2].map((j) => (
+        <p key={j} className="a4-empty-line">{'\u200B'}</p>
+      ))}
+      {name && <p className="a4-signature a4-signature-standalone" style={{ paddingRight: signaturePadding(nameIndent) }}>{name}</p>}
+      {date && <p className="a4-date a4-date-standalone" style={{ paddingRight: signaturePadding(dateIndent) }}>{date}</p>}
+    </>
+  )
 }
 
 /** 渲染标题 + 正文流（不含版头/版记外壳） */
@@ -265,33 +225,7 @@ export function renderA4Content(opts: A4ContentRenderOptions): React.ReactNode {
 
         return elements
       })}
-      {/* 落款（发文机关署名 + 成文日期）：空三行，署名右空 4-5 字，日期居中于署名 */}
-      {(signatureName || signatureDate) && (() => {
-        const { nameIndentEm, dateIndentEm } = getSignatureIndents(signatureName ?? '', signatureDate ?? '')
-        return (
-          <>
-            {[0, 1, 2].map((j) => (
-              <p key={`sig-empty-${j}`} className="a4-empty-line">{'\u200B'}</p>
-            ))}
-            {signatureName && (
-              <p
-                className="a4-signature a4-signature-standalone"
-                style={{ paddingRight: `${nameIndentEm}em` }}
-              >
-                {signatureName}
-              </p>
-            )}
-            {signatureDate && (
-              <p
-                className="a4-date a4-date-standalone"
-                style={{ paddingRight: `${dateIndentEm}em` }}
-              >
-                {signatureDate}
-              </p>
-            )}
-          </>
-        )
-      })()}
+      {renderSupplementalSignature(signatureName, signatureDate)}
       {!title && body.length === 0 && (
         <p className="a4-placeholder">预览区域</p>
       )}

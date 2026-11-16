@@ -1,9 +1,10 @@
 import React, { memo, type CSSProperties } from 'react'
 import { NodeType } from '../../types/ast'
 import type { AttachmentNode, DocumentNode, GongwenAST } from '../../types/ast'
+import { getSignatureIndentChars } from '../../utils/documentLayout'
+import { signaturePadding } from './pageLayoutStyles'
 import {
   NODE_CLASS_MAP,
-  calculateSignatureIndentEm,
   renderAttachment,
   renderBoldFirstSentence,
   renderHeading1,
@@ -27,17 +28,16 @@ function getNodeStyle(
   body: DocumentNode[],
   hasStamp: boolean
 ): CSSProperties | undefined {
-  if (node.type === NodeType.SIGNATURE) {
+  if (node.type === NodeType.SIGNATURE || node.type === NodeType.DATE) {
     const nextNode = body[index + 1]
-    if (nextNode && nextNode.type === NodeType.DATE) {
-      const indent = calculateSignatureIndentEm(node.content, nextNode.content, hasStamp)
-      return { paddingRight: `${indent}em` }
+    return {
+      textAlign: node.alignment,
+      paddingRight: signaturePadding(getSignatureIndentChars({
+        hasStamp, name: node.type === NodeType.SIGNATURE ? node.content : undefined,
+        date: nextNode?.type === NodeType.DATE ? nextNode.content : undefined,
+        alignment: node.alignment, noIndent: node.noIndent,
+      })),
     }
-    return { paddingRight: `${hasStamp ? 4 : 2}em` }
-  }
-
-  if (node.type === NodeType.DATE) {
-    return { paddingRight: `${hasStamp ? 4 : 2}em` }
   }
 
   return undefined

@@ -45,6 +45,7 @@
 .a4-paragraph,
 .a4-addressee,
 .a4-attachment,
+.a4-signature,
 .a4-date {
   letter-spacing: var(--char-spacing, 0);
 }
@@ -257,7 +258,7 @@
   font-size: var(--body-size, 16pt);
   text-indent: 0;
   text-align: right;
-  padding-right: var(--signature-indent, 2em);
+  padding-right: calc(var(--layout-char-width, 1em) * var(--signature-indent-chars, 2));
   line-height: var(--body-line-height, 29pt);
   margin: 0;
 }
@@ -271,7 +272,7 @@
   font-size: var(--body-size, 16pt);
   text-indent: 0;
   text-align: right;
-  padding-right: var(--signature-indent, 2em);
+  padding-right: calc(var(--layout-char-width, 1em) * var(--signature-indent-chars, 2));
   line-height: var(--body-line-height, 29pt);
   margin: 0;
 }

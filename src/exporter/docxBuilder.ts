@@ -10,6 +10,7 @@ import { getTitleLines, NodeType } from '../types/ast'
 import type { DocumentConfig, PageNumberStyle } from '../types/documentConfig'
 import { cmToTwip, ptToTwip } from '../types/documentConfig'
 import { ensureTitleDateParentheses, getSupplementalSignature, getTitleMetadataIndices, normalizeDocumentDate, readTitleByline } from '../utils/documentDates'
+import { getGridCharacterWidthTwips, getParagraphOffsetTwips, getSupplementalSignatureIndents } from '../utils/documentLayout'
 import { getHeadingSpans, isDiscourseHeading, sliceHeadingText } from '../parser/headings'
 import {
   createCharacterFirstLineIndent,
@@ -242,7 +243,7 @@ function attachmentToParagraphs(
       ? { ...base, alignment, indent: { left: 0, right: 0 } }
       : { ...base, alignment }
     return [new Paragraph({
-      ...shiftParagraph(position, (node.offsetChars || 0) * ptToTwip(config.body.fontSize)),
+      ...shiftParagraph(position, getParagraphOffsetTwips(node.offsetChars, config.body.fontSize)),
       children: node.runs?.length ? runsToTextRuns(node.runs, runStyle) : [new TextRun({ ...runStyle, text: node.content })],
     })]
   }
@@ -358,7 +359,7 @@ function nodeToParagraph(
     }
   }
 
-  const offset = (node.offsetChars || 0) * ptToTwip(config.body.fontSize)
+  const offset = getParagraphOffsetTwips(node.offsetChars, config.body.fontSize)
   const baseParagraphStyle = useCharacterIndent
     ? { ...paragraphStyle, indent: undefined }
     : shiftParagraph(paragraphStyle, offset)
@@ -592,7 +593,7 @@ export function buildDocument(ast: GongwenAST, config: DocumentConfig): Document
       const style = { font: nameDateFont, size: nameDateFontSize }
       children.push(new Paragraph({
         ...shiftParagraph(getParagraphStyle(node.type, config, undefined, undefined, isTitleDate,
-          i === titleMetadata.name, node.alignment, node.noIndent), (node.offsetChars || 0) * ptToTwip(config.body.fontSize)),
+          i === titleMetadata.name, node.alignment, node.noIndent), getParagraphOffsetTwips(node.offsetChars, config.body.fontSize)),
         children: node.runs && hasRichStyleOverrides(node.runs)
           ? runsToTextRuns(node.runs, style)
           : [new TextRun({ ...style, text })],
@@ -641,48 +642,31 @@ export function buildDocument(ast: GongwenAST, config: DocumentConfig): Document
   // ---- 落款（发文机关署名 + 成文日期） ----
   const { name: nameText, date: dateText } = getSupplementalSignature(ast, config.specialOptions)
   if (nameText || dateText) {
-    const bodyFont = {
-      ascii: 'Times New Roman',
-      eastAsia: config.body.fontFamily,
-      hAnsi: config.body.fontFamily,
-      cs: 'Times New Roman',
-    }
-    const bodyFontSize = config.body.fontSize * 2
-    const oneCharWidth = ptToTwip(config.body.fontSize)
-    const runOptions = { font: bodyFont, size: bodyFontSize }
+    const charWidth = getGridCharacterWidthTwips(config)
+    const runOptions = cache.bodyRunStyle
 
     // 落款前空三行（距最后一行公文正文）
     for (let j = 0; j < 3; j++) {
       children.push(new Paragraph({
         spacing: { line: bodyLineSpacing, lineRule: LineRuleType.EXACT, before: 0, after: 0 },
-        children: [new TextRun({ font: bodyFont, size: bodyFontSize, text: '' })],
+        children: [new TextRun({ ...runOptions, text: '' })],
       }))
     }
 
-    // 署名右空 4 字（日期长于署名 2 字以上则 5 字），日期居中于署名（中线对齐）
-    const estimateEm = (t: string) => {
-      let w = 0
-      for (const c of t) w += /[\u4e00-\u9fff\uff01-\uff5e\u3000-\u303f]/.test(c) ? 1 : 0.5
-      return w
-    }
-    const dateW = dateText ? estimateEm(dateText) : 0
-    const nameW = nameText ? estimateEm(nameText) : 0
-    const dateIndentChars = dateW > nameW + 2 ? 5 : 4
-    const nameIndentChars = Math.max(0, dateIndentChars + (dateW - nameW) / 2)
+    const { nameIndent, dateIndent } = getSupplementalSignatureIndents(nameText, dateText)
 
     // 发文机关署名
     if (nameText) children.push(new Paragraph({
       alignment: AlignmentType.RIGHT,
-      indent: { right: Math.round(oneCharWidth * nameIndentChars) },
+      indent: { right: Math.round(charWidth * nameIndent) },
       spacing: { line: bodyLineSpacing, lineRule: LineRuleType.EXACT, before: 0, after: 0 },
       children: [new TextRun({ ...runOptions, text: nameText })],
     }))
 
-    // 成文日期（不添加括号）：在署名右空基础上向左微调 0.5 字，
-    // 补偿仿宋中阿拉伯数字实际宽度大于 0.5em 估算造成的视觉左偏
+    // 成文日期（不添加括号）
     if (dateText) children.push(new Paragraph({
       alignment: AlignmentType.RIGHT,
-      indent: { right: Math.max(0, Math.round(oneCharWidth * (dateIndentChars - 0.5))) },
+      indent: { right: Math.round(charWidth * dateIndent) },
       spacing: { line: bodyLineSpacing, lineRule: LineRuleType.EXACT, before: 0, after: 0 },
       children: [new TextRun({ ...runOptions, text: dateText })],
     }))

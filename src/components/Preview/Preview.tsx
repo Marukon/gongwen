@@ -1,16 +1,17 @@
-import { useEffect, useMemo, useRef, useState, useCallback, type ClipboardEvent, type CSSProperties, type KeyboardEvent, type RefObject } from 'react'
+import { useEffect, useMemo, useRef, useState, useCallback, type ClipboardEvent, type KeyboardEvent, type RefObject } from 'react'
 import { useDocumentConfig } from '../../contexts/useDocumentConfig'
-import { CHARS_PER_LINE, FONT_OPTIONS, FONT_SIZE_OPTIONS, cmToPagePercent, A4_RENDER_WIDTH_PX, A4_RENDER_HEIGHT_PX } from '../../types/documentConfig'
+import { FONT_OPTIONS, FONT_SIZE_OPTIONS, A4_RENDER_WIDTH_PX, A4_RENDER_HEIGHT_PX } from '../../types/documentConfig'
 import type { GongwenAST } from '../../types/ast'
 import { normalizeEditorHtml, parseEditorContent } from '../../utils/richText'
-import { BLOCK_SELECTOR, exec, applyFontSize, getSelectedBlocks, getFormatAtSelection, applyFormatToSelection, applyFormatToBlock, type CapturedFormat } from './layoutFormatting'
+import { BLOCK_SELECTOR, exec, applyFontSize, getSelectedBlocks, getFormatAtSelection, applyFormatToSelection, applyFormatToBlock, getRelativeCenterPair, centerBlockOnReference, setBlockOffset, updateEditorSignatureLayout, type CapturedFormat } from './layoutFormatting'
 import { getSupplementalSignature } from '../../utils/documentDates'
-import { MAX_OFFSET_CHARS, offsetTransform, readOffset } from '../../utils/editorLayout'
+import { MAX_OFFSET_CHARS, MAX_RELATIVE_OFFSET_CHARS, readOffset } from '../../utils/editorLayout'
 import { LayoutHistory } from '../../utils/layoutHistory'
 import { insertLayoutParagraphs } from '../../utils/editorInsert'
 import { useFitScale } from '../../hooks/useFitScale'
 import { PrintPreview } from './PrintPreview'
-import { renderA4FooterNote, getSignatureIndents } from './A4Page'
+import { renderA4FooterNote, renderSupplementalSignature } from './A4Page'
+import { buildA4CssVars } from './pageLayoutStyles'
 import './A4Page.css'
 import './Preview.css'
 
@@ -43,6 +44,7 @@ export function Preview({ value, ast, onChange, editorRef }: PreviewProps) {
   const historyRef = useRef(new LayoutHistory())
   const composingRef = useRef(false)
   const [historyButtons, setHistoryButtons] = useState({ undo: false, redo: false })
+  const [canRelativeCenter, setCanRelativeCenter] = useState(false)
   const painterClickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [currentFont, setCurrentFont] = useState(FONT_FAMILY_OPTIONS[0])
   const [currentFontSize, setCurrentFontSize] = useState(FONT_SIZE_OPTIONS_CN[3]?.value ?? 16)
@@ -92,39 +94,8 @@ export function Preview({ value, ast, onChange, editorRef }: PreviewProps) {
     [config.header.orgName, isFormalHeader],
   )
 
-  const cssVars = useMemo((): CSSProperties => {
-    const pageWidthPx = A4_RENDER_WIDTH_PX
-    const marginLeftPx = (config.margins.left / 21) * pageWidthPx
-    const marginRightPx = (config.margins.right / 21) * pageWidthPx
-    const availablePx = pageWidthPx - marginLeftPx - marginRightPx
-    const textWidth = config.body.fontSize * (96 / 72) * CHARS_PER_LINE
-    const letterSpacingUnits = CHARS_PER_LINE - 1
-    const charSpacingPx = (availablePx - textWidth) / letterSpacingUnits
-
-    return { 
-      '--margin-top': `${cmToPagePercent(config.margins.top, 'x')}%`,
-      '--margin-bottom': `${cmToPagePercent(config.margins.bottom, 'x')}%`,
-      '--margin-left': `${cmToPagePercent(config.margins.left, 'x')}%`,
-      '--margin-right': `${cmToPagePercent(config.margins.right, 'x')}%`,
-      '--margin-bottom-y': `${cmToPagePercent(config.margins.bottom, 'y')}%`,
-      '--title-font': config.title.fontFamily,
-      '--title-size': `${config.title.fontSize}pt`,
-      '--title-line-height': `${config.title.lineSpacing}pt`,
-      '--body-font': config.body.fontFamily,
-      '--body-size': `${config.body.fontSize}pt`,
-      '--body-line-height': `${config.body.lineSpacing}pt`,
-      '--body-indent': `${config.body.firstLineIndent}em`,
-      '--signature-indent': config.specialOptions.hasStamp ? '4em' : '2em',
-      '--char-spacing': `${charSpacingPx.toFixed(4)}px`,
-      '--h1-font': config.advanced.h1.fontFamily,
-      '--h1-size': `${config.advanced.h1.fontSize}pt`,
-      '--h2-font': config.advanced.h2.fontFamily,
-      '--h2-size': `${config.advanced.h2.fontSize}pt`,
-      '--h3-font': config.advanced.h3.fontFamily,
-      '--h3-size': `${config.advanced.h3.fontSize}pt`,
-      '--page-number-font': config.specialOptions.pageNumberFont,
-    } as CSSProperties
-  }, [config])
+  const cssVars = useMemo(() => buildA4CssVars(config), [config])
+  const hasStamp = config.specialOptions.hasStamp
 
   useEffect(() => {
     const editor = editorRef.current
@@ -133,15 +104,19 @@ export function Preview({ value, ast, onChange, editorRef }: PreviewProps) {
       selectionRef.current = null
       return
     }
-    if (lastEmittedRef.current === value) return
+    if (lastEmittedRef.current === value) {
+      updateEditorSignatureLayout(editor, hasStamp)
+      return
+    }
     const content = parseEditorContent(value)
     if (historyRef.current.present?.html !== content.innerHTML) {
       historyRef.current.reset({ html: content.innerHTML })
       updateHistoryButtons()
     }
     if (editor.innerHTML !== content.innerHTML) editor.replaceChildren(...content.childNodes)
+    updateEditorSignatureLayout(editor, hasStamp)
     lastEmittedRef.current = value
-  }, [value, showPrintPreview, editorRef, updateHistoryButtons])
+  }, [value, showPrintPreview, editorRef, updateHistoryButtons, hasStamp])
 
   useEffect(() => {
     if (showPrintPreview) return
@@ -151,12 +126,14 @@ export function Preview({ value, ast, onChange, editorRef }: PreviewProps) {
       if (!editor || !selection?.rangeCount) return
       const range = selection.getRangeAt(0)
       if (editor.contains(range.commonAncestorContainer)) selectionRef.current = range.cloneRange()
+      setCanRelativeCenter(Boolean(getRelativeCenterPair(editor)))
     }
     const clearOutsideSelection = (event: PointerEvent) => {
       historyRef.current.breakTyping()
       const target = event.target
       if (target instanceof Element && !editorRef.current?.contains(target) && !target.closest('.preview-toolbar,.preview-history')) {
         selectionRef.current = null
+        setCanRelativeCenter(false)
       }
     }
     document.addEventListener('selectionchange', rememberSelection)
@@ -183,6 +160,7 @@ export function Preview({ value, ast, onChange, editorRef }: PreviewProps) {
   const emitChange = useCallback((typingKind?: string) => {
     const editor = editorRef.current
     if (!editor || internalDrag.current || formattingBatch.current) return
+    updateEditorSignatureLayout(editor, hasStamp)
     const normalized = normalizeEditorHtml(editor.innerHTML)
     let element: Node | null | undefined = window.getSelection()?.anchorNode
     while (element && element.parentNode !== editor) element = element.parentNode
@@ -192,7 +170,7 @@ export function Preview({ value, ast, onChange, editorRef }: PreviewProps) {
     if (normalized === lastEmittedRef.current) return
     lastEmittedRef.current = normalized
     onChange(normalized)
-  }, [onChange, editorRef, updateHistoryButtons])
+  }, [onChange, editorRef, updateHistoryButtons, hasStamp])
 
   const stepHistory = useCallback((direction: 'undo' | 'redo') => {
     const editor = editorRef.current
@@ -201,6 +179,7 @@ export function Preview({ value, ast, onChange, editorRef }: PreviewProps) {
     const snapshot = historyRef.current.step(direction)
     if (!snapshot) return
     editor.replaceChildren(...parseEditorContent(snapshot.html).childNodes)
+    updateEditorSignatureLayout(editor, hasStamp)
     lastEmittedRef.current = snapshot.html
     const caret = document.createRange()
     caret.selectNodeContents(editor.children[snapshot.block ?? 0] ?? editor)
@@ -212,7 +191,7 @@ export function Preview({ value, ast, onChange, editorRef }: PreviewProps) {
     selectionRef.current = caret.cloneRange()
     updateHistoryButtons()
     onChange(snapshot.html)
-  }, [editorRef, emitChange, onChange, updateHistoryButtons])
+  }, [editorRef, emitChange, onChange, updateHistoryButtons, hasStamp])
 
   useEffect(() => {
     const editor = editorRef.current
@@ -268,11 +247,19 @@ export function Preview({ value, ast, onChange, editorRef }: PreviewProps) {
     const editor = editorRef.current
     if (!editor || !restoreSelection()) return
     for (const block of getSelectedBlocks(editor)) {
-      const offset = Math.max(-MAX_OFFSET_CHARS, Math.min(MAX_OFFSET_CHARS, (readOffset(block.dataset.offsetChars) ?? 0) + delta))
-      if (offset) block.dataset.offsetChars = String(offset)
-      else delete block.dataset.offsetChars
-      block.style.transform = offsetTransform(offset) ?? ''
+      const previous = readOffset(block.dataset.offsetChars) ?? 0
+      const limit = Math.abs(previous) > MAX_OFFSET_CHARS ? MAX_RELATIVE_OFFSET_CHARS : MAX_OFFSET_CHARS
+      setBlockOffset(block, Math.max(-limit, Math.min(limit, Math.round((previous + delta) * 100) / 100)))
     }
+    emitChange()
+  }
+
+  const handleRelativeCenter = () => {
+    const editor = editorRef.current
+    if (!editor || !restoreSelection()) return
+    const pair = getRelativeCenterPair(editor)
+    if (!pair) return
+    centerBlockOnReference(pair, config.body.fontSize * (96 / 72) * editScale)
     emitChange()
   }
 
@@ -311,6 +298,7 @@ export function Preview({ value, ast, onChange, editorRef }: PreviewProps) {
   const handleModeChange = () => {
     if (!showPrintPreview) emitChange()
     cancelPainter()
+    setCanRelativeCenter(false)
     setShowPrintPreview(!showPrintPreview)
   }
 
@@ -450,11 +438,13 @@ export function Preview({ value, ast, onChange, editorRef }: PreviewProps) {
             {showPrintPreview ? '编辑' : '预览'}
           </button>
           {!showPrintPreview && (
-            <div className="preview-history" role="group" aria-label="编辑历史" onMouseDown={(event) => event.preventDefault()}>
+            <div className="preview-history" role="group" aria-label="版面编辑操作" onMouseDown={(event) => event.preventDefault()}>
               <button type="button" className="preview-history-btn" disabled={!historyButtons.undo}
                 title="撤销上一步（Ctrl+Z）" onClick={() => stepHistory('undo')}>撤销</button>
               <button type="button" className="preview-history-btn" disabled={!historyButtons.redo}
                 title="还原已撤销的修改（Ctrl+Y）" onClick={() => stepHistory('redo')}>还原</button>
+              <button type="button" className="preview-history-btn" disabled={!canRelativeCenter}
+                title="选中两行文字，将上行对准下行的中心" onClick={handleRelativeCenter}>相对居中对齐</button>
             </div>
           )}
         </div>
@@ -593,36 +583,9 @@ export function Preview({ value, ast, onChange, editorRef }: PreviewProps) {
                     onKeyDown={handleKeyDown}
                     onMouseUp={handleEditorMouseUp}
                   />
+                  {renderSupplementalSignature(signature.name, signature.date)}
                 </div>
                 {renderA4FooterNote(config.footerNote)}
-                {/* 落款：空三行，署名右空 4-5 字，日期居中于署名 */}
-                {(signature.name || signature.date) && (() => {
-                  const { name: nameS, date: dateS } = signature
-                  const { nameIndentEm, dateIndentEm } = getSignatureIndents(nameS, dateS)
-                  const lineStyle: CSSProperties = {
-                    fontFamily: config.body.fontFamily,
-                    fontSize: `${config.body.fontSize}pt`,
-                    lineHeight: `${config.body.lineSpacing}pt`,
-                    margin: 0,
-                  }
-                  return (
-                    <div className="a4-signature-area">
-                      {[0, 1, 2].map((j) => (
-                        <p key={`sig-empty-${j}`} style={{ ...lineStyle, height: `${config.body.lineSpacing}pt` }}>{'\u00A0'}</p>
-                      ))}
-                      {nameS && (
-                        <p style={{ ...lineStyle, textAlign: 'right', paddingRight: `${nameIndentEm}em` }}>
-                          {nameS}
-                        </p>
-                      )}
-                      {dateS && (
-                        <p style={{ ...lineStyle, textAlign: 'right', paddingRight: `${dateIndentEm}em` }}>
-                          {dateS}
-                        </p>
-                      )}
-                    </div>
-                  )
-                })()}
               </div>
             </div>
           </div>
