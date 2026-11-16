@@ -67,6 +67,30 @@ describe('版面编辑写入 Word', () => {
     }
   })
 
+  it.each([
+    { indent: 4536, left: 4536, right: 0 },
+    { indent: -2835, left: 0, right: 2835 },
+  ])('相对居中使用 Word 段落的单侧缩进 $indent', async ({ indent, left, right }) => {
+    const format = { alignment: 'center', noIndent: true, paragraphIndentTwips: indent } as const
+    const name = '值班室测试员'
+    const date = '2026年11月7日'
+    const { ast, xml } = await documentXml([
+      { text: name, layoutType: NodeType.SIGNATURE, ...format },
+      { text: date, layoutType: NodeType.DATE, ...format },
+    ])
+    const preview = renderToStaticMarkup(renderA4Content({ ...DEFAULT_CONFIG.specialOptions, ...ast }))
+    expect(preview).not.toContain('translateX')
+    expect(preview.split(`padding-left:${left / 20}pt`).length - 1).toBe(2)
+    expect(preview.split(`padding-right:${right / 20}pt`).length - 1).toBe(2)
+    for (const text of [name, date]) {
+      const p = paragraph(xml, text)
+      expect(p).toContain('<w:jc w:val="center"/>')
+      expect(p).toContain(`w:left="${left}"`)
+      expect(p).toContain(`w:right="${right}"`)
+      expect(p).not.toContain('w:firstLineChars')
+    }
+  })
+
   it('保持落款段的新顺序、水平位置，以及非末尾的日期与文本空格', async () => {
     const { ast, xml } = await documentXml([
       { text: '情况说明', layoutType: NodeType.DOCUMENT_TITLE },

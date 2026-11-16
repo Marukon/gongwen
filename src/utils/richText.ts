@@ -7,6 +7,7 @@ import { autoFixDocumentText } from './sanitize'
 import { ensureTitleDateParentheses, getTitleMetadataIndices, readTitleByline } from './documentDates'
 import { getHeadingSpans, headingClass, sliceHeadingText } from '../parser/headings'
 import { attachmentClass, hasRichStyleOverrides, offsetTransform, readOffset } from './editorLayout'
+import { paragraphIndentCss, readParagraphIndent } from './documentLayout'
 
 const BLOCK_TAGS = new Set(['P', 'DIV', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6'])
 const EDITOR_STYLES = new Set([
@@ -52,7 +53,7 @@ export function parseEditorContent(html: string): HTMLDivElement {
   const content = DOMPurify.sanitize(html, {
     RETURN_DOM_FRAGMENT: true,
     ALLOWED_TAGS: [...Array.from(BLOCK_TAGS, (tag) => tag.toLowerCase()), '#text', 'br', 'span', 'strong', 'em', 'b', 'i', 'u', 'font'],
-    ALLOWED_ATTR: ['class', 'style', 'align', 'face', 'size', 'color', 'data-no-indent', 'data-align-no-indent', 'data-offset-chars'],
+    ALLOWED_ATTR: ['class', 'style', 'align', 'face', 'size', 'color', 'data-no-indent', 'data-align-no-indent', 'data-offset-chars', 'data-paragraph-indent-twips'],
     ALLOW_DATA_ATTR: false,
     ALLOW_ARIA_ATTR: false,
   })
@@ -66,6 +67,16 @@ export function parseEditorContent(html: string): HTMLDivElement {
     const offset = readOffset(element.dataset.offsetChars)
     if (offset !== undefined && BLOCK_TAGS.has(element.tagName)) element.style.transform = offsetTransform(offset) ?? ''
     else delete element.dataset.offsetChars
+  }
+  for (const element of content.querySelectorAll<HTMLElement>('[data-paragraph-indent-twips]')) {
+    const indent = paragraphIndentCss(readParagraphIndent(element.dataset.paragraphIndentTwips))
+    if (indent && BLOCK_TAGS.has(element.tagName)) {
+      Object.assign(element.style, indent)
+      delete element.dataset.offsetChars
+      element.style.removeProperty('transform')
+    } else {
+      delete element.dataset.paragraphIndentTwips
+    }
   }
   root.append(content)
 
@@ -194,6 +205,7 @@ function paragraphHtml(
   const alignmentStyle = node.alignment ? ` style="text-align:${escapeAttribute(node.alignment)}"` : ''
   const noIndentAttr = node.noIndent ? ' data-no-indent="true"' : ''
   const offsetAttr = node.offsetChars ? ` data-offset-chars="${node.offsetChars}"` : ''
+  const indentAttr = node.paragraphIndentTwips === undefined ? '' : ` data-paragraph-indent-twips="${node.paragraphIndentTwips}"`
   const styledRuns = hasRichStyleOverrides(node.runs) ? node.runs : undefined
 
   let content = '<br>'
@@ -211,7 +223,7 @@ function paragraphHtml(
       content = escapeHtml(node.content)
     }
   }
-  return `<p class="${className}"${alignmentStyle}${noIndentAttr}${offsetAttr}>${content}</p>`
+  return `<p class="${className}"${alignmentStyle}${noIndentAttr}${offsetAttr}${indentAttr}>${content}</p>`
 }
 
 function attachmentHtml(node: AttachmentNode): string {

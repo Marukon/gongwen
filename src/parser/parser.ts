@@ -31,7 +31,7 @@ const ADDRESSEE_MAX_LENGTH = 60
 /** 主送机关检测窗口：标题后前 N 个非空行内首次出现的冒号结尾短行识别为主送机关 */
 const ADDRESSEE_PREAMBLE_MAX_LINES = 4
 
-export interface ParsedLineInput extends Pick<DocumentNode, 'runs' | 'alignment' | 'noIndent' | 'offsetChars' | 'bylineRole'> {
+export interface ParsedLineInput extends Pick<DocumentNode, 'runs' | 'alignment' | 'noIndent' | 'offsetChars' | 'paragraphIndentTwips' | 'bylineRole'> {
   text: string
   lineNumber: number
   layoutType?: NodeType.DOCUMENT_TITLE | NodeType.SIGNATURE | NodeType.DATE | NodeType.ADDRESSEE
@@ -449,8 +449,8 @@ export function parseParsedLines(lines: ParsedLineInput[], preserveEmptyLines = 
     // 标题只在当前位置组成标题区，移过的段落不会被重新提到文首。
     const titleLines: NonNullable<DocumentNode['titleLines']> = []
     while (lines[startIndex]?.layoutType === NodeType.DOCUMENT_TITLE && lines[startIndex].text.trim()) {
-      const { text, lineNumber, runs, alignment, noIndent, offsetChars } = lines[startIndex++]
-      titleLines.push({ content: text.trim(), lineNumber, runs, alignment, noIndent, offsetChars })
+      const { text, lineNumber, runs, alignment, noIndent, offsetChars, paragraphIndentTwips } = lines[startIndex++]
+      titleLines.push({ content: text.trim(), lineNumber, runs, alignment, noIndent, offsetChars, paragraphIndentTwips })
     }
     if (titleLines.length) title = {
       type: NodeType.DOCUMENT_TITLE,
@@ -470,8 +470,8 @@ export function parseParsedLines(lines: ParsedLineInput[], preserveEmptyLines = 
   while (i < lines.length) {
     const source = lines[i]
     const trimmed = source.text.trim()
-    const { lineNumber, alignment, noIndent, offsetChars, bylineRole } = source
-    const layout = { lineNumber, alignment, noIndent, offsetChars, bylineRole }
+    const { lineNumber, alignment, noIndent, offsetChars, paragraphIndentTwips, bylineRole } = source
+    const layout = { lineNumber, alignment, noIndent, offsetChars, paragraphIndentTwips, bylineRole }
 
     // 跳过空行（标题之前 / 普通正文之间）
     if (trimmed.length === 0) {

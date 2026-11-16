@@ -6,7 +6,7 @@ import { getPreviewFontFamily } from '../../utils/fontAliases'
 import { ensureTitleDateParentheses, getTitleMetadataIndices, normalizeDocumentDate, readTitleByline } from '../../utils/documentDates'
 import { getHeadingSpans, headingClass, sliceHeadingText } from '../../parser/headings'
 import { attachmentClass, hasRichStyleOverrides, offsetTransform } from '../../utils/editorLayout'
-import { getSignatureIndentChars, getSupplementalSignatureIndents } from '../../utils/documentLayout'
+import { getSignatureIndentChars, getSupplementalSignatureIndents, paragraphIndentCss } from '../../utils/documentLayout'
 import { signaturePadding } from './pageLayoutStyles'
 import './A4Page.css'
 
@@ -151,7 +151,8 @@ export function renderA4Content(opts: A4ContentRenderOptions): React.ReactNode {
         <p
           key={`title-${title.lineNumber}-${idx}`}
           className={NODE_CLASS_MAP[title.type]}
-          style={{ marginBottom: idx < arr.length - 1 ? 0 : undefined, textAlign: line.alignment, transform: offsetTransform(line.offsetChars) }}
+          style={{ marginBottom: idx < arr.length - 1 ? 0 : undefined, textAlign: line.alignment, transform: offsetTransform(line.offsetChars),
+            ...paragraphIndentCss(line.paragraphIndentTwips) }}
         >
           {hasRichStyleOverrides(line.runs) ? renderRichRuns(line.runs ?? []) : line.content}
         </p>
@@ -216,6 +217,7 @@ export function renderA4Content(opts: A4ContentRenderOptions): React.ReactNode {
               style={{
                 ...(role ? { textAlign: node.alignment } : getA4NodeStyle(node, index, hasStamp, body)),
                 transform: offsetTransform(node.offsetChars),
+                ...paragraphIndentCss(node.paragraphIndentTwips),
               }}
             >
               {nodeContent}
@@ -286,7 +288,7 @@ function renderBoldFirstSentence(content: string): React.ReactNode {
 function renderAttachment(node: AttachmentNode): React.ReactNode {
   if (node.layoutLine) return (
     <p className={attachmentClass(node.layoutLine)} data-no-indent={node.noIndent || undefined}
-      style={{ textAlign: node.alignment, transform: offsetTransform(node.offsetChars) }}>
+      style={{ textAlign: node.alignment, transform: offsetTransform(node.offsetChars), ...paragraphIndentCss(node.paragraphIndentTwips) }}>
       {hasRichStyleOverrides(node.runs) ? renderRichRuns(node.runs ?? []) : node.content}
     </p>
   )

@@ -45,3 +45,21 @@ export function getSupplementalSignatureIndents(name: string, date: string) {
 export function getParagraphOffsetTwips(offsetChars: number | undefined, bodyFontSize: number): number {
   return Math.round(ptToTwip((offsetChars ?? 0) * bodyFontSize))
 }
+
+export const MAX_PARAGRAPH_INDENT_TWIPS = 11906
+
+export function readParagraphIndent(raw: string | undefined): number | undefined {
+  if (!raw?.trim()) return undefined
+  const value = Number(raw)
+  return Number.isInteger(value) && Math.abs(value) <= MAX_PARAGRAPH_INDENT_TWIPS ? value : undefined
+}
+
+export function paragraphIndents(twips: number) {
+  return { left: Math.max(0, twips), right: Math.max(0, -twips) }
+}
+
+export function paragraphIndentCss(twips: number | undefined) {
+  if (twips === undefined) return undefined
+  const { left, right } = paragraphIndents(twips)
+  return { paddingLeft: `${left / 20}pt`, paddingRight: `${right / 20}pt` }
+}

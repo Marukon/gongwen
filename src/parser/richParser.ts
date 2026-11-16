@@ -2,6 +2,7 @@ import { NodeType, type GongwenAST, type ParagraphAlignment, type RichTextRun } 
 import { parseParsedLines, type ParsedLineInput } from './parser'
 import { normalizeFontName } from '../utils/fontAliases'
 import { readOffset } from '../utils/editorLayout'
+import { readParagraphIndent } from '../utils/documentLayout'
 
 let colorContext: CanvasRenderingContext2D | null | undefined
 
@@ -149,6 +150,7 @@ function extractBlocks(root: HTMLElement): ParsedLineInput[] {
     const alignment = parseTextAlign(element.style.textAlign || element.getAttribute('align')) ?? inheritedAlignment
     const noIndent = element.dataset.noIndent === 'true'
     const offsetChars = readOffset(element.dataset.offsetChars)
+    const paragraphIndentTwips = readParagraphIndent(element.dataset.paragraphIndentTwips)
     const hint = getLayoutHint(element)
     const nested = Array.from(element.children).some(isBlock)
     const styles = readInlineStyle(element, inheritedStyles)
@@ -165,7 +167,7 @@ function extractBlocks(root: HTMLElement): ParsedLineInput[] {
       for (const line of lines) {
         const runs = mergeAdjacentRuns(line)
         blocks.push({ text: runs.map((run) => run.text).join(''), lineNumber: lineNumber++, runs,
-          alignment, noIndent, offsetChars, ...(firstLine ? hint : {}) })
+          alignment, noIndent, offsetChars, paragraphIndentTwips, ...(firstLine ? hint : {}) })
         firstLine = false
       }
       pending = []
@@ -220,6 +222,6 @@ export function parseRichGongwen(html: string): GongwenAST {
   const doc = new DOMParser().parseFromString(`<div data-editor-root="true">${html}</div>`, 'text/html')
   const root = doc.body.firstElementChild as HTMLElement | null
   if (!root) return { title: null, body: [] }
-  const explicitLayout = !!root.querySelector('.a4-title,.a4-title-secondary,.a4-title-date,.a4-paragraph,.a4-signature,.a4-date,.a4-addressee,.a4-attachment,.a4-attachment-item,.a4-h1,.a4-h2,.a4-h3,.a4-h4')
+  const explicitLayout = !!root.querySelector('.a4-title,.a4-title-secondary,.a4-title-date,.a4-paragraph,.a4-signature,.a4-date,.a4-addressee,.a4-attachment,.a4-attachment-item,.a4-h1,.a4-h2,.a4-h3,.a4-h4,[data-paragraph-indent-twips]')
   return parseParsedLines(extractBlocks(root), true, explicitLayout)
 }

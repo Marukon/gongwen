@@ -10,7 +10,7 @@ import { getTitleLines, NodeType } from '../types/ast'
 import type { DocumentConfig, PageNumberStyle } from '../types/documentConfig'
 import { cmToTwip, ptToTwip } from '../types/documentConfig'
 import { ensureTitleDateParentheses, getSupplementalSignature, getTitleMetadataIndices, normalizeDocumentDate, readTitleByline } from '../utils/documentDates'
-import { getGridCharacterWidthTwips, getParagraphOffsetTwips, getSupplementalSignatureIndents } from '../utils/documentLayout'
+import { getGridCharacterWidthTwips, getParagraphOffsetTwips, getSupplementalSignatureIndents, paragraphIndents } from '../utils/documentLayout'
 import { getHeadingSpans, isDiscourseHeading, sliceHeadingText } from '../parser/headings'
 import {
   createCharacterFirstLineIndent,
@@ -243,7 +243,7 @@ function attachmentToParagraphs(
       ? { ...base, alignment, indent: { left: 0, right: 0 } }
       : { ...base, alignment }
     return [new Paragraph({
-      ...shiftParagraph(position, getParagraphOffsetTwips(node.offsetChars, config.body.fontSize)),
+      ...positionParagraph(position, node, config),
       children: node.runs?.length ? runsToTextRuns(node.runs, runStyle) : [new TextRun({ ...runStyle, text: node.content })],
     })]
   }
@@ -334,6 +334,13 @@ function shiftParagraph(style: Partial<IParagraphOptions>, offset: number): Part
   }
 }
 
+function positionParagraph(style: Partial<IParagraphOptions>, node: DocumentNode, config: DocumentConfig): Partial<IParagraphOptions> {
+  if (node.paragraphIndentTwips !== undefined) {
+    return { ...style, indent: { ...paragraphIndents(node.paragraphIndentTwips), firstLine: 0 } }
+  }
+  return shiftParagraph(style, getParagraphOffsetTwips(node.offsetChars, config.body.fontSize))
+}
+
 /** 将单个 AST 节点转换为 docx Paragraph */
 function nodeToParagraph(
   node: DocumentNode,
@@ -348,7 +355,7 @@ function nodeToParagraph(
       ? getParagraphStyle(node.type, config, signatureContent, dateContent, false, false, node.alignment, node.noIndent)
       : cache.paragraphStyles[node.type as StaticParagraphType] ?? getParagraphStyle(node.type, config)
   const runStyle = cache.runStyles[node.type] ?? getRunStyle(node.type, config)
-  const useCharacterIndent = cache.useCharacterIndent.has(node.type) &&
+  const useCharacterIndent = node.paragraphIndentTwips === undefined && cache.useCharacterIndent.has(node.type) &&
     !node.noIndent && (!node.alignment || node.alignment === 'justify')
 
   // 外部传入的额外 spacing.before（如版头后标题空二行）
@@ -362,7 +369,7 @@ function nodeToParagraph(
   const offset = getParagraphOffsetTwips(node.offsetChars, config.body.fontSize)
   const baseParagraphStyle = useCharacterIndent
     ? { ...paragraphStyle, indent: undefined }
-    : shiftParagraph(paragraphStyle, offset)
+    : positionParagraph(paragraphStyle, node, config)
   const wordHeadingOptions = node.type === NodeType.HEADING_3 && isDiscourseHeading(node.content)
     ? undefined
     : getWordHeadingOptions(node.type)
@@ -592,8 +599,8 @@ export function buildDocument(ast: GongwenAST, config: DocumentConfig): Document
       const text = isTitleDate ? readTitleByline(node.content) ?? ensureTitleDateParentheses(node.content) : node.content
       const style = { font: nameDateFont, size: nameDateFontSize }
       children.push(new Paragraph({
-        ...shiftParagraph(getParagraphStyle(node.type, config, undefined, undefined, isTitleDate,
-          i === titleMetadata.name, node.alignment, node.noIndent), getParagraphOffsetTwips(node.offsetChars, config.body.fontSize)),
+        ...positionParagraph(getParagraphStyle(node.type, config, undefined, undefined, isTitleDate,
+          i === titleMetadata.name, node.alignment, node.noIndent), node, config),
         children: node.runs && hasRichStyleOverrides(node.runs)
           ? runsToTextRuns(node.runs, style)
           : [new TextRun({ ...style, text })],

@@ -3,9 +3,10 @@ import { useDocumentConfig } from '../../contexts/useDocumentConfig'
 import { FONT_OPTIONS, FONT_SIZE_OPTIONS, A4_RENDER_WIDTH_PX, A4_RENDER_HEIGHT_PX } from '../../types/documentConfig'
 import type { GongwenAST } from '../../types/ast'
 import { normalizeEditorHtml, parseEditorContent } from '../../utils/richText'
-import { BLOCK_SELECTOR, exec, applyFontSize, getSelectedBlocks, getFormatAtSelection, applyFormatToSelection, applyFormatToBlock, getRelativeCenterPair, centerBlockOnReference, setBlockOffset, updateEditorSignatureLayout, type CapturedFormat } from './layoutFormatting'
+import { BLOCK_SELECTOR, exec, applyFontSize, getSelectedBlocks, getFormatAtSelection, applyFormatToSelection, applyFormatToBlock, getRelativeCenterPair, centerBlockOnReference, setBlockOffset, setBlockParagraphIndent, updateEditorSignatureLayout, type CapturedFormat } from './layoutFormatting'
 import { getSupplementalSignature } from '../../utils/documentDates'
 import { MAX_OFFSET_CHARS, MAX_RELATIVE_OFFSET_CHARS, readOffset } from '../../utils/editorLayout'
+import { getParagraphOffsetTwips, readParagraphIndent } from '../../utils/documentLayout'
 import { LayoutHistory } from '../../utils/layoutHistory'
 import { insertLayoutParagraphs } from '../../utils/editorInsert'
 import { useFitScale } from '../../hooks/useFitScale'
@@ -247,6 +248,11 @@ export function Preview({ value, ast, onChange, editorRef }: PreviewProps) {
     const editor = editorRef.current
     if (!editor || !restoreSelection()) return
     for (const block of getSelectedBlocks(editor)) {
+      const indent = readParagraphIndent(block.dataset.paragraphIndentTwips)
+      if (indent !== undefined) {
+        setBlockParagraphIndent(block, indent + 2 * getParagraphOffsetTwips(delta, config.body.fontSize))
+        continue
+      }
       const previous = readOffset(block.dataset.offsetChars) ?? 0
       const limit = Math.abs(previous) > MAX_OFFSET_CHARS ? MAX_RELATIVE_OFFSET_CHARS : MAX_OFFSET_CHARS
       setBlockOffset(block, Math.max(-limit, Math.min(limit, Math.round((previous + delta) * 100) / 100)))
@@ -259,7 +265,7 @@ export function Preview({ value, ast, onChange, editorRef }: PreviewProps) {
     if (!editor || !restoreSelection()) return
     const pair = getRelativeCenterPair(editor)
     if (!pair) return
-    centerBlockOnReference(pair, config.body.fontSize * (96 / 72) * editScale)
+    centerBlockOnReference(pair, editScale)
     emitChange()
   }
 
@@ -444,7 +450,7 @@ export function Preview({ value, ast, onChange, editorRef }: PreviewProps) {
               <button type="button" className="preview-history-btn" disabled={!historyButtons.redo}
                 title="还原已撤销的修改（Ctrl+Y）" onClick={() => stepHistory('redo')}>还原</button>
               <button type="button" className="preview-history-btn" disabled={!canRelativeCenter}
-                title="选中两行文字，将上行对准下行的中心" onClick={handleRelativeCenter}>相对居中对齐</button>
+                title="清除所选两行的空白占位，以段落缩进对准下行的中心" onClick={handleRelativeCenter}>相对居中对齐</button>
             </div>
           )}
         </div>

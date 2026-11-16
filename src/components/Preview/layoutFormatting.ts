@@ -1,9 +1,13 @@
 import type { ParagraphAlignment } from '../../types/ast'
 import { normalizeFontName } from '../../utils/fontAliases'
-import { MAX_RELATIVE_OFFSET_CHARS, offsetTransform } from '../../utils/editorLayout'
-import { getSignatureIndentChars } from '../../utils/documentLayout'
+import { offsetTransform } from '../../utils/editorLayout'
+import { getSignatureIndentChars, MAX_PARAGRAPH_INDENT_TWIPS, paragraphIndentCss } from '../../utils/documentLayout'
 
 export const BLOCK_SELECTOR = 'p,div,h1,h2,h3,h4,h5,h6'
+const ALIGNMENT_BLANK = '[\\p{White_Space}\\u180E\\u200B\\u2060\\u2800\\u3164\\uFEFF\\uFFA0]'
+const ALL_ALIGNMENT_BLANKS = new RegExp(ALIGNMENT_BLANK, 'gu')
+const LEADING_ALIGNMENT_BLANKS = new RegExp(`^${ALIGNMENT_BLANK}+`, 'u')
+const TRAILING_ALIGNMENT_BLANKS = new RegExp(`${ALIGNMENT_BLANK}+$`, 'u')
 
 export function updateEditorSignatureLayout(editor: HTMLElement, hasStamp: boolean) {
   for (const block of editor.querySelectorAll<HTMLElement>(':scope > .a4-signature, :scope > .a4-date')) {
@@ -138,7 +142,7 @@ export function getRelativeCenterPair(editor: HTMLElement): [HTMLElement, HTMLEl
     portion.selectNodeContents(block)
     if (block.contains(selected.startContainer)) portion.setStart(selected.startContainer, selected.startOffset)
     if (block.contains(selected.endContainer)) portion.setEnd(selected.endContainer, selected.endOffset)
-    return portion.toString().trim() !== ''
+    return portion.toString().replace(ALL_ALIGNMENT_BLANKS, '') !== ''
   })
   if (blocks.length === 2) return [blocks[0], blocks[1]]
 }
@@ -149,12 +153,13 @@ function getTextCenter(block: HTMLElement): number {
   let found = false
   for (let node = walker.nextNode(); node; node = walker.nextNode()) {
     const text = (node as Text).data
-    if (!text.trim()) continue
+    const start = text.match(LEADING_ALIGNMENT_BLANKS)?.[0].length ?? 0
+    if (start === text.length) continue
     if (!found) {
-      range.setStart(node, text.length - text.trimStart().length)
+      range.setStart(node, start)
       found = true
     }
-    range.setEnd(node, text.trimEnd().length)
+    range.setEnd(node, text.length - (text.match(TRAILING_ALIGNMENT_BLANKS)?.[0].length ?? 0))
   }
   const { left, width } = range.getBoundingClientRect()
   return left + width / 2
@@ -166,33 +171,39 @@ export function setBlockOffset(block: HTMLElement, offset: number) {
   block.style.transform = offsetTransform(offset) ?? ''
 }
 
-function trimSignaturePadding(block: HTMLElement) {
+function removeAlignmentBlanks(block: HTMLElement) {
   const walker = document.createTreeWalker(block, NodeFilter.SHOW_TEXT)
   for (let node = walker.nextNode(); node; node = walker.nextNode()) {
     const text = node as Text
-    const leading = text.data.match(/^[\t \u00A0\u3000]+/)?.[0].length ?? 0
-    if (leading) text.deleteData(0, leading)
-    if (text.length) break
+    const clean = text.data.replace(ALL_ALIGNMENT_BLANKS, '')
+    if (clean !== text.data) text.data = clean
   }
 }
 
+export function setBlockParagraphIndent(block: HTMLElement, twips: number) {
+  const bounded = Math.max(-MAX_PARAGRAPH_INDENT_TWIPS, Math.min(MAX_PARAGRAPH_INDENT_TWIPS, Math.round(twips)))
+  setBlockOffset(block, 0)
+  block.dataset.paragraphIndentTwips = String(bounded)
+  Object.assign(block.style, paragraphIndentCss(bounded))
+}
+
 export function centerBlockOnReference(
-  [upper, lower]: [HTMLElement, HTMLElement], scaledBodyFontPx: number,
+  [upper, lower]: [HTMLElement, HTMLElement], scale: number,
 ) {
-  if (scaledBodyFontPx <= 0) return
+  if (scale <= 0) return
   const targetCenter = getTextCenter(lower)
-  const isSignature = upper.classList.contains('a4-signature')
-  if (isSignature) trimSignaturePadding(upper)
-  // Pin a signature and its date to the same axis in Word, even when date digits
-  // have different widths there. The axis is the original position of the date.
-  const signingPair = isSignature && lower.classList.contains('a4-date')
-  for (const block of signingPair ? [lower, upper] : [upper]) {
+  for (const block of [upper, lower]) {
+    removeAlignmentBlanks(block)
     block.style.textAlign = 'center'
     block.dataset.noIndent = 'true'
     block.dataset.alignNoIndent = 'true'
-    setBlockOffset(block, 0)
-    const offset = Math.round((targetCenter - getTextCenter(block)) / scaledBodyFontPx * 100) / 100
-    setBlockOffset(block, Math.max(-MAX_RELATIVE_OFFSET_CHARS, Math.min(MAX_RELATIVE_OFFSET_CHARS, offset)))
+    setBlockParagraphIndent(block, 0)
+  }
+  // A one-sided indent moves the center by half its width. 1 CSS px = 15 twips at 96 DPI.
+  const { left, width } = lower.getBoundingClientRect()
+  const indent = (targetCenter - (left + width / 2)) / scale * 30
+  for (const block of [upper, lower]) {
+    setBlockParagraphIndent(block, indent)
   }
 }
 

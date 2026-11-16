@@ -49,9 +49,11 @@ export interface DocumentNode {
   noIndent?: boolean
   /** 从原排版位置左右微移，以正文字号为单位。 */
   offsetChars?: number
+  /** 实际段落缩进：正数为左缩进，负数为右缩进，单位 twip。 */
+  paragraphIndentTwips?: number
   bylineRole?: 'name' | 'date'
   /** 标题的独立版面行，保存分行后的富文本和对齐。 */
-  titleLines?: Array<Pick<DocumentNode, 'content' | 'lineNumber' | 'runs' | 'alignment' | 'noIndent' | 'offsetChars'>>
+  titleLines?: Array<Pick<DocumentNode, 'content' | 'lineNumber' | 'runs' | 'alignment' | 'noIndent' | 'offsetChars' | 'paragraphIndentTwips'>>
 }
 
 /** 附件项 */
