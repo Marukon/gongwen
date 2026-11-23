@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 import { describe, it, expect } from 'vitest'
 import { parseGongwen } from '../parser/parser'
 import { removeMeaninglessLineBreaks } from '../utils/sanitize'
@@ -38,21 +39,16 @@ describe('Subtitle and Author Name separation', () => {
   })
 })
 
-describe('Version Sequence Numbering', () => {
-  it('generates version string in vYYYY.MM.DD-N format', () => {
-    const now = new Date()
-    const y = now.getFullYear()
-    const m = String(now.getMonth() + 1).padStart(2, '0')
-    const d = String(now.getDate()).padStart(2, '0')
-    const baseDate = `v${y}.${m}.${d}`
-
-    const seq1 = 1
-    const v1 = `${baseDate}-${seq1}`
-    expect(v1).toMatch(/^v\d{4}\.\d{2}\.\d{2}-1$/)
-
-    const seq2 = seq1 + 1
-    const v2 = `${baseDate}-${seq2}`
-    expect(v2).toMatch(/^v\d{4}\.\d{2}\.\d{2}-2$/)
+describe('工具栏版本', () => {
+  it('编辑次数变化时保留完整程序版本', async () => {
+    const { createElement } = await import('react')
+    const { renderToStaticMarkup } = await import('react-dom/server')
+    const { Toolbar } = await import('../components/Toolbar/Toolbar')
+    const render = (draftRevision: number) => renderToStaticMarkup(createElement(Toolbar, {
+      ast: { title: null, body: [] }, onClear() {}, onImport() {}, onExport() {}, draftRevision,
+    }))
+    expect(render(2)).toContain(__APP_VERSION__ + ' · 草稿修订 2')
+    expect(render(3)).toContain(__APP_VERSION__ + ' · 草稿修订 3')
   })
 })
 
@@ -62,7 +58,8 @@ describe('parseRichGongwen handles format painter HTML', () => {
     // Scenario 1: span wrapped around text inside paragraph
     const html1 = '<p class="a4-title">这是公文标题</p><p class="a4-paragraph"><span style="font-family: FangSong; font-size: 16pt;">被刷格式的文字</span>正常文字</p>'
     const ast1 = parseRichGongwen(html1)
-    expect(ast1.body[0].content).toContain('被刷格式的文字')
+    expect(ast1.body[0].content).toBe('被刷格式的文字正常文字')
+    expect(ast1.body[0].runs?.[0]).toMatchObject({ text: '被刷格式的文字', fontFamily: '仿宋_GB2312', fontSize: 16 })
 
     // Scenario 2: span inserted at root level (extracted contents)
     const html2 = '<p class="a4-title">这是公文标题</p><span style="font-family: FangSong; font-size: 16pt;">被刷格式的文字</span><p class="a4-paragraph">正常文字</p>'

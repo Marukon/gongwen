@@ -2,11 +2,9 @@
 
 参照 [GB/T 9704—2012《党政机关公文格式》](https://openstd.samr.gov.cn/bzgk/std/newGbInfo?hcno=F3CC9BEF482524C895FDA7A08BB4A70E) 的公文排版工具，支持实时预览、智能分页和 DOCX 导出。
 
-🔗 **在线体验：https://hehecat.github.io/gongwen/**
+🔗 **[打开本分支的公文排版工具](https://pb.zhangxuhu.com/)** · [上游原项目](https://github.com/hehecat/gongwen)
 
-📦 **离线版下载：[Releases](https://github.com/hehecat/gongwen/releases/latest)** — 下载 `gongwen.html`，双击即可使用
-
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fhehecat%2Fgongwen)
+离线使用：在本分支运行 `npm run build:single`，用浏览器打开生成的 `dist/index.html`。
 
 ## 功能特性
 
@@ -34,7 +32,7 @@
 - [docx](https://github.com/dolanmedia/docx) — DOCX 文件生成
 - [mammoth](https://github.com/mwilliamson/mammoth.js) — .docx 文件纯文本提取
 - [file-saver](https://github.com/nickeahman/FileSaver.js) — 浏览器端文件下载
-- GitHub Actions — 自动构建部署到 GitHub Pages & 发布离线版到 Releases
+- 在线版入口：[pb.zhangxuhu.com](https://pb.zhangxuhu.com/)；本地也可以构建独立的离线版。
 
 ## 本地开发
 
@@ -50,7 +48,7 @@ npm test               # 运行解析、文本整理、草稿与导出测试
 - 讲话稿有副标题和开场称呼时，自动识别标题下的姓名与日期。可写成「（姓名 2026年10月15日）」一行，也可将姓名、日期分行；分行时日期自动加全角括号并居中。其他文稿可勾选「有人名日期」开启识别。
 - 「整理原文」会清理粘贴产生的空行，保留正常的段落边界，并将「一是」「第一，」等分项引导句与紧随的展开说明排在同一段。若需保留段落间的一行空白，可在高级设置里关闭回车整理。
 - 识别到文末成文日期时，优先采用文稿中的落款。没有识别到成文日期时，可在高级设置里填写备用落款。
-- 修改原文会重新排版，右侧的手工调整会随之重建。建议先完成原文，再微调版面。
+- 右侧改字、增删与移动段落、撤销还原会同步到左侧；仅调整字体或位置保留原文。修改左侧会重新排版。已有手工排版时，「整理原文」会先询问。不同窗口同时改一份旧稿时，保留独立副本，可从草稿列表切换。
 
 ## 构建
 

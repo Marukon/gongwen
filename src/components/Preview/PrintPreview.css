@@ -41,6 +41,9 @@
 
 /* 度量容器内的正文流：外层 .a4-content 已施加页边距，这里不再重复加左右内边距，
    否则正文宽度会比可见页窄，导致分页行数不一致。 */
+.a4-page-rows, .a4-measurer-content { display: flow-root; }
+.a4-page-rows > p:first-child { margin-top: 0; }
+
 .a4-measurer-content {
   padding: 0;
   position: relative;

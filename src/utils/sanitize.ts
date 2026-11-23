@@ -307,7 +307,7 @@ export function removeMeaninglessLineBreaks(text: string, compact = false): Sani
     }
     const previous = compacted[compacted.length - 1]?.trim()
     // 讲话稿的引导句与紧随其后的展开段合并，下一编号仍独立成段。
-    if (previous && current.length >= 24 && !/^(?:[“‘「『]|[\s　]{2})/.test(line) &&
+    if (previous && current.length >= 24 && !/^(?:[“‘「『]|[\s\u3000]{2})/.test(line) &&
       /[。！？]/.test(current) && !SUBTITLE_RE.test(current) && !SPEECH_CLOSING_RE.test(current) &&
       detectNodeType(current) === NodeType.PARAGRAPH &&
       isDiscourseHeading(previous) && /[。！？]$/.test(previous) &&

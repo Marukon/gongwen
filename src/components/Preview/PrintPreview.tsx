@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useRef } from 'react'
+import { A4Page } from './A4Page'
 import {
-  A4Page,
-  renderA4Content,
+  contentRows,
   renderA4Header,
   renderA4FooterNote,
-} from './A4Page'
-import { getHeaderOrgFontSize } from './Preview'
-import { usePagination, type PaginationConfig } from '../../hooks/usePagination'
+} from './a4Content'
+import { getHeaderOrgFontSize } from '../../utils/documentLayout'
+import { usePagination } from '../../hooks/usePagination'
 import { useFitScale } from '../../hooks/useFitScale'
 import type { GongwenAST } from '../../types/ast'
 import type { DocumentConfig } from '../../types/documentConfig'
@@ -19,47 +19,6 @@ import {
 import { buildA4CssVars } from './pageLayoutStyles'
 import './A4Page.css'
 import './PrintPreview.css'
-
-function buildPaginationConfig(config: DocumentConfig): PaginationConfig {
-  return {
-    margins: { ...config.margins },
-    header: {
-      enabled: config.header.enabled,
-      orgName: config.header.orgName,
-      docNumber: config.header.docNumber,
-      signer: config.header.signer,
-    },
-    footerNote: {
-      enabled: config.footerNote.enabled,
-      cc: config.footerNote.cc,
-      printer: config.footerNote.printer,
-      printDate: config.footerNote.printDate,
-    },
-    title: {
-      fontFamily: config.title.fontFamily,
-      fontSize: config.title.fontSize,
-      lineSpacing: config.title.lineSpacing,
-    },
-    body: {
-      fontFamily: config.body.fontFamily,
-      asciiFontFamily: config.body.asciiFontFamily,
-      fontSize: config.body.fontSize,
-      lineSpacing: config.body.lineSpacing,
-      firstLineIndent: config.body.firstLineIndent,
-    },
-    advanced: {
-      h1: { fontFamily: config.advanced.h1.fontFamily, fontSize: config.advanced.h1.fontSize },
-      h2: { fontFamily: config.advanced.h2.fontFamily, fontSize: config.advanced.h2.fontSize },
-      h3: { fontFamily: config.advanced.h3.fontFamily, fontSize: config.advanced.h3.fontSize },
-    },
-    specialOptions: {
-      boldFirstSentence: config.specialOptions.boldFirstSentence,
-      boldHeading2: config.specialOptions.boldHeading2,
-      boldHeading3: config.specialOptions.boldHeading3,
-      hasStamp: config.specialOptions.hasStamp,
-    },
-  }
-}
 
 interface PrintPreviewProps {
   ast: GongwenAST
@@ -75,8 +34,7 @@ interface PrintPreviewProps {
 export function PrintPreview({ ast, config, onPageCountChange }: PrintPreviewProps) {
   const measurerRef = useRef<HTMLDivElement>(null)
   const cssVars = useMemo(() => buildA4CssVars(config), [config])
-  const paginationConfig = useMemo(() => buildPaginationConfig(config), [config])
-  const pages = usePagination(ast.title, ast.body, measurerRef, paginationConfig)
+  const pages = usePagination(ast.title, ast.body, measurerRef, config)
   const headerOrgFontSize = useMemo(
     () => getHeaderOrgFontSize(config.header.orgName, config.margins.left, config.margins.right, config.header.mode === 'formal'),
     [config.header.orgName, config.margins.left, config.margins.right, config.header.mode],
@@ -93,18 +51,10 @@ export function PrintPreview({ ast, config, onPageCountChange }: PrintPreviewPro
     onPageCountChange?.(pages.length)
   }, [pages.length, onPageCountChange])
 
-  const signature = getSupplementalSignature(ast, config.specialOptions)
-  const contentOpts = {
-    title: ast.title,
-    body: ast.body,
-    layoutEditable: ast.layoutEditable,
-    hasTitleNameDate: config.specialOptions.hasTitleNameDate,
-    boldFirstSentence: config.specialOptions.boldFirstSentence,
-    boldHeading3: config.specialOptions.boldHeading3,
-    hasStamp: config.specialOptions.hasStamp,
-    signatureName: signature.name,
-    signatureDate: signature.date,
-  }
+  const rows = useMemo(() => {
+    const signature = getSupplementalSignature(ast, config.specialOptions)
+    return contentRows({ ...ast, ...config.specialOptions, signatureName: signature.name, signatureDate: signature.date })
+  }, [ast, config.specialOptions])
 
   return (
     <div className="print-preview" style={cssVars}>
@@ -113,10 +63,10 @@ export function PrintPreview({ ast, config, onPageCountChange }: PrintPreviewPro
       <div className="a4-measurer" ref={measurerRef} aria-hidden="true">
         <div className="a4-page">
           <div className="a4-content">
-            {renderA4Header(config.header)}
+            {renderA4Header(config.header, headerOrgFontSize)}
             <div className="a4-content-viewport" style={{ height: '100%' }}>
               <div className="a4-measurer-content">
-                {renderA4Content(contentOpts)}
+                {rows}
               </div>
             </div>
           </div>
@@ -134,27 +84,18 @@ export function PrintPreview({ ast, config, onPageCountChange }: PrintPreviewPro
           {pages.map((slice, i) => (
             <A4Page
               key={i}
-              title={ast.title}
-              body={ast.body}
-              layoutEditable={ast.layoutEditable}
               pageNumber={i + 1}
               offsetY={slice.offsetY}
               clipHeight={slice.clipHeight}
               showPageNumber={config.specialOptions.showPageNumber}
               firstPageNoNumber={config.specialOptions.firstPageNoNumber}
-              boldFirstSentence={config.specialOptions.boldFirstSentence}
-              boldHeading3={config.specialOptions.boldHeading3}
               headerConfig={config.header}
               footerNoteConfig={config.footerNote}
               isFirstPage={i === 0}
               isLastPage={i === pages.length - 1}
               pageNumberLayout={config.specialOptions.pageNumberStyle}
-              hasStamp={config.specialOptions.hasStamp}
-              hasTitleNameDate={config.specialOptions.hasTitleNameDate}
               headerOrgFontSize={headerOrgFontSize}
-              signatureName={signature.name}
-              signatureDate={signature.date}
-            />
+            >{rows.slice(slice.firstRow, slice.endRow)}</A4Page>
           ))}
         </div>
       </div>

@@ -1,5 +1,6 @@
 interface LayoutSnapshot {
   html: string
+  sourceText?: string
   block?: number
 }
 

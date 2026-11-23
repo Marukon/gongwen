@@ -201,16 +201,14 @@ export function centerBlockOnReference(
     block.dataset.alignNoIndent = 'true'
     setBlockParagraphIndent(block, 0)
   }
-  let indent = adjustedIndent
-  if (indent === undefined) {
-    const { left, width } = lower.getBoundingClientRect()
-    const halfTextWidth = Math.max(getTextBounds(upper).width, getTextBounds(lower).width) / 2
-    // Limit the inset at the left edge so the longer line still fits on one line.
-    const clearance = Math.max(0, referenceCenter - left - halfTextWidth)
-    const shiftPx = Math.min(clearance, leftInsetTwips / 15 * scale)
-    // A one-sided indent moves the center by half its width. 1 CSS px = 15 twips.
-    indent = (referenceCenter - shiftPx - (left + width / 2)) / scale * 30
-  }
+  const { left, width } = lower.getBoundingClientRect()
+  if (!width) return
+  const center = left + width / 2
+  const halfText = Math.min(width / 2, Math.max(getTextBounds(upper).width, getTextBounds(lower).width) / 2 + 0.5 * scale)
+  const desired = adjustedIndent === undefined ? referenceCenter - leftInsetTwips / 15 * scale
+    : center + adjustedIndent / 30 * scale
+  const target = Math.max(left + halfText, Math.min(left + width - halfText, desired))
+  const indent = (target - center) / scale * 30
   for (const block of [upper, lower]) {
     setBlockParagraphIndent(block, indent)
     block.dataset.relativeCenterInset = 'true'
@@ -253,7 +251,21 @@ export function getFormatAtSelection(editor: HTMLElement): CapturedFormat | null
   let fontFamily = targetElement.style.fontFamily || block.style.fontFamily
   if (!fontFamily) {
     const rawFont = computed.fontFamily || blockComputed.fontFamily
+    // For mixed paragraph fonts, the first family is for Latin glyphs. Copy the
+    // Chinese family when the selection starts on a Chinese character.
+    const anchor = sel?.rangeCount ? sel.getRangeAt(0) : null
+    const sample = anchor?.startContainer.nodeType === Node.TEXT_NODE
+      ? anchor.startContainer.textContent?.slice(anchor.startOffset, anchor.startOffset + 1) : targetElement.textContent?.trimStart()[0]
     fontFamily = rawFont.split(',')[0].trim().replace(/^['"]|['"]$/g, '')
+    if (sample && sample.charCodeAt(0) > 127) {
+      for (const role of ['body', 'h1', 'h2', 'h3']) {
+        const mixed = computed.getPropertyValue('--' + role + '-font').trim().replace(/["']/g, '')
+        if (mixed && rawFont.replace(/["']/g, '').startsWith(mixed + ',')) {
+          fontFamily = computed.getPropertyValue('--' + role + '-east').trim()
+          break
+        }
+      }
+    }
   }
   fontFamily = normalizeFontName(fontFamily)
 

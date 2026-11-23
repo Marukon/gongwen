@@ -1,4 +1,5 @@
 import type { GongwenAST, DocumentNode, AttachmentNode, RichTextRun } from '../types/ast'
+import { extractBlocks } from '../parser/richParser'
 import DOMPurify from 'dompurify'
 import { getTitleLines, NodeType } from '../types/ast'
 import type { DocumentConfig } from '../types/documentConfig'
@@ -48,12 +49,28 @@ export function plainTextToEditorHtml(text: string): string {
     .join('')
 }
 
+/** Enter can clone a spacer paragraph in contenteditable. Only the original
+ * layout gap remains automatic; each additional empty paragraph is user text. */
+export function normalizeAutomaticSpacers(root: ParentNode) {
+  const markers = Array.from(root.querySelectorAll<HTMLElement>('[data-auto-space]'))
+  for (const el of markers) {
+    if (el.tagName !== 'P' || !['signature', 'title'].includes(el.dataset.autoSpace ?? '') ||
+        el.textContent || el.querySelectorAll('br').length > 1 || el.querySelector('div,p')) delete el.dataset.autoSpace
+  }
+  const duplicates = markers.filter(el => {
+    const kind = el.dataset.autoSpace
+    const adjacent = kind === 'title' ? el.previousElementSibling : el.nextElementSibling
+    return kind && adjacent?.getAttribute('data-auto-space') === kind
+  })
+  for (const el of duplicates) delete el.dataset.autoSpace
+}
+
 export function parseEditorContent(html: string): HTMLDivElement {
   const root = document.createElement('div')
   const content = DOMPurify.sanitize(html, {
     RETURN_DOM_FRAGMENT: true,
     ALLOWED_TAGS: [...Array.from(BLOCK_TAGS, (tag) => tag.toLowerCase()), '#text', 'br', 'span', 'strong', 'em', 'b', 'i', 'u', 'font'],
-    ALLOWED_ATTR: ['class', 'style', 'align', 'face', 'size', 'color', 'data-no-indent', 'data-align-no-indent', 'data-offset-chars', 'data-paragraph-indent-twips', 'data-relative-center-inset'],
+    ALLOWED_ATTR: ['class', 'style', 'align', 'face', 'size', 'color', 'data-no-indent', 'data-align-no-indent', 'data-offset-chars', 'data-paragraph-indent-twips', 'data-relative-center-inset', 'data-auto-space'],
     ALLOW_DATA_ATTR: false,
     ALLOW_ARIA_ATTR: false,
   })
@@ -78,6 +95,7 @@ export function parseEditorContent(html: string): HTMLDivElement {
       delete element.dataset.paragraphIndentTwips
     }
   }
+  normalizeAutomaticSpacers(content)
   root.append(content)
 
   const children = Array.from(root.childNodes)
@@ -112,23 +130,35 @@ export function normalizeEditorHtml(html: string): string {
   return parseEditorContent(html).innerHTML
 }
 
+/** Upgrade only the exact unstyled spacer runs emitted by the previous formatter. */
+export function restoreLegacySpacers(html: string, reference: string, stamp: boolean): string {
+  const root = parseEditorContent(html)
+  const model = getRoot(createDocument(reference))
+  if (!model) return root.innerHTML
+  const plainSpacer = (el: Element | null) => el?.outerHTML === '<p><br></p>'
+  for (const marker of model.querySelectorAll<HTMLElement>('[data-auto-space]')) {
+    const kind = marker.dataset.autoSpace
+    const following = kind === 'signature'
+    const anchor = following ? marker.nextElementSibling : marker.previousElementSibling
+    if (!anchor) continue
+    const matches = Array.from(root.children).filter(el => el.className === anchor.className && el.textContent === anchor.textContent)
+    if (matches.length !== 1) continue
+    const blanks: Element[] = []
+    for (let el = following ? matches[0].previousElementSibling : matches[0].nextElementSibling; el && plainSpacer(el);
+      el = following ? el.previousElementSibling : el.nextElementSibling) blanks.push(el)
+    if (blanks.length !== (following && stamp ? 3 : 1)) continue
+    blanks[0].setAttribute('data-auto-space', kind!)
+    for (const extra of blanks.slice(1)) extra.remove()
+  }
+  return root.innerHTML
+}
+
 export function editorHtmlToPlainText(html: string): string {
   const doc = createDocument(html)
   const root = getRoot(doc)
   if (!root) return html
 
-  const lines: string[] = []
-  const children = Array.from(root.childNodes)
-  for (const child of children) {
-    if (child.nodeType === Node.ELEMENT_NODE && BLOCK_TAGS.has((child as Element).tagName)) {
-      const text = (child.textContent ?? '').replace(/\u00a0/g, ' ')
-      lines.push(text)
-    } else if (child.nodeType === Node.TEXT_NODE) {
-      lines.push((child.textContent ?? '').replace(/\u00a0/g, ' '))
-    }
-  }
-
-  return lines.join('\n')
+  return extractBlocks(root, 'source').map(line => line.text.replace(/\u00a0/g, ' ')).join('\n')
 }
 
 export function editorHtmlHasContent(html: string): boolean {
@@ -253,7 +283,7 @@ export function astToStyledHtml(ast: GongwenAST, config: DocumentConfig): string
     })
     if (ast.body.length > 0) {
       if (titleMetadata.name < 0 && titleMetadata.byline === undefined && ast.body[0].content !== '') {
-        html.push('<p><br></p>')
+        html.push('<p data-auto-space="title"><br></p>')
       }
     }
   }
@@ -278,7 +308,7 @@ export function astToStyledHtml(ast: GongwenAST, config: DocumentConfig): string
     }
 
     if (node.type === NodeType.SIGNATURE && !ast.layoutEditable) {
-      html.push(...Array.from({ length: config.specialOptions.hasStamp ? 3 : 1 }, () => '<p><br></p>'))
+      html.push('<p data-auto-space="signature"><br></p>')
     }
 
     const className = {

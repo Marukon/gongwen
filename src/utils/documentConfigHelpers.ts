@@ -17,6 +17,7 @@ export type LegacyDocumentConfig = DeepPartial<DocumentConfig> & {
 export function deepMerge<T extends object>(target: T, patch: DeepPartial<T>): T {
   const result = { ...target }
   for (const key of Object.keys(patch) as (keyof T)[]) {
+    if (!Object.prototype.hasOwnProperty.call(target, key)) continue
     const patchVal = patch[key]
     const targetVal = target[key]
     if (
@@ -92,6 +93,28 @@ export function normalizeLineSpacing(config: DocumentConfig): DocumentConfig {
   }
 }
 
+function checkFields(patch: unknown, schema: object, path = 'config') {
+  if (!patch || typeof patch !== 'object' || Array.isArray(patch)) throw new Error(`模板字段 ${path} 应为配置对象。`)
+  for (const [key, expected] of Object.entries(schema)) {
+    const value = (patch as Record<string, unknown>)[key]
+    if (value === undefined) continue
+    const field = path + '.' + key
+    if (typeof expected === 'object') checkFields(value, expected, field)
+    else if (typeof value !== typeof expected ||
+      (typeof value === 'number' && (!Number.isFinite(value) || value < 0 ||
+        (['fontSize', 'lineSpacing'].includes(key) && value === 0))) ||
+      (field === 'config.header.mode' && value !== 'formal' && value !== 'note') ||
+      (key === 'pageNumberStyle' && value !== 'mirrored' && value !== 'center')) {
+      throw new Error(`模板字段 ${field} 的值无效。`)
+    }
+  }
+}
+
 export function normalizeDocumentConfig(parsed: LegacyDocumentConfig): DocumentConfig {
-  return normalizeLineSpacing(deepMerge(DEFAULT_CONFIG, migrateLegacyHeadingConfig(parsed)))
+  checkFields(parsed, DEFAULT_CONFIG)
+  if (parsed.headings !== undefined) checkFields(parsed.headings, { h1: DEFAULT_CONFIG.advanced.h1, h2: DEFAULT_CONFIG.advanced.h2 }, 'headings')
+  const config = normalizeLineSpacing(deepMerge(DEFAULT_CONFIG, migrateLegacyHeadingConfig(parsed)))
+  if (config.margins.left + config.margins.right >= 21 || config.margins.top + config.margins.bottom >= 29.7)
+    throw new Error('页边距超出了 A4 纸张范围。')
+  return config
 }

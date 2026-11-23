@@ -1,6 +1,7 @@
 import { Packer } from 'docx'
 import { saveAs } from 'file-saver'
-import { NodeType, type GongwenAST } from '../types/ast'
+import type { GongwenAST } from '../types/ast'
+import { isSignatureDatePair } from '../utils/documentLayout'
 import type { DocumentConfig } from '../types/documentConfig'
 import { buildDocument } from './docxBuilder'
 
@@ -36,9 +37,13 @@ function getPartFileName(baseName: string, part: number, total: number): string 
 function getPartTitle(ast: GongwenAST, part: number, total: number): GongwenAST['title'] {
   if (!ast.title) return null
   if (total <= 1) return ast.title
+  const suffix = `（第${part}部分/共${total}部分）`
+  const append = <T extends { content: string; runs?: NonNullable<GongwenAST['title']>['runs'] }>(line: T) => ({
+    ...line, content: line.content + suffix, runs: line.runs && [...line.runs, { text: suffix }],
+  })
   return {
-    ...ast.title,
-    content: `${ast.title.content}（第${part}部分/共${total}部分）`,
+    ...append(ast.title),
+    titleLines: ast.title.titleLines?.map((line, i, lines) => i === lines.length - 1 ? append(line) : line),
   }
 }
 
@@ -46,6 +51,7 @@ export function splitAstForLargeExport(
   ast: GongwenAST,
   chunkSize = MULTIPART_EXPORT_CHUNK_SIZE,
 ): GongwenAST[] {
+  if (!Number.isInteger(chunkSize) || chunkSize < 1) throw new RangeError('每卷段落数必须为正整数')
   if (ast.body.length === 0 || ast.body.length <= chunkSize) {
     return [ast]
   }
@@ -59,14 +65,13 @@ export function splitAstForLargeExport(
     // 避免把署名和成文日期拆到两个文件里。
     if (
       end < ast.body.length &&
-      ast.body[end - 1]?.type === NodeType.SIGNATURE &&
-      ast.body[end]?.type === NodeType.DATE
+      isSignatureDatePair(ast.body[end - 1], ast.body[end])
     ) {
       end -= 1
     }
 
     if (end <= start) {
-      end = Math.min(start + chunkSize, ast.body.length)
+      end = Math.min(start + 2, ast.body.length)
     }
 
     chunks.push({
@@ -78,6 +83,7 @@ export function splitAstForLargeExport(
 
   const total = chunks.length
   return chunks.map((chunk, index) => ({
+    ...ast,
     title: getPartTitle(ast, index + 1, total),
     body: chunk.body,
   }))

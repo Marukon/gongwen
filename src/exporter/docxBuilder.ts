@@ -10,7 +10,7 @@ import { getTitleLines, NodeType } from '../types/ast'
 import type { DocumentConfig, PageNumberStyle } from '../types/documentConfig'
 import { cmToTwip, ptToTwip } from '../types/documentConfig'
 import { ensureTitleDateParentheses, getSupplementalSignature, getTitleMetadataIndices, normalizeDocumentDate, readTitleByline } from '../utils/documentDates'
-import { getGridCharacterWidthTwips, getParagraphOffsetTwips, getSupplementalSignatureIndents, paragraphIndents } from '../utils/documentLayout'
+import { getHeaderOrgFontSize, isSignatureDatePair, getGridCharacterWidthTwips, getParagraphOffsetTwips, getSupplementalSignatureIndents, paragraphIndents } from '../utils/documentLayout'
 import { getHeadingSpans, isDiscourseHeading, sliceHeadingText } from '../parser/headings'
 import {
   createCharacterFirstLineIndent,
@@ -348,7 +348,8 @@ function nodeToParagraph(
   cache: BuildStyleCache,
   spacingBefore = 0,
   signatureContent?: string,
-  dateContent?: string
+  dateContent?: string,
+  keepNext = false,
 ): Paragraph {
   let paragraphStyle =
     node.type === NodeType.SIGNATURE || node.alignment || node.noIndent
@@ -378,6 +379,7 @@ function nodeToParagraph(
     const paragraph = new Paragraph({
       ...baseParagraphStyle,
       ...wordHeadingOptions,
+      keepNext: keepNext || undefined,
       children,
     })
 
@@ -442,9 +444,7 @@ export function buildDocument(ast: GongwenAST, config: DocumentConfig): Document
     const orgDisplayName = isFormal ? `${config.header.orgName}文件` : config.header.orgName
 
     // 1. 发文机关标志：红色大字，分散对齐撑满版心，字号按名称长度计算（GB/T 9704 7.2.4）
-    const orgChars = Array.from(orgDisplayName).length
-    const availableMm = 210 - config.margins.left * 10 - config.margins.right * 10
-    const headerOrgSizePt = Math.max(18, Math.min(30, Math.floor((availableMm * 72 / 25.4) / orgChars)))
+    const headerOrgSizePt = getHeaderOrgFontSize(config.header.orgName, config.margins.left, config.margins.right, isFormal)
     const noteHeaderFont = {
       ascii: 'Times New Roman',
       eastAsia: '方正大标宋',
@@ -639,8 +639,8 @@ export function buildDocument(ast: GongwenAST, config: DocumentConfig): Document
     }
     
     // 对于 SIGNATURE 节点，查找下一个节点是否为 DATE
-    if (node.type === NodeType.SIGNATURE && i + 1 < ast.body.length && ast.body[i + 1].type === NodeType.DATE) {
-      children.push(nodeToParagraph(node, config, cache, 0, node.content, ast.body[i + 1].content))
+    if (isSignatureDatePair(node, ast.body[i + 1])) {
+      children.push(nodeToParagraph(node, config, cache, 0, node.content, ast.body[i + 1].content, true))
     } else {
       children.push(nodeToParagraph(node, config, cache))
     }
@@ -664,6 +664,7 @@ export function buildDocument(ast: GongwenAST, config: DocumentConfig): Document
 
     // 发文机关署名
     if (nameText) children.push(new Paragraph({
+      keepNext: !!dateText,
       alignment: AlignmentType.RIGHT,
       indent: { right: Math.round(charWidth * nameIndent) },
       spacing: { line: bodyLineSpacing, lineRule: LineRuleType.EXACT, before: 0, after: 0 },
@@ -805,20 +806,16 @@ export function buildDocument(ast: GongwenAST, config: DocumentConfig): Document
     }))
   }
 
-  // 页码字体：四号宋体（中英文统一宋体，14pt = 28 half-point）
-  const pageNumFont = {
-    ascii: '宋体',
-    eastAsia: '宋体',
-    hAnsi: '宋体',
-    cs: '宋体',
-  }
+  // 中西文页码统一使用所选字体；四号 14pt = 28 half-point。
+  const fontName = config.specialOptions.pageNumberFont
+  const pageNumFont = { ascii: fontName, eastAsia: fontName, hAnsi: fontName, cs: fontName }
   const pageNumSize = 28 // 四号 14pt
   // 奇偶页各空一字（四号字 14pt = 280 twips）
   const pageNumIndent = ptToTwip(14)
   const pageNumberOptions = getPageNumberParagraphOptions(config.specialOptions.pageNumberStyle, pageNumIndent)
 
   // 页脚配置：默认国标单右双左，也支持全居中；支持首页无页码
-  const footers: any = {}
+  const footers: { default?: Footer; even?: Footer; first?: Footer } = {}
   let evenAndOddHeaderAndFooters = false
 
   if (config.specialOptions.showPageNumber) {
@@ -848,7 +845,10 @@ export function buildDocument(ast: GongwenAST, config: DocumentConfig): Document
       })
     }
 
-    if (config.specialOptions.firstPageNoNumber) {
+    if (noteHeaderParagraph && !config.specialOptions.firstPageNoNumber) {
+      footers.first = new Footer({ children: [pageNumberParagraph(pageNumberOptions.defaultOptions.alignment,
+        pageNumberOptions.defaultOptions.indent, pageNumFont, pageNumSize)] })
+    } else if (config.specialOptions.firstPageNoNumber) {
       footers.first = new Footer({
         children: [],
       })
@@ -862,7 +862,7 @@ export function buildDocument(ast: GongwenAST, config: DocumentConfig): Document
       {
         properties: {
           // 首页无页码：启用首页独立页脚（first footer 为空）
-          titlePage: config.specialOptions.showPageNumber && config.specialOptions.firstPageNoNumber,
+          titlePage: !!noteHeaderParagraph || (config.specialOptions.showPageNumber && config.specialOptions.firstPageNoNumber),
           page: {
             size: {
               width: 11906, // A4: 210mm
@@ -880,7 +880,7 @@ export function buildDocument(ast: GongwenAST, config: DocumentConfig): Document
         },
         // 便签模式：版头放页眉
         ...(noteHeaderParagraph
-          ? { headers: { default: new Header({ children: [noteHeaderParagraph] }) } }
+          ? { headers: { first: new Header({ children: [noteHeaderParagraph] }) } }
           : {}),
         footers: Object.keys(footers).length > 0 ? footers : undefined,
         children,

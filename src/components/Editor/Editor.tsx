@@ -69,7 +69,7 @@ export const Editor = memo(function Editor({
       <div className="editor-header">
         <div className="editor-header-main">
           <span className="editor-label">原文</span>
-          <span className="editor-hint">修改原文会重新排版；微调请在版面编辑区完成。</span>
+          <span className="editor-hint">右侧改字会同步到这里；修改此处原文会重新排版。</span>
         </div>
         <div className="editor-header-actions">
           {fixFeedback && (

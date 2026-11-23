@@ -1,4 +1,4 @@
-import type { ParagraphAlignment } from '../types/ast'
+import { NodeType, type DocumentNode, type ParagraphAlignment } from '../types/ast'
 import { CHARS_PER_LINE, cmToTwip, ptToTwip, type DocumentConfig } from '../types/documentConfig'
 
 // Twenty twips are one point. Use the same grid in CSS and in the Word document.
@@ -9,6 +9,11 @@ export function getCharacterSpacingTwips(config: DocumentConfig): number {
 
 export function getGridCharacterWidthTwips(config: DocumentConfig): number {
   return ptToTwip(config.body.fontSize) + getCharacterSpacingTwips(config)
+}
+
+export function getHeaderOrgFontSize(name: string, left: number, right: number, formal: boolean): number {
+  const length = Math.max(1, Array.from(name.trim()).length + (formal ? 2 : 0))
+  return Math.max(18, Math.min(30, Math.floor(((210 - 10 * (left + right)) * 72 / 25.4) / length)))
 }
 
 function estimateWidthHundredths(text: string, asciiWidth: number): number {
@@ -44,6 +49,13 @@ export function getSupplementalSignatureIndents(name: string, date: string) {
 
 export function getParagraphOffsetTwips(offsetChars: number | undefined, bodyFontSize: number): number {
   return Math.round(ptToTwip((offsetChars ?? 0) * bodyFontSize))
+}
+
+export function isSignatureDatePair(node: DocumentNode, next?: DocumentNode): boolean {
+  return next?.type === NodeType.DATE && !next.bylineRole && !node.bylineRole && (
+    node.type === NodeType.SIGNATURE || (node.alignment === 'center' && node.paragraphIndentTwips !== undefined &&
+    next.alignment === 'center' && node.paragraphIndentTwips === next.paragraphIndentTwips)
+  )
 }
 
 export const MAX_PARAGRAPH_INDENT_TWIPS = 11906

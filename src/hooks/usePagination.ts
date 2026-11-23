@@ -1,68 +1,16 @@
 import { useEffect, useState, type RefObject } from 'react'
 import type { DocumentNode } from '../types/ast'
-import { A4_PREVIEW_WIDTH_PX } from '../types/documentConfig'
+import type { DocumentConfig } from '../types/documentConfig'
 
 /** 单页裁剪信息 */
 export interface PageSlice {
-  /** 内容在完整流中的起始偏移(px) */
+  /** 本页涉及的段落范围 [firstRow, endRow)。 */
+  firstRow: number
+  endRow: number
+  /** 本页从第一个段落的哪个垂直位置开始（px）。 */
   offsetY: number
   /** 该页应显示的内容高度(px)，精确到行边界 */
   clipHeight: number
-}
-
-export interface PaginationConfig {
-  margins: {
-    top: number
-    bottom: number
-    left: number
-    right: number
-  }
-  header: {
-    enabled: boolean
-    orgName: string
-    docNumber: string
-    signer: string
-  }
-  footerNote: {
-    enabled: boolean
-    cc: string
-    printer: string
-    printDate: string
-  }
-  title: {
-    fontFamily: string
-    fontSize: number
-    lineSpacing: number
-  }
-  body: {
-    fontFamily: string
-    asciiFontFamily: string
-    fontSize: number
-    lineSpacing: number
-    firstLineIndent: number
-  }
-  advanced: {
-    h1: {
-      fontFamily: string
-      fontSize: number
-    }
-    h2: {
-      fontFamily: string
-      fontSize: number
-    }
-    h3: {
-      fontFamily: string
-      fontSize: number
-    }
-  }
-  specialOptions: {
-    boldFirstSentence: boolean
-    boldHeading2: boolean
-    boldHeading3: boolean
-    hasStamp: boolean
-  }
-  previewPageWidth?: number
-  previewContentWidth?: number | null
 }
 
 function arePagesEqual(prev: PageSlice[], next: PageSlice[]): boolean {
@@ -70,6 +18,7 @@ function arePagesEqual(prev: PageSlice[], next: PageSlice[]): boolean {
 
   for (let i = 0; i < prev.length; i++) {
     if (
+      prev[i].firstRow !== next[i].firstRow || prev[i].endRow !== next[i].endRow ||
       Math.abs(prev[i].offsetY - next[i].offsetY) > 0.5
       || Math.abs(prev[i].clipHeight - next[i].clipHeight) > 0.5
     ) {
@@ -96,9 +45,9 @@ export function usePagination(
   title: DocumentNode | null,
   body: DocumentNode[],
   measurerRef: RefObject<HTMLDivElement | null>,
-  config: PaginationConfig
+  config: DocumentConfig
 ): PageSlice[] {
-  const [pages, setPages] = useState<PageSlice[]>(() => [{ offsetY: 0, clipHeight: 0 }])
+  const [pages, setPages] = useState<PageSlice[]>(() => [{ firstRow: 0, endRow: 0, offsetY: 0, clipHeight: 0 }])
 
   useEffect(() => {
     const measurer = measurerRef.current
@@ -108,27 +57,18 @@ export function usePagination(
     function calculate() {
       const el = measurerRef.current
       if (!el) {
-        setPages([{ offsetY: 0, clipHeight: 0 }])
+        setPages([{ firstRow: 0, endRow: 0, offsetY: 0, clipHeight: 0 }])
         return
       }
 
       const scrollContainer = el.parentElement
       if (!scrollContainer) {
-        setPages([{ offsetY: 0, clipHeight: 0 }])
+        setPages([{ firstRow: 0, endRow: 0, offsetY: 0, clipHeight: 0 }])
         return
       }
 
-      // ① 同步度量容器宽度：使用 getBoundingClientRect 获取精确浮点宽度，
-      //    避免 offsetWidth 整数取整导致度量容器与 A4 页面文本换行不一致。
-      const a4Page = scrollContainer.querySelector('.a4-page') as HTMLElement | null
-      if (a4Page) {
-        el.style.width = `${a4Page.getBoundingClientRect().width}px`
-      } else {
-        const cs = getComputedStyle(scrollContainer)
-        const contentWidth = scrollContainer.clientWidth
-          - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight)
-        el.style.width = `${Math.min(contentWidth, A4_PREVIEW_WIDTH_PX)}px`
-      }
+      // The measurement page and visible pages share the same unscaled A4 width.
+      const a4Page = el.querySelector<HTMLElement>('.a4-page')
 
       // ② 读取 .a4-content 内容区全量高度（= 页面高度 - 上下 padding）
       //    这是不含版头/版记时的最大可用空间。
@@ -170,114 +110,66 @@ export function usePagination(
       // ⑤ 获取度量容器内所有段落
       const contentEl = el.querySelector('.a4-measurer-content')
       if (!contentEl) {
-        setPages([{ offsetY: 0, clipHeight: firstPageAvailable }])
+        setPages([{ firstRow: 0, endRow: 0, offsetY: 0, clipHeight: firstPageAvailable }])
         return
       }
 
       const paragraphs = contentEl.querySelectorAll<HTMLParagraphElement>(':scope > p')
       if (paragraphs.length === 0) {
-        setPages([{ offsetY: 0, clipHeight: firstPageAvailable }])
+        setPages([{ firstRow: 0, endRow: 0, offsetY: 0, clipHeight: firstPageAvailable }])
         return
       }
 
-      // ⑥ 收集所有行的 top/bottom 位置
-      interface LinePos { top: number; bottom: number }
-      const lines: LinePos[] = []
-      const lineIsSignature: boolean[] = [] // 与 lines 平行：该行是否属于落款（署名/日期）
-      const contentRect = contentEl.getBoundingClientRect()
-
-      for (const p of paragraphs) {
-        const pRect = p.getBoundingClientRect()
-        const pTop = pRect.top - contentRect.top
-        const pHeight = pRect.height
-        const computedStyle = getComputedStyle(p)
-        const lineHeight = parseFloat(computedStyle.lineHeight)
-        const isSig = (p as HTMLElement).dataset?.signature === 'true'
-
-        if (isNaN(lineHeight) || lineHeight <= 0 || pHeight <= lineHeight * 1.5) {
-          // 单行段落（标题等）：整段作为一行
-          lines.push({ top: pTop, bottom: pTop + pHeight })
-          lineIsSignature.push(isSig)
-        } else {
-          const lineCount = Math.max(1, Math.round(pHeight / lineHeight))
-          // 使用 CSS line-height 定位行边界（而非 pHeight/lineCount），
-          // 避免混合字体 inline span 导致段落高度偏离 line-height 整数倍时
-          // 断点位置与实际渲染不一致（半行字问题）。
-          // 最后一行 bottom 取段落实际底部，衔接下一段。
-          for (let i = 0; i < lineCount; i++) {
-            lines.push({
-              top: pTop + i * lineHeight,
-              bottom: i < lineCount - 1 ? pTop + (i + 1) * lineHeight : pTop + pHeight,
-            })
-            lineIsSignature.push(isSig)
-          }
-        }
-      }
-
-      const totalContentHeight = lines.length > 0 ? lines[lines.length - 1].bottom : 0
-      // 落款块首行行号（署名/日期保持整体，不被拆开）
-      const sigFirstIdx = lineIsSignature.findIndex(Boolean)
-
-      // ⑦ Phase 1: 按行边界分页
-      //    首页使用 firstPageAvailable（扣除版头），后续页使用 fullAvailable。
-      const breakOffsets: number[] = [0]
-      let pageStart = 0
-      let currentAvailable = firstPageAvailable
-
-      for (let li = 0; li < lines.length; li++) {
-        const line = lines[li]
-        // 当前行底部超出当前页可用高度 → 推入下一页
-        // line.top - pageStart > 0.5 防止页首行触发分页（死循环保护）
-        if (line.bottom - pageStart > currentAvailable && line.top - pageStart > 0.5) {
-          let breakTop = line.top
-          // 断点落在落款块内部时，前移到块首，保证署名+日期整体换页
-          if (sigFirstIdx >= 0 && li > sigFirstIdx && lines[sigFirstIdx].top > pageStart + 0.5) {
-            breakTop = lines[sigFirstIdx].top
-          }
-          pageStart = breakTop
-          breakOffsets.push(breakTop)
-          currentAvailable = fullAvailable // 后续页恢复全量高度
-        }
-      }
-
-      // ⑧ Phase 2: 确保末页有足够空间容纳版记
-      //    版记在末页渲染，其高度会挤压 viewport 的可用空间。
-      //    如果末页内容 + 版记 > 全量高度，需要将溢出行推到新页。
-      if (footerNoteHeight > 0) {
-        let maxIterations = 10 // 安全上限，防止极端情况死循环
-        let stable = false
-        while (!stable && maxIterations-- > 0) {
-          stable = true
-          const lastIdx = breakOffsets.length - 1
-          const lastStart = breakOffsets[lastIdx]
-          const isAlsoFirstPage = lastIdx === 0
-          const lastPageBase = isAlsoFirstPage ? firstPageAvailable : fullAvailable
-          const lastPageAvailable = lastPageBase - footerNoteHeight
-          const lastPageContent = totalContentHeight - lastStart
-
-          if (lastPageContent > lastPageAvailable + 0.5) {
-            // 在末页中找到溢出行并创建新断点
-            for (const line of lines) {
-              if (line.top < lastStart + 0.5) continue
-              if (line.bottom - lastStart > lastPageAvailable && line.top - lastStart > 0.5) {
-                breakOffsets.push(line.top)
-                stable = false
-                break
-              }
-            }
-          }
-        }
-      }
-
-      // ⑨ 根据断点计算每页 clipHeight
-      //    clipHeight = 下一页 offsetY - 当前页 offsetY，天然对齐行边界。
-      const result: PageSlice[] = breakOffsets.map((offset, i) => {
-        const nextOffset = i < breakOffsets.length - 1 ? breakOffsets[i + 1] : totalContentHeight
-        return {
-          offsetY: offset,
-          clipHeight: nextOffset - offset,
-        }
+      const origin = contentEl.getBoundingClientRect().top
+      const rows = Array.from(paragraphs, p => {
+        const box = p.getBoundingClientRect()
+        return { top: box.top - origin, bottom: box.bottom - origin,
+          line: parseFloat(getComputedStyle(p).lineHeight), keepNext: p.dataset.keepNext === 'true' }
       })
+      // Adjacent signature/date paragraphs form one breakable unit only if the pair fits a page.
+      const units: { top: number; bottom: number; first: number; end: number }[] = []
+      for (let i = 0; i < rows.length; i++) {
+        const row = rows[i], next = rows[i + 1]
+        if (row.keepNext && next && next.bottom - row.top <= fullAvailable) {
+          units.push({ top: row.top, bottom: next.bottom, first: i, end: i + 2 })
+          i++
+          continue
+        }
+        const count = row.line > 0 ? Math.max(1, Math.round((row.bottom - row.top) / row.line)) : 1
+        for (let j = 0; j < count; j++) units.push({
+          top: j ? row.top + j * row.line : row.top,
+          bottom: j + 1 === count ? row.bottom : row.top + (j + 1) * row.line,
+          first: i, end: i + 1,
+        })
+      }
+      const result: PageSlice[] = []
+      let from = 0, start = 0
+      function finish(to: number, bottom: number) {
+        const first = units[from]?.first ?? rows.length
+        result.push({ firstRow: first, endRow: to > from ? units[to - 1].end : first,
+          offsetY: start - (rows[first]?.top ?? start), clipHeight: Math.max(0, bottom - start) })
+        from = to
+        start = bottom
+      }
+      for (let i = 0; i < units.length; i++) {
+        const unit = units[i]
+        const available = result.length ? fullAvailable : firstPageAvailable
+        if (unit.bottom - start > available + 0.5 &&
+          (i > from || (!result.length && headerHeight > 0 && unit.bottom - unit.top <= fullAvailable))) {
+          finish(i, unit.top)
+        }
+      }
+      const bottom = rows[rows.length - 1].bottom
+      const capacity = result.length ? fullAvailable : firstPageAvailable
+      if (footerNoteHeight > 0 && bottom - start + footerNoteHeight > capacity + 0.5) {
+        const last = units[units.length - 1]
+        if (last.bottom - last.top + footerNoteHeight <= fullAvailable && (units.length - 1 > from || headerHeight > 0 && !result.length)) {
+          finish(units.length - 1, last.top)
+        } else {
+          finish(units.length, bottom)
+        }
+      }
+      finish(units.length, bottom)
 
       setPages((prev) => (arePagesEqual(prev, result) ? prev : result))
     }
@@ -294,6 +186,8 @@ export function usePagination(
 
     // 监听尺寸变化（窗口缩放时重新分页）
     const observer = new ResizeObserver(() => scheduleCalculate())
+    const flow = measurer.querySelector('.a4-measurer-content')
+    if (flow) observer.observe(flow)
     observer.observe(measurer)
     return () => {
       cancelAnimationFrame(frameId)

@@ -139,7 +139,7 @@ function getLayoutHint(element: HTMLElement): Pick<ParsedLineInput, 'layoutType'
   return {}
 }
 
-function extractBlocks(root: HTMLElement): ParsedLineInput[] {
+export function extractBlocks(root: HTMLElement, stamp: boolean | 'source' = false): ParsedLineInput[] {
   const blocks: ParsedLineInput[] = []
   let lineNumber = 1
   function appendBlock(
@@ -147,6 +147,12 @@ function extractBlocks(root: HTMLElement): ParsedLineInput[] {
     inheritedStyles: Omit<RichTextRun, 'text'> = {},
     inheritedAlignment?: ParagraphAlignment,
   ) {
+    if (element.dataset.autoSpace && !element.textContent && !element.querySelector('p,div') && element.querySelectorAll('br').length <= 1) {
+      if (stamp === 'source') return
+      const count = element.dataset.autoSpace === 'signature' && stamp ? 3 : 1
+      for (let i = 0; i < count; i++) blocks.push({ text: '', lineNumber: lineNumber++ })
+      return
+    }
     const alignment = parseTextAlign(element.style.textAlign || element.getAttribute('align')) ?? inheritedAlignment
     const noIndent = element.dataset.noIndent === 'true'
     const offsetChars = readOffset(element.dataset.offsetChars)
@@ -208,7 +214,7 @@ function extractBlocks(root: HTMLElement): ParsedLineInput[] {
   return blocks
 }
 
-export function parseRichGongwen(html: string): GongwenAST {
+export function parseRichGongwen(html: string, stamp = false): GongwenAST {
   if (typeof DOMParser === 'undefined') {
     return parseParsedLines(
       html.split('\n').map((line, index) => ({
@@ -223,5 +229,5 @@ export function parseRichGongwen(html: string): GongwenAST {
   const root = doc.body.firstElementChild as HTMLElement | null
   if (!root) return { title: null, body: [] }
   const explicitLayout = !!root.querySelector('.a4-title,.a4-title-secondary,.a4-title-date,.a4-paragraph,.a4-signature,.a4-date,.a4-addressee,.a4-attachment,.a4-attachment-item,.a4-h1,.a4-h2,.a4-h3,.a4-h4,[data-paragraph-indent-twips]')
-  return parseParsedLines(extractBlocks(root), true, explicitLayout)
+  return parseParsedLines(extractBlocks(root, stamp), true, explicitLayout)
 }

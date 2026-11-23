@@ -84,12 +84,14 @@ function normalizeStoredTemplate(value: unknown): DocumentTemplate | null {
     : createdAt
 
   if (!isRecord(value.config)) return null
+  let config: DocumentConfig
+  try { config = normalizeDocumentConfig(value.config as LegacyDocumentConfig) } catch { return null }
 
   return {
     id: value.id,
     name,
     description,
-    config: normalizeDocumentConfig(value.config as LegacyDocumentConfig),
+    config,
     createdAt,
     updatedAt,
   }

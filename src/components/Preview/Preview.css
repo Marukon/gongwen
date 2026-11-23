@@ -282,6 +282,10 @@
   min-height: 0;
 }
 
+.preview-editor > [data-auto-space='signature']:has(> br:only-child) {
+  line-height: calc(var(--body-line-height) * var(--signature-gap-lines));
+}
+
 .preview-editor--painter,
 .preview-editor--painter * {
   cursor: copy !important;

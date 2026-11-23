@@ -120,6 +120,7 @@
 
 /* 二级小标题 inline: 楷体 */
 .a4-h2-inline {
+  font-weight: var(--h2-weight, normal);
   font-family: var(--h2-font, 'KaiTi_GB2312'), 'KaiTi', 'STKaiti', serif;
   font-style: normal;
 }
@@ -194,18 +195,17 @@
   margin: 0;
 }
 
-/* 主送机关: 顶格 仿宋，段前空一行 */
+/* 主送机关: 顶格仿宋；标题后的空行已在文稿中保存 */
 .a4-addressee {
   font-family: var(--body-font, 'FangSong_GB2312'), 'FangSong', 'STFangsong', serif;
   font-size: var(--body-size, 16pt);
   text-indent: 0;
   text-align: justify;
   line-height: var(--body-line-height, 29pt);
-  margin: var(--body-line-height, 29pt) 0 0 0;
+  margin: 0;
 }
 
-/* 标题负责与紧随其后的主送机关/附件之间的留白，避免段后和段前重复控制 */
-.a4-title + .a4-addressee,
+/* 标题负责与紧随其后的附件之间的留白，避免段后和段前重复控制 */
 .a4-title + .a4-attachment {
   margin-top: 0;
 }
@@ -289,29 +289,13 @@
   margin: 0;
 }
 
-/* 度量容器: absolute 定位，宽度由 JS 动态修正以匹配 A4 页面 */
-.a4-measurer {
-  position: absolute;
-  top: 0;
-  left: 0;
-  max-width: 595.28px;
-  visibility: hidden;
-  pointer-events: none;
-  z-index: -1;
-}
-
-.a4-measurer-content {
-  padding: 0 var(--margin-right, 12.38%) 0 var(--margin-left, 13.33%);
-  position: relative;
-}
-
 /* 页脚: 页码区域 */
 .a4-footer {
   position: absolute;
   bottom: 8.3%;
   left: var(--margin-left, 13.33%);
   right: var(--margin-right, 12.38%);
-  font-family: 'Times New Roman', var(--page-number-font, '宋体'), serif;
+  font-family: var(--page-number-font, '宋体'), serif;
   font-size: 14pt;
   color: #374151;
 }

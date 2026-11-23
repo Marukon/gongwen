@@ -29,8 +29,8 @@ const INDENT_SELECT_OPTIONS = INDENT_OPTIONS.map((opt) => ({
 }))
 
 const PROJECT_INFO = {
-  repoUrl: 'https://github.com/hehecat/gongwen',
-  releasesUrl: 'https://github.com/hehecat/gongwen/releases',
+  repoUrl: 'https://github.com/Marukon/gongwen',
+  historyUrl: 'https://github.com/Marukon/gongwen/commits/main/',
   authorEmail: 'hehecat@outlook.com',
   recentUpdates: __APP_RECENT_UPDATES__,
 }
@@ -761,15 +761,15 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                       )}
                       <a
                         className="settings-info-link"
-                        href={PROJECT_INFO.releasesUrl}
+                        href={PROJECT_INFO.historyUrl}
                         target="_blank"
                         rel="noopener noreferrer"
                       >
-                        查看全部 Releases
+                        查看本分支更新记录
                       </a>
                     </div>
                     <div className="settings-info-item settings-info-contact">
-                      <span className="settings-info-label">作者联系邮箱</span>
+                      <span className="settings-info-label">上游作者联系邮箱</span>
                       <a className="settings-info-link" href={`mailto:${PROJECT_INFO.authorEmail}`}>
                         {PROJECT_INFO.authorEmail}
                       </a>

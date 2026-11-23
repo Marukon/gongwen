@@ -2,16 +2,16 @@ import { useEffect, useMemo, useRef, useState, useCallback, type ClipboardEvent,
 import { useDocumentConfig } from '../../contexts/useDocumentConfig'
 import { FONT_OPTIONS, FONT_SIZE_OPTIONS, A4_RENDER_WIDTH_PX, A4_RENDER_HEIGHT_PX } from '../../types/documentConfig'
 import type { GongwenAST } from '../../types/ast'
-import { normalizeEditorHtml, parseEditorContent } from '../../utils/richText'
+import { normalizeAutomaticSpacers, normalizeEditorHtml, parseEditorContent } from '../../utils/richText'
 import { BLOCK_SELECTOR, exec, applyFontSize, getSelectedBlocks, getFormatAtSelection, applyFormatToSelection, applyFormatToBlock, getRelativeCenterPair, centerBlockOnReference, setBlockOffset, setBlockParagraphIndent, updateEditorSignatureLayout, type CapturedFormat } from './layoutFormatting'
 import { getSupplementalSignature } from '../../utils/documentDates'
 import { MAX_OFFSET_CHARS, MAX_RELATIVE_OFFSET_CHARS, readOffset } from '../../utils/editorLayout'
-import { getParagraphOffsetTwips, readParagraphIndent } from '../../utils/documentLayout'
+import { getHeaderOrgFontSize, getParagraphOffsetTwips, readParagraphIndent } from '../../utils/documentLayout'
 import { LayoutHistory } from '../../utils/layoutHistory'
 import { insertLayoutParagraphs } from '../../utils/editorInsert'
 import { useFitScale } from '../../hooks/useFitScale'
 import { PrintPreview } from './PrintPreview'
-import { renderA4FooterNote, renderSupplementalSignature } from './A4Page'
+import { renderA4FooterNote, renderSupplementalSignature } from './a4Content'
 import { buildA4CssVars } from './pageLayoutStyles'
 import './A4Page.css'
 import './Preview.css'
@@ -19,7 +19,8 @@ import './Preview.css'
 interface PreviewProps {
   value: string
   ast: GongwenAST
-  onChange: (value: string) => void
+  sourceText: string
+  onChange: (value: string, restoredSource?: string) => string
   editorRef: RefObject<HTMLDivElement | null>
 }
 
@@ -28,14 +29,7 @@ const FONT_SIZE_OPTIONS_CN = FONT_SIZE_OPTIONS.map((option) => ({
   label: option.label,
   value: option.value,
 }))
-export function getHeaderOrgFontSize(orgName: string, leftMargin: number, rightMargin: number, isFormal: boolean): number {
-  const baseLen = Math.max(1, Array.from(orgName.trim()).length)
-  const length = isFormal ? baseLen + 2 : baseLen // 正式文件加"文件"两字
-  const availablePx = A4_RENDER_WIDTH_PX * (1 - (leftMargin * 10 / 210) - (rightMargin * 10 / 210))
-  return Math.max(18, Math.min(30, Math.floor(availablePx / length)))
-}
-
-export function Preview({ value, ast, onChange, editorRef }: PreviewProps) {
+export function Preview({ value, sourceText, ast, onChange, editorRef }: PreviewProps) {
   const { config } = useDocumentConfig()
   const shellRef = useRef<HTMLDivElement>(null)
   const lastEmittedRef = useRef<string | null>(null)
@@ -105,19 +99,19 @@ export function Preview({ value, ast, onChange, editorRef }: PreviewProps) {
       selectionRef.current = null
       return
     }
-    if (lastEmittedRef.current === value) {
+    if (lastEmittedRef.current === value && historyRef.current.present?.sourceText === sourceText) {
       updateEditorSignatureLayout(editor, hasStamp)
       return
     }
     const content = parseEditorContent(value)
-    if (historyRef.current.present?.html !== content.innerHTML) {
-      historyRef.current.reset({ html: content.innerHTML })
+    if (historyRef.current.present?.html !== content.innerHTML || historyRef.current.present?.sourceText !== sourceText) {
+      historyRef.current.reset({ html: content.innerHTML, sourceText })
       updateHistoryButtons()
     }
     if (editor.innerHTML !== content.innerHTML) editor.replaceChildren(...content.childNodes)
     updateEditorSignatureLayout(editor, hasStamp)
     lastEmittedRef.current = value
-  }, [value, showPrintPreview, editorRef, updateHistoryButtons, hasStamp])
+  }, [value, sourceText, showPrintPreview, editorRef, updateHistoryButtons, hasStamp])
 
   useEffect(() => {
     if (showPrintPreview) return
@@ -161,16 +155,17 @@ export function Preview({ value, ast, onChange, editorRef }: PreviewProps) {
   const emitChange = useCallback((typingKind?: string) => {
     const editor = editorRef.current
     if (!editor || internalDrag.current || formattingBatch.current) return
+    normalizeAutomaticSpacers(editor)
     updateEditorSignatureLayout(editor, hasStamp)
     const normalized = normalizeEditorHtml(editor.innerHTML)
     let element: Node | null | undefined = window.getSelection()?.anchorNode
     while (element && element.parentNode !== editor) element = element.parentNode
     const block = element instanceof HTMLElement ? Array.from(editor.children).indexOf(element) : -1
-    historyRef.current.record({ html: normalized, block: block < 0 ? undefined : block }, typingKind)
-    updateHistoryButtons()
     if (normalized === lastEmittedRef.current) return
+    const nextSource = onChange(normalized)
+    historyRef.current.record({ html: normalized, sourceText: nextSource, block: block < 0 ? undefined : block }, typingKind)
+    updateHistoryButtons()
     lastEmittedRef.current = normalized
-    onChange(normalized)
   }, [onChange, editorRef, updateHistoryButtons, hasStamp])
 
   const stepHistory = useCallback((direction: 'undo' | 'redo') => {
@@ -191,7 +186,7 @@ export function Preview({ value, ast, onChange, editorRef }: PreviewProps) {
     selection?.addRange(caret)
     selectionRef.current = caret.cloneRange()
     updateHistoryButtons()
-    onChange(snapshot.html)
+    onChange(snapshot.html, snapshot.sourceText)
   }, [editorRef, emitChange, onChange, updateHistoryButtons, hasStamp])
 
   useEffect(() => {
